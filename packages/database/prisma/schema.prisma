@@ -1,0 +1,611 @@
+// Agora - Digital Education Identity Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Seed script configuration
+// Run with: npm run db:seed
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DB_URL")
+}
+
+enum AccountStatus {
+  SHADOW
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  SCHOOL_ADMIN
+  TEACHER
+  PARENT
+  STUDENT
+}
+
+enum TransferStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum PeriodType {
+  LESSON
+  BREAK
+  ASSEMBLY
+  LUNCH
+}
+
+enum SessionStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum TermStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+model User {
+  id            String        @id @default(cuid())
+  email         String?       @unique
+  phone         String?       @unique
+  passwordHash  String?
+  accountStatus AccountStatus @default(SHADOW)
+  role          UserRole
+  deviceId      String?
+  lastLoginAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  studentProfile  Student?
+  parentProfile   Parent?
+  teacherProfiles Teacher[] // Changed to array to support multiple schools
+  schoolAdmins    SchoolAdmin[] // Changed to array to support multiple schools
+
+  notifications       NotificationLog[]
+  passwordResetTokens PasswordResetToken[]
+
+  @@index([email])
+  @@index([phone])
+  @@index([accountStatus])
+}
+
+model Student {
+  id            String   @id @default(cuid())
+  uid           String   @unique
+  firstName     String
+  lastName      String
+  middleName    String?
+  dateOfBirth   DateTime
+  profileLocked Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  enrollments Enrollment[]
+  guardians   StudentGuardian[]
+  transfers   Transfer[]
+
+  @@index([uid])
+  @@index([userId])
+}
+
+model Parent {
+  id           String   @id @default(cuid())
+  firstName    String
+  lastName     String
+  phone        String
+  email        String?
+  relationship String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  students StudentGuardian[]
+  otpCodes OtpCode[]
+
+  @@index([phone])
+  @@index([email])
+  @@index([userId])
+}
+
+model StudentGuardian {
+  id           String   @id @default(cuid())
+  studentId    String
+  parentId     String
+  relationship String
+  isPrimary    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  parent  Parent  @relation(fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, parentId])
+  @@index([studentId])
+  @@index([parentId])
+}
+
+model Teacher {
+  id          String   @id @default(cuid())
+  teacherId   String   @unique
+  publicId    String   @unique // Format: AG-{schoolname}-{short alphanumeric}
+  firstName   String
+  lastName    String
+  phone       String
+  email       String?
+  employeeId  String?
+  subject     String?
+  isTemporary Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  grades           Grade[]
+  attendances      Attendance[]
+  classTeachers    ClassTeacher[]
+  timetablePeriods TimetablePeriod[]
+
+  @@unique([userId, schoolId]) // A user can only be a teacher once per school, but can be teacher in multiple schools
+  @@index([userId])
+  @@index([schoolId])
+  @@index([teacherId])
+  @@index([publicId])
+}
+
+model SchoolAdmin {
+  id        String   @id @default(cuid())
+  adminId   String   @unique
+  publicId  String   @unique // Format: AG-{schoolname}-{short alphanumeric}
+  firstName String
+  lastName  String
+  phone     String
+  email     String?
+  role      String   @default("Administrator") // Store role as string to support custom roles
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, schoolId]) // A user can only be an admin once per school, but can be admin in multiple schools
+  @@index([userId])
+  @@index([schoolId])
+  @@index([role])
+  @@index([adminId])
+  @@index([publicId])
+}
+
+model School {
+  id           String   @id @default(cuid())
+  name         String
+  schoolId     String?  @unique // Unique school identifier (nullable for migration)
+  subdomain    String   @unique
+  domain       String?
+  address      String?
+  city         String?
+  state        String?
+  country      String   @default("Nigeria")
+  phone        String?
+  email        String?
+  isActive     Boolean  @default(true)
+  hasPrimary   Boolean  @default(false)
+  hasSecondary Boolean  @default(false)
+  hasTertiary  Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  admins           SchoolAdmin[]
+  teachers         Teacher[]
+  classes          Class[]
+  enrollments      Enrollment[]
+  fees             Fee[]
+  transfersFrom    Transfer[]        @relation("TransferFrom")
+  transfersTo      Transfer[]        @relation("TransferTo")
+  academicSessions AcademicSession[]
+  classLevels      ClassLevel[]
+  rooms            Room[]
+  subjects         Subject[]
+
+  @@index([subdomain])
+  @@index([schoolId])
+  @@index([isActive])
+}
+
+model Class {
+  id           String   @id @default(cuid())
+  name         String // e.g., "JSS1", "SS2", "Introduction to Computer Science"
+  code         String? // Course code for tertiary (e.g., "CS101")
+  classLevel   String? // For primary/secondary: "JSS1", "SS2", "Class 1", etc.
+  type         String // "PRIMARY", "SECONDARY", or "TERTIARY"
+  academicYear String
+  creditHours  Int? // For tertiary courses
+  description  String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  classTeachers ClassTeacher[]
+  enrollments   Enrollment[]
+
+  @@index([schoolId])
+  @@index([type])
+  @@index([academicYear])
+  @@index([isActive])
+}
+
+model ClassTeacher {
+  id        String   @id @default(cuid())
+  classId   String
+  teacherId String
+  subject   String? // For secondary: subject name (e.g., "Mathematics", "English")
+  // For tertiary: course module/topic the teacher handles
+  // For primary: can be "Class Teacher" or null
+  isPrimary Boolean  @default(false) // For primary schools, marks the main class teacher
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  class   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([classId, teacherId, subject]) // A teacher can teach multiple subjects in the same class
+  @@index([classId])
+  @@index([teacherId])
+}
+
+model AcademicSession {
+  id        String        @id @default(cuid())
+  name      String // e.g., "2025/2026"
+  startDate DateTime
+  endDate   DateTime
+  status    SessionStatus @default(DRAFT)
+  schoolId  String
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  school      School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  terms       Term[]
+  enrollments Enrollment[]
+
+  @@index([schoolId])
+  @@index([status])
+  @@index([startDate])
+}
+
+model Term {
+  id                String     @id @default(cuid())
+  name              String // e.g., "1st Term", "2nd Term", "3rd Term"
+  number            Int // 1, 2, or 3
+  startDate         DateTime
+  endDate           DateTime
+  halfTermStart     DateTime? // Optional half-term break start
+  halfTermEnd       DateTime? // Optional half-term break end
+  status            TermStatus @default(DRAFT)
+  academicSessionId String
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  academicSession  AcademicSession   @relation(fields: [academicSessionId], references: [id], onDelete: Cascade)
+  enrollments      Enrollment[]
+  grades           Grade[]           @relation("GradeTerm")
+  timetablePeriods TimetablePeriod[]
+
+  @@unique([academicSessionId, number])
+  @@index([academicSessionId])
+  @@index([status])
+  @@index([startDate])
+}
+
+model ClassLevel {
+  id        String   @id @default(cuid())
+  name      String // e.g., "JSS 1", "SS 2", "Class 1"
+  code      String? // e.g., "JSS1", "SS2"
+  level     Int // Numeric level for ordering (1, 2, 3, etc.)
+  type      String // "PRIMARY", "SECONDARY", "TERTIARY"
+  schoolId  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classArms      ClassArm[]
+  nextLevel      ClassLevel?  @relation("ClassLevelProgression", fields: [nextLevelId], references: [id])
+  nextLevelId    String?
+  previousLevels ClassLevel[] @relation("ClassLevelProgression")
+
+  @@unique([schoolId, code])
+  @@index([schoolId])
+  @@index([type])
+  @@index([isActive])
+}
+
+model ClassArm {
+  id           String   @id @default(cuid())
+  name         String // e.g., "JSS 1 Gold", "SS 2 Blue"
+  capacity     Int? // Maximum number of students
+  classLevelId String
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  classLevel       ClassLevel        @relation(fields: [classLevelId], references: [id], onDelete: Cascade)
+  enrollments      Enrollment[]
+  timetablePeriods TimetablePeriod[]
+
+  @@unique([classLevelId, name])
+  @@index([classLevelId])
+  @@index([isActive])
+}
+
+model Room {
+  id        String   @id @default(cuid())
+  name      String // e.g., "Science Lab", "Room 101"
+  code      String? // e.g., "LAB-01", "R101"
+  capacity  Int?
+  roomType  String? // e.g., "Laboratory", "Classroom", "Hall"
+  schoolId  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school           School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  timetablePeriods TimetablePeriod[]
+
+  @@unique([schoolId, code])
+  @@index([schoolId])
+  @@index([isActive])
+}
+
+model Subject {
+  id        String   @id @default(cuid())
+  name      String // e.g., "Mathematics", "English Language"
+  code      String? // e.g., "MATH", "ENG"
+  schoolId  String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  school           School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  timetablePeriods TimetablePeriod[]
+
+  @@unique([schoolId, code])
+  @@index([schoolId])
+  @@index([isActive])
+}
+
+model TimetablePeriod {
+  id         String     @id @default(cuid())
+  dayOfWeek  DayOfWeek
+  startTime  String // e.g., "08:00" (HH:mm format)
+  endTime    String // e.g., "09:00" (HH:mm format)
+  type       PeriodType @default(LESSON)
+  subjectId  String?
+  teacherId  String?
+  roomId     String?
+  classArmId String
+  termId     String
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  subject  Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  teacher  Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  room     Room?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  classArm ClassArm @relation(fields: [classArmId], references: [id], onDelete: Cascade)
+  term     Term     @relation(fields: [termId], references: [id], onDelete: Cascade)
+
+  @@unique([termId, classArmId, dayOfWeek, startTime])
+  @@index([termId])
+  @@index([classArmId])
+  @@index([teacherId])
+  @@index([roomId])
+  @@index([dayOfWeek])
+}
+
+model Enrollment {
+  id             String   @id @default(cuid())
+  studentId      String
+  schoolId       String
+  classId        String? // Link to Class model (nullable for backward compatibility)
+  classArmId     String? // Link to ClassArm (physical group)
+  termId         String? // Link to Term
+  classLevel     String // Keep for backward compatibility and quick access
+  academicYear   String // Keep for backward compatibility
+  enrollmentDate DateTime @default(now())
+  isActive       Boolean  @default(true)
+  debtBalance    Decimal  @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  student  Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  school   School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  class    Class?    @relation(fields: [classId], references: [id], onDelete: SetNull)
+  classArm ClassArm? @relation(fields: [classArmId], references: [id], onDelete: SetNull)
+  term     Term?     @relation(fields: [termId], references: [id], onDelete: SetNull)
+
+  grades            Grade[]
+  attendances       Attendance[]
+  fees              Fee[]
+  AcademicSession   AcademicSession? @relation(fields: [academicSessionId], references: [id])
+  academicSessionId String?
+
+  @@unique([studentId, schoolId, termId]) // One enrollment per student per term
+  @@index([studentId])
+  @@index([schoolId])
+  @@index([classId])
+  @@index([classArmId])
+  @@index([termId])
+  @@index([isActive])
+}
+
+model Grade {
+  id           String   @id @default(cuid())
+  enrollmentId String
+  teacherId    String
+  termId       String? // Link to Term
+  subject      String // Keep for backward compatibility
+  score        Decimal
+  maxScore     Decimal  @default(100)
+  term         String // Keep for backward compatibility
+  academicYear String // Keep for backward compatibility
+  remarks      String?
+  signedAt     DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  teacher      Teacher    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  termRelation Term?      @relation("GradeTerm", fields: [termId], references: [id], onDelete: SetNull)
+
+  @@index([enrollmentId])
+  @@index([teacherId])
+  @@index([termId])
+  @@index([academicYear])
+}
+
+model Attendance {
+  id           String   @id @default(cuid())
+  enrollmentId String
+  teacherId    String
+  date         DateTime @db.Date
+  status       String
+  remarks      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  teacher    Teacher    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([enrollmentId, date])
+  @@index([enrollmentId])
+  @@index([date])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+model Fee {
+  id           String    @id @default(cuid())
+  enrollmentId String
+  schoolId     String
+  description  String
+  amount       Decimal
+  dueDate      DateTime
+  paidDate     DateTime?
+  status       String    @default("PENDING")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  school     School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@index([enrollmentId])
+  @@index([schoolId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+model Transfer {
+  id              String         @id @default(cuid())
+  studentId       String
+  fromSchoolId    String
+  toSchoolId      String
+  status          TransferStatus @default(PENDING)
+  reason          String?
+  requestedBy     String?
+  approvedBy      String?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  student    Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  fromSchool School  @relation("TransferFrom", fields: [fromSchoolId], references: [id])
+  toSchool   School  @relation("TransferTo", fields: [toSchoolId], references: [id])
+
+  @@index([studentId])
+  @@index([fromSchoolId])
+  @@index([toSchoolId])
+  @@index([status])
+}
+
+model OtpCode {
+  id        String    @id @default(cuid())
+  parentId  String
+  code      String
+  purpose   String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  parent Parent @relation(fields: [parentId], references: [id], onDelete: Cascade)
+
+  @@index([parentId])
+  @@index([code])
+  @@index([expiresAt])
+}
+
+model NotificationLog {
+  id        String    @id @default(cuid())
+  userId    String
+  type      String
+  channel   String
+  recipient String
+  subject   String?
+  body      String
+  status    String    @default("PENDING")
+  priority  String    @default("NORMAL")
+  metadata  Json?
+  sentAt    DateTime?
+  error     String?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}

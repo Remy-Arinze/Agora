@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light Mode Colors - using hex for better compatibility */
+    --light-bg: #e4edff; /* gray-200 */
+    --light-card: #ffffff; /* Pure white for cards */
+    --light-text-primary: #111827; /* gray-900 */
+    --light-text-secondary: #4b5563; /* gray-600 */
+    --light-text-muted: #6b7280; /* gray-500 */
+    --light-border: #1a3262; /* gray-100 - very light gray border */
+    
+    /* Dark Mode Colors - using hex for better compatibility */
+    --dark-bg: #020408; /* Very dark, almost black */
+    --dark-surface: #1e2742; /* Deep greyish blue for cards */
+    --dark-border: #1e293b; /* Border color */
+    --dark-text-primary: #f1f5f9; /* Lighter text for better contrast */
+    --dark-text-secondary: #cbd5e1; /* Secondary text */
+    --dark-text-muted: #94a3b8; /* Muted text */
+  }
+
+  /* Border colors are applied via Tailwind classes, not globally */
+
+  body {
+    /* Background is handled by layout.tsx div, not body */
+    color: var(--light-text-primary);
+    transition: color 200ms;
+  }
+
+  .dark body {
+    /* Background is handled by layout.tsx div, not body */
+    color: var(--dark-text-primary);
+  }
+}
+

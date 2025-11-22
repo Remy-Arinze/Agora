@@ -1,0 +1,323 @@
+import { apiSlice } from './apiSlice';
+
+// Types (these should match backend DTOs)
+export interface SchoolAdmin {
+  id: string;
+  adminId?: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  phone: string;
+  role: string;
+  createdAt: string;
+}
+
+export interface Teacher {
+  id: string;
+  teacherId?: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  phone: string;
+  employeeId: string | null;
+  subject: string | null;
+  isTemporary: boolean;
+  createdAt: string;
+}
+
+export interface SchoolTypeContext {
+  hasPrimary: boolean;
+  hasSecondary: boolean;
+  hasTertiary: boolean;
+  isMixed: boolean;
+  availableTypes: ('PRIMARY' | 'SECONDARY' | 'TERTIARY')[];
+  primaryType: 'PRIMARY' | 'SECONDARY' | 'TERTIARY' | 'MIXED';
+}
+
+export interface School {
+  id: string;
+  schoolId: string;
+  name: string;
+  subdomain: string;
+  domain: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  country: string;
+  phone: string | null;
+  email: string | null;
+  isActive: boolean;
+  hasPrimary: boolean;
+  hasSecondary: boolean;
+  hasTertiary: boolean;
+  createdAt: string;
+  admins: SchoolAdmin[];
+  teachers: Teacher[];
+  teachersCount: number;
+  studentsCount?: number;
+  schoolType?: SchoolTypeContext;
+}
+
+export interface CreateSchoolDto {
+  name: string;
+  subdomain: string;
+  domain?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  phone?: string;
+  email?: string;
+  levels?: {
+    primary?: boolean;
+    secondary?: boolean;
+    tertiary?: boolean;
+  };
+  principal?: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+  };
+  admins?: Array<{
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    role: string;
+  }>;
+}
+
+export interface AddAdminDto {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  role: string;
+  employeeId?: string;
+}
+
+export interface AddTeacherDto {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  subject?: string;
+  isTemporary?: boolean;
+  employeeId?: string;
+}
+
+export interface UpdateAdminDto {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  role?: string;
+}
+
+export interface UpdateTeacherDto {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  subject?: string;
+  isTemporary?: boolean;
+}
+
+export interface UpdatePrincipalDto {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+}
+
+export interface ResponseDto<T> {
+  success: boolean;
+  message: string;
+  data: T;
+  timestamp?: string;
+}
+
+// RTK Query endpoints for schools
+export const schoolsApi = apiSlice.injectEndpoints({
+  endpoints: (builder) => ({
+    // Get all schools
+    getSchools: builder.query<ResponseDto<School[]>, void>({
+      query: () => '/schools',
+      providesTags: ['School'],
+    }),
+
+    // Get school by ID
+    getSchool: builder.query<ResponseDto<School>, string>({
+      query: (id) => `/schools/${id}`,
+      providesTags: (result, error, id) => [{ type: 'School', id }],
+    }),
+
+    // Create school
+    createSchool: builder.mutation<ResponseDto<School>, CreateSchoolDto>({
+      query: (body) => ({
+        url: '/schools',
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['School'],
+    }),
+
+    // Update school
+    updateSchool: builder.mutation<ResponseDto<School>, { id: string; data: Partial<CreateSchoolDto> }>({
+      query: ({ id, data }) => ({
+        url: `/schools/${id}`,
+        method: 'PATCH',
+        body: data,
+      }),
+      invalidatesTags: (result, error, { id }) => [
+        { type: 'School', id },
+        'School',
+      ],
+    }),
+
+    // Add admin to school
+    addAdmin: builder.mutation<ResponseDto<SchoolAdmin>, { schoolId: string; admin: AddAdminDto }>({
+      query: ({ schoolId, admin }) => ({
+        url: `/schools/${schoolId}/admins`,
+        method: 'POST',
+        body: admin,
+      }),
+      invalidatesTags: (result, error, { schoolId }) => [
+        { type: 'School', id: schoolId },
+        'School',
+      ],
+    }),
+
+    // Update admin in school
+    updateAdmin: builder.mutation<ResponseDto<SchoolAdmin>, { schoolId: string; adminId: string; admin: UpdateAdminDto }>({
+      query: ({ schoolId, adminId, admin }) => ({
+        url: `/schools/${schoolId}/admins/${adminId}`,
+        method: 'PATCH',
+        body: admin,
+      }),
+      invalidatesTags: (result, error, { schoolId }) => [
+        { type: 'School', id: schoolId },
+        'School',
+      ],
+    }),
+
+    // Add teacher to school
+    addTeacher: builder.mutation<ResponseDto<Teacher>, { schoolId: string; teacher: AddTeacherDto }>({
+      query: ({ schoolId, teacher }) => ({
+        url: `/schools/${schoolId}/teachers`,
+        method: 'POST',
+        body: teacher,
+      }),
+      invalidatesTags: (result, error, { schoolId }) => [
+        { type: 'School', id: schoolId },
+        'School',
+      ],
+    }),
+
+    // Update teacher in school
+    updateTeacher: builder.mutation<ResponseDto<Teacher>, { schoolId: string; teacherId: string; teacher: UpdateTeacherDto }>({
+      query: ({ schoolId, teacherId, teacher }) => ({
+        url: `/schools/${schoolId}/teachers/${teacherId}`,
+        method: 'PATCH',
+        body: teacher,
+      }),
+      invalidatesTags: (result, error, { schoolId }) => [
+        { type: 'School', id: schoolId },
+        'School',
+      ],
+    }),
+
+    // Delete teacher from school
+    deleteTeacher: builder.mutation<ResponseDto<void>, { schoolId: string; teacherId: string }>({
+      query: ({ schoolId, teacherId }) => ({
+        url: `/schools/${schoolId}/teachers/${teacherId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: (result, error, { schoolId }) => [
+        { type: 'School', id: schoolId },
+        'School',
+      ],
+    }),
+
+    // Delete admin from school
+    deleteAdmin: builder.mutation<ResponseDto<void>, { schoolId: string; adminId: string }>({
+      query: ({ schoolId, adminId }) => ({
+        url: `/schools/${schoolId}/admins/${adminId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: (result, error, { schoolId }) => [
+        { type: 'School', id: schoolId },
+        'School',
+      ],
+    }),
+
+    // Update principal in school
+    updatePrincipal: builder.mutation<ResponseDto<SchoolAdmin>, { schoolId: string; principalId: string; principal: UpdatePrincipalDto }>({
+      query: ({ schoolId, principalId, principal }) => ({
+        url: `/schools/${schoolId}/principal/${principalId}`,
+        method: 'PATCH',
+        body: principal,
+      }),
+      invalidatesTags: (result, error, { schoolId }) => [
+        { type: 'School', id: schoolId },
+        'School',
+      ],
+    }),
+
+    // Delete principal from school
+    deletePrincipal: builder.mutation<ResponseDto<void>, { schoolId: string; principalId: string }>({
+      query: ({ schoolId, principalId }) => ({
+        url: `/schools/${schoolId}/principal/${principalId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: (result, error, { schoolId }) => [
+        { type: 'School', id: schoolId },
+        'School',
+      ],
+    }),
+
+    // Make an admin the principal
+    makePrincipal: builder.mutation<ResponseDto<void>, { schoolId: string; adminId: string }>({
+      query: ({ schoolId, adminId }) => ({
+        url: `/schools/${schoolId}/admins/${adminId}/make-principal`,
+        method: 'PATCH',
+      }),
+      invalidatesTags: (result, error, { schoolId }) => [
+        { type: 'School', id: schoolId },
+        'School',
+      ],
+    }),
+
+    // Convert teacher to admin
+    convertTeacherToAdmin: builder.mutation<
+      ResponseDto<void>,
+      { schoolId: string; teacherId: string; role: string; keepAsTeacher: boolean }
+    >({
+      query: ({ schoolId, teacherId, role, keepAsTeacher }) => ({
+        url: `/schools/${schoolId}/teachers/${teacherId}/convert-to-admin`,
+        method: 'PATCH',
+        body: { role, keepAsTeacher },
+      }),
+      invalidatesTags: (result, error, { schoolId }) => [
+        { type: 'School', id: schoolId },
+        'School',
+      ],
+    }),
+  }),
+});
+
+export const {
+  useGetSchoolsQuery,
+  useGetSchoolQuery,
+  useCreateSchoolMutation,
+  useUpdateSchoolMutation,
+  useAddAdminMutation,
+  useUpdateAdminMutation,
+  useAddTeacherMutation,
+  useUpdateTeacherMutation,
+  useDeleteTeacherMutation,
+  useDeleteAdminMutation,
+  useUpdatePrincipalMutation,
+  useDeletePrincipalMutation,
+  useMakePrincipalMutation,
+  useConvertTeacherToAdminMutation,
+} = schoolsApi;
+
