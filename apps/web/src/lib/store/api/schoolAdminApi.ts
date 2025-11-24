@@ -251,6 +251,93 @@ export interface CreateMasterScheduleDto {
   }>;
 }
 
+export interface ClassLevel {
+  id: string;
+  name: string;
+  code?: string;
+  level: number;
+  type: string;
+  schoolId: string;
+  isActive: boolean;
+  nextLevelId?: string;
+}
+
+export interface ClassArm {
+  id: string;
+  name: string;
+  capacity?: number;
+  classLevelId: string;
+  classLevelName: string;
+  isActive: boolean;
+}
+
+export interface Subject {
+  id: string;
+  name: string;
+  code?: string;
+  schoolId: string;
+  isActive: boolean;
+}
+
+export interface Room {
+  id: string;
+  name: string;
+  code?: string;
+  capacity?: number;
+  roomType?: string;
+  schoolId: string;
+  isActive: boolean;
+}
+
+export interface CreateClassArmDto {
+  name: string;
+  capacity?: number;
+  classLevelId: string;
+}
+
+export interface CreateSubjectDto {
+  name: string;
+  code?: string;
+}
+
+export interface CreateRoomDto {
+  name: string;
+  code?: string;
+  capacity?: number;
+  roomType?: string;
+}
+
+export type CalendarEventType = 'ACADEMIC' | 'EVENT' | 'EXAM' | 'MEETING' | 'HOLIDAY';
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  description?: string;
+  startDate: string;
+  endDate: string;
+  type: CalendarEventType;
+  location?: string;
+  roomId?: string;
+  roomName?: string;
+  schoolId: string;
+  createdBy?: string;
+  isAllDay: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateEventDto {
+  title: string;
+  description?: string;
+  startDate: string;
+  endDate: string;
+  type: CalendarEventType;
+  location?: string;
+  roomId?: string;
+  isAllDay?: boolean;
+  schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY';
+}
+
 // RTK Query endpoints for school admin
 export const schoolAdminApi = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
@@ -385,6 +472,13 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['Session', 'School'],
     }),
+    endTerm: builder.mutation<ResponseDto<{ term: Term }>, { schoolId: string }>({
+      query: ({ schoolId }) => ({
+        url: `/schools/${schoolId}/sessions/end-term`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['Session', 'School'],
+    }),
     // Timetable Management
     getTimetableForClassArm: builder.query<ResponseDto<TimetablePeriod[]>, { schoolId: string; classArmId: string; termId: string }>({
       query: ({ schoolId, classArmId, termId }) => {
@@ -425,6 +519,96 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['Timetable'],
     }),
+    // Resource endpoints
+    getClassLevels: builder.query<ResponseDto<ClassLevel[]>, { schoolId: string }>({
+      query: ({ schoolId }) => `/schools/${schoolId}/timetable/class-levels`,
+      providesTags: ['Timetable'],
+    }),
+    getClassArms: builder.query<ResponseDto<ClassArm[]>, { schoolId: string; classLevelId?: string; schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY' }>({
+      query: ({ schoolId, classLevelId, schoolType }) => {
+        const queryParams = new URLSearchParams();
+        if (classLevelId) queryParams.append('classLevelId', classLevelId);
+        if (schoolType) queryParams.append('schoolType', schoolType);
+        const queryString = queryParams.toString();
+        return `/schools/${schoolId}/timetable/class-arms${queryString ? `?${queryString}` : ''}`;
+      },
+      providesTags: ['Timetable'],
+    }),
+    createClassArm: builder.mutation<ResponseDto<ClassArm>, { schoolId: string; data: CreateClassArmDto }>({
+      query: ({ schoolId, data }) => ({
+        url: `/schools/${schoolId}/timetable/class-arms`,
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['Timetable'],
+    }),
+    getSubjects: builder.query<ResponseDto<Subject[]>, { schoolId: string }>({
+      query: ({ schoolId }) => `/schools/${schoolId}/timetable/subjects`,
+      providesTags: ['Timetable'],
+    }),
+    createSubject: builder.mutation<ResponseDto<Subject>, { schoolId: string; data: CreateSubjectDto }>({
+      query: ({ schoolId, data }) => ({
+        url: `/schools/${schoolId}/timetable/subjects`,
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['Timetable'],
+    }),
+    getRooms: builder.query<ResponseDto<Room[]>, { schoolId: string }>({
+      query: ({ schoolId }) => `/schools/${schoolId}/timetable/rooms`,
+      providesTags: ['Timetable'],
+    }),
+    createRoom: builder.mutation<ResponseDto<Room>, { schoolId: string; data: CreateRoomDto }>({
+      query: ({ schoolId, data }) => ({
+        url: `/schools/${schoolId}/timetable/rooms`,
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['Timetable'],
+    }),
+    // Event Management
+    getEvents: builder.query<ResponseDto<CalendarEvent[]>, { schoolId: string; startDate: string; endDate: string; schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY' }>({
+      query: ({ schoolId, startDate, endDate, schoolType }) => {
+        const queryParams = new URLSearchParams();
+        queryParams.append('startDate', startDate);
+        queryParams.append('endDate', endDate);
+        if (schoolType) queryParams.append('schoolType', schoolType);
+        return `/schools/${schoolId}/events?${queryParams.toString()}`;
+      },
+      providesTags: ['Event'],
+    }),
+    getUpcomingEvents: builder.query<ResponseDto<CalendarEvent[]>, { schoolId: string; days?: number; schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY' }>({
+      query: ({ schoolId, days, schoolType }) => {
+        const queryParams = new URLSearchParams();
+        if (days) queryParams.append('days', days.toString());
+        if (schoolType) queryParams.append('schoolType', schoolType);
+        return `/schools/${schoolId}/events/upcoming?${queryParams.toString()}`;
+      },
+      providesTags: ['Event'],
+    }),
+    createEvent: builder.mutation<ResponseDto<CalendarEvent>, { schoolId: string; data: CreateEventDto }>({
+      query: ({ schoolId, data }) => ({
+        url: `/schools/${schoolId}/events`,
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['Event'],
+    }),
+    updateEvent: builder.mutation<ResponseDto<CalendarEvent>, { schoolId: string; eventId: string; data: Partial<CreateEventDto> }>({
+      query: ({ schoolId, eventId, data }) => ({
+        url: `/schools/${schoolId}/events/${eventId}`,
+        method: 'PATCH',
+        body: data,
+      }),
+      invalidatesTags: ['Event'],
+    }),
+    deleteEvent: builder.mutation<ResponseDto<void>, { schoolId: string; eventId: string }>({
+      query: ({ schoolId, eventId }) => ({
+        url: `/schools/${schoolId}/events/${eventId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Event'],
+    }),
   }),
 });
 
@@ -446,11 +630,26 @@ export const {
   useCreateTermMutation,
   useStartNewTermMutation,
   useMigrateStudentsMutation,
+  useEndTermMutation,
   // Timetable hooks
   useGetTimetableForClassArmQuery,
   useCreateTimetablePeriodMutation,
   useUpdateTimetablePeriodMutation,
   useDeleteTimetablePeriodMutation,
   useCreateMasterScheduleMutation,
+  // Resource hooks
+  useGetClassLevelsQuery,
+  useGetClassArmsQuery,
+  useCreateClassArmMutation,
+  useGetSubjectsQuery,
+  useCreateSubjectMutation,
+  useGetRoomsQuery,
+  useCreateRoomMutation,
+  // Event hooks
+  useGetEventsQuery,
+  useGetUpcomingEventsQuery,
+  useCreateEventMutation,
+  useUpdateEventMutation,
+  useDeleteEventMutation,
 } = schoolAdminApi;
 

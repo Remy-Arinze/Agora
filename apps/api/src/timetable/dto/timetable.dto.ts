@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { DayOfWeek, PeriodType } from '@prisma/client';
+import { DayOfWeek, PeriodType } from './create-timetable-period.dto';
 
 export class TimetablePeriodDto {
   @ApiProperty()

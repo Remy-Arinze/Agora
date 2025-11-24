@@ -235,6 +235,7 @@ model School {
   classLevels      ClassLevel[]
   rooms            Room[]
   subjects         Subject[]
+  events           Event[]
 
   @@index([subdomain])
   @@index([schoolId])
@@ -382,6 +383,7 @@ model Room {
 
   school           School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   timetablePeriods TimetablePeriod[]
+  events           Event[]
 
   @@unique([schoolId, code])
   @@index([schoolId])
@@ -608,4 +610,38 @@ model NotificationLog {
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+}
+
+enum EventType {
+  ACADEMIC
+  EVENT
+  EXAM
+  MEETING
+  HOLIDAY
+}
+
+model Event {
+  id          String    @id @default(cuid())
+  title       String
+  description String?
+  startDate   DateTime
+  endDate     DateTime
+  type        EventType
+  schoolType  String? // "PRIMARY", "SECONDARY", "TERTIARY" - null means applies to all types
+  location    String?
+  roomId      String?
+  schoolId    String
+  createdBy   String? // User ID who created the event
+  isAllDay    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  room   Room?  @relation(fields: [roomId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@index([schoolType])
+  @@index([startDate])
+  @@index([type])
+  @@index([isAllDay])
 }

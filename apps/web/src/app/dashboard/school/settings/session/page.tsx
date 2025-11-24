@@ -7,6 +7,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
+import { SessionWizardInfoModal } from '@/components/modals';
 import { motion } from 'framer-motion';
 import { Calendar, ArrowRight, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 import {
@@ -16,6 +17,7 @@ import {
   useGetSessionsQuery,
   type SessionType,
 } from '@/lib/store/api/schoolAdminApi';
+import { useEffect } from 'react';
 import toast from 'react-hot-toast';
 
 type Step = 1 | 2 | 3;
@@ -31,6 +33,7 @@ export default function SessionWizardPage() {
   const [halfTermEnd, setHalfTermEnd] = useState('');
   const [carryOver, setCarryOver] = useState<boolean>(true);
   const [selectedTermId, setSelectedTermId] = useState<string>('');
+  const [showInfoModal, setShowInfoModal] = useState(false);
 
   const { data: schoolResponse } = useGetMySchoolQuery();
   const schoolId = schoolResponse?.data?.id;
@@ -40,7 +43,7 @@ export default function SessionWizardPage() {
     { skip: !schoolId }
   );
 
-  const { data: sessionsResponse } = useGetSessionsQuery(
+  const { data: sessionsResponse, isLoading: isLoadingSessions } = useGetSessionsQuery(
     { schoolId: schoolId! },
     { skip: !schoolId }
   );
@@ -49,6 +52,45 @@ export default function SessionWizardPage() {
 
   const activeSession = activeSessionResponse?.data;
   const sessions = sessionsResponse?.data || [];
+
+  // Show info modal when page loads if no active session
+  useEffect(() => {
+    if (activeSessionResponse && !activeSessionResponse.isLoading) {
+      if (!activeSession?.session) {
+        setShowInfoModal(true);
+      }
+    }
+  }, [activeSessionResponse, activeSession]);
+
+  // Validate session dates (must be at least 10 months)
+  const validateSessionDates = (start: string, end: string): string | null => {
+    if (!start || !end) return null;
+    
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    const monthsDiff = (endDate.getFullYear() - startDate.getFullYear()) * 12 + 
+                       (endDate.getMonth() - startDate.getMonth());
+    const daysDiff = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (monthsDiff < 10 || daysDiff < 300) {
+      return 'An academic session must span at least 10 months (approximately one year).';
+    }
+    return null;
+  };
+
+  const sessionDateError = sessionType === 'NEW_SESSION' 
+    ? validateSessionDates(startDate, endDate) 
+    : null;
+
+  // Show warning if active session exists when trying to create new session
+  useEffect(() => {
+    if (sessionType === 'NEW_SESSION' && activeSession?.session) {
+      toast.error(
+        `Cannot create a new session while ${activeSession.session.name} is active. Please end the current session first.`,
+        { duration: 5000 }
+      );
+    }
+  }, [sessionType, activeSession]);
 
   const handleNext = () => {
     if (currentStep < 3) {
@@ -89,12 +131,23 @@ export default function SessionWizardPage() {
     }
   };
 
-  const canProceedStep1 = sessionType && (sessionType === 'NEW_SESSION' ? sessionName && startDate && endDate : selectedTermId);
-  const canProceedStep2 = startDate && endDate;
+  // For Step 1: NEW_SESSION only needs sessionName, NEW_TERM needs selectedTermId
+  // Also check that no active session exists for NEW_SESSION
+  const canProceedStep1 = sessionType && 
+    (sessionType === 'NEW_SESSION' 
+      ? sessionName.trim().length > 0 && !activeSession?.session 
+      : selectedTermId.trim().length > 0);
+  const canProceedStep2 = startDate && endDate && !sessionDateError;
   const canProceedStep3 = true; // Logic gate is just a question
 
   return (
     <ProtectedRoute roles={['SCHOOL_ADMIN']}>
+      {/* Info Modal */}
+      <SessionWizardInfoModal
+        isOpen={showInfoModal}
+        onClose={() => setShowInfoModal(false)}
+      />
+
       <div className="w-full max-w-4xl mx-auto">
         {/* Header */}
         <motion.div
@@ -190,6 +243,15 @@ export default function SessionWizardPage() {
                     onChange={(e) => setSessionName(e.target.value)}
                     placeholder="2025/2026"
                   />
+                  {activeSession?.session && (
+                    <Alert variant="error" className="mt-2">
+                      <AlertCircle className="h-4 w-4" />
+                      <div>
+                        <strong>Active Session:</strong> {activeSession.session.name} is currently active. 
+                        You must end the current session before creating a new one.
+                      </div>
+                    </Alert>
+                  )}
                 </div>
               )}
 
@@ -198,20 +260,44 @@ export default function SessionWizardPage() {
                   <label className="block text-sm font-medium mb-2 text-light-text-primary dark:text-dark-text-primary">
                     Select Term
                   </label>
-                  <select
-                    value={selectedTermId}
-                    onChange={(e) => setSelectedTermId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-dark-surface"
-                  >
-                    <option value="">Select a term...</option>
-                    {sessions.map((session) =>
-                      session.terms.map((term) => (
-                        <option key={term.id} value={term.id}>
-                          {session.name} - {term.name}
-                        </option>
-                      ))
-                    )}
-                  </select>
+                  {isLoadingSessions ? (
+                    <div className="p-4 border border-gray-300 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-dark-surface flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                        Loading sessions...
+                      </p>
+                    </div>
+                  ) : sessions.length === 0 ? (
+                    <div className="p-4 border border-yellow-300 dark:border-yellow-700 rounded-lg bg-yellow-50 dark:bg-yellow-900/20">
+                      <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                        <strong>No sessions found.</strong> Please select "New Session" to start a new academic year first, or create a session through the admin panel.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <select
+                        value={selectedTermId}
+                        onChange={(e) => setSelectedTermId(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-dark-surface"
+                      >
+                        <option value="">Select a term...</option>
+                        {sessions
+                          .filter((session) => session.terms && session.terms.length > 0)
+                          .map((session) =>
+                            session.terms.map((term) => (
+                              <option key={term.id} value={term.id}>
+                                {session.name} - {term.name}
+                              </option>
+                            ))
+                          )}
+                      </select>
+                      {sessions.length > 0 && sessions.every((s) => !s.terms || s.terms.length === 0) && (
+                        <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">
+                          ⚠️ No terms found in existing sessions. You need to create terms for your sessions first.
+                        </p>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
 
@@ -260,7 +346,19 @@ export default function SessionWizardPage() {
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
+                    min={startDate || undefined}
                   />
+                  {sessionDateError && (
+                    <Alert variant="error" className="mt-2">
+                      <AlertCircle className="h-4 w-4" />
+                      <p className="text-sm">{sessionDateError}</p>
+                    </Alert>
+                  )}
+                  {startDate && endDate && !sessionDateError && (
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                      ✓ Session duration is valid (at least 10 months)
+                    </p>
+                  )}
                 </div>
               </div>
 

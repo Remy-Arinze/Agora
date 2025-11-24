@@ -34,6 +34,7 @@ import {
   useAssignTeacherToClassMutation,
   useRemoveTeacherFromClassMutation,
   useGetStaffListQuery,
+  useGetActiveSessionQuery,
   type Class,
   type ClassTeacher,
 } from '@/lib/store/api/schoolAdminApi';
@@ -60,6 +61,13 @@ export default function ClassDetailPage() {
   // Get school data
   const { data: schoolResponse } = useGetMySchoolQuery();
   const schoolId = schoolResponse?.data?.id;
+
+  // Get active session
+  const { data: activeSessionResponse } = useGetActiveSessionQuery(
+    { schoolId: schoolId! },
+    { skip: !schoolId }
+  );
+  const activeSession = activeSessionResponse?.data;
 
   // Get class data
   const {
@@ -197,9 +205,18 @@ export default function ClassDetailPage() {
               <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
                 {classData.name}
               </h1>
-              <p className="text-light-text-secondary dark:text-dark-text-secondary">
+              <p className="text-light-text-secondary dark:text-dark-text-secondary mb-1">
                 {classData.classLevel || classData.name} • Academic Year {classData.academicYear}
               </p>
+              {activeSession?.session && (
+                <div className="flex items-center gap-2 mt-2">
+                  <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                    Active: {activeSession.session.name}
+                    {activeSession.term && ` - ${activeSession.term.name}`}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </motion.div>
@@ -263,6 +280,17 @@ export default function ClassDetailPage() {
                         {classData.academicYear}
                       </p>
                     </div>
+                    {activeSession?.session && (
+                      <div>
+                        <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                          Active Session
+                        </p>
+                        <p className="font-semibold text-blue-600 dark:text-blue-400">
+                          {activeSession.session.name}
+                          {activeSession.term && ` - ${activeSession.term.name}`}
+                        </p>
+                      </div>
+                    )}
                     {classData.code && (
                       <div>
                         <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">

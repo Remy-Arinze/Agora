@@ -11,8 +11,18 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { TimetableService } from './timetable.service';
+import { ResourcesService } from './resources.service';
 import { CreateTimetablePeriodDto, CreateMasterScheduleDto } from './dto/create-timetable-period.dto';
 import { TimetablePeriodDto } from './dto/timetable.dto';
+import {
+  ClassLevelDto,
+  ClassArmDto,
+  RoomDto,
+  SubjectDto,
+  CreateClassArmDto,
+  CreateRoomDto,
+  CreateSubjectDto,
+} from './dto/resource.dto';
 import { ResponseDto } from '../common/dto/response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SchoolDataAccessGuard } from '../common/guards/school-data-access.guard';
@@ -22,7 +32,10 @@ import { SchoolDataAccessGuard } from '../common/guards/school-data-access.guard
 @UseGuards(JwtAuthGuard, SchoolDataAccessGuard)
 @ApiBearerAuth()
 export class TimetableController {
-  constructor(private readonly timetableService: TimetableService) {}
+  constructor(
+    private readonly timetableService: TimetableService,
+    private readonly resourcesService: ResourcesService
+  ) {}
 
   @Post('periods')
   @ApiOperation({ summary: 'Create a timetable period with conflict detection' })
@@ -99,6 +112,111 @@ export class TimetableController {
   ): Promise<ResponseDto<void>> {
     await this.timetableService.deletePeriod(schoolId, periodId);
     return ResponseDto.ok(undefined, 'Period deleted successfully');
+  }
+
+  // Resource endpoints (ClassArms, Subjects, Rooms)
+  @Get('class-levels')
+  @ApiOperation({ summary: 'Get all class levels for a school, optionally filtered by school type' })
+  @ApiResponse({
+    status: 200,
+    description: 'Class levels retrieved successfully',
+    type: [ClassLevelDto],
+  })
+  async getClassLevels(
+    @Param('schoolId') schoolId: string,
+    @Query('schoolType') schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY'
+  ): Promise<ResponseDto<ClassLevelDto[]>> {
+    const data = await this.resourcesService.getClassLevels(schoolId, schoolType);
+    return ResponseDto.ok(data, 'Class levels retrieved successfully');
+  }
+
+  @Get('class-arms')
+  @ApiOperation({ summary: 'Get all class arms for a school, optionally filtered by school type' })
+  @ApiResponse({
+    status: 200,
+    description: 'Class arms retrieved successfully',
+    type: [ClassArmDto],
+  })
+  async getClassArms(
+    @Param('schoolId') schoolId: string,
+    @Query('classLevelId') classLevelId?: string,
+    @Query('schoolType') schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY'
+  ): Promise<ResponseDto<ClassArmDto[]>> {
+    const data = await this.resourcesService.getClassArms(schoolId, classLevelId, schoolType);
+    return ResponseDto.ok(data, 'Class arms retrieved successfully');
+  }
+
+  @Post('class-arms')
+  @ApiOperation({ summary: 'Create a new class arm' })
+  @ApiResponse({
+    status: 201,
+    description: 'Class arm created successfully',
+    type: ClassArmDto,
+  })
+  async createClassArm(
+    @Param('schoolId') schoolId: string,
+    @Body() dto: CreateClassArmDto
+  ): Promise<ResponseDto<ClassArmDto>> {
+    const data = await this.resourcesService.createClassArm(schoolId, dto);
+    return ResponseDto.ok(data, 'Class arm created successfully');
+  }
+
+  @Get('subjects')
+  @ApiOperation({ summary: 'Get all subjects for a school' })
+  @ApiResponse({
+    status: 200,
+    description: 'Subjects retrieved successfully',
+    type: [SubjectDto],
+  })
+  async getSubjects(
+    @Param('schoolId') schoolId: string
+  ): Promise<ResponseDto<SubjectDto[]>> {
+    const data = await this.resourcesService.getSubjects(schoolId);
+    return ResponseDto.ok(data, 'Subjects retrieved successfully');
+  }
+
+  @Post('subjects')
+  @ApiOperation({ summary: 'Create a new subject' })
+  @ApiResponse({
+    status: 201,
+    description: 'Subject created successfully',
+    type: SubjectDto,
+  })
+  async createSubject(
+    @Param('schoolId') schoolId: string,
+    @Body() dto: CreateSubjectDto
+  ): Promise<ResponseDto<SubjectDto>> {
+    const data = await this.resourcesService.createSubject(schoolId, dto);
+    return ResponseDto.ok(data, 'Subject created successfully');
+  }
+
+  @Get('rooms')
+  @ApiOperation({ summary: 'Get all rooms for a school' })
+  @ApiResponse({
+    status: 200,
+    description: 'Rooms retrieved successfully',
+    type: [RoomDto],
+  })
+  async getRooms(
+    @Param('schoolId') schoolId: string
+  ): Promise<ResponseDto<RoomDto[]>> {
+    const data = await this.resourcesService.getRooms(schoolId);
+    return ResponseDto.ok(data, 'Rooms retrieved successfully');
+  }
+
+  @Post('rooms')
+  @ApiOperation({ summary: 'Create a new room' })
+  @ApiResponse({
+    status: 201,
+    description: 'Room created successfully',
+    type: RoomDto,
+  })
+  async createRoom(
+    @Param('schoolId') schoolId: string,
+    @Body() dto: CreateRoomDto
+  ): Promise<ResponseDto<RoomDto>> {
+    const data = await this.resourcesService.createRoom(schoolId, dto);
+    return ResponseDto.ok(data, 'Room created successfully');
   }
 }
 

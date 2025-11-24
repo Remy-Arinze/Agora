@@ -17,6 +17,7 @@ import {
   useGetClassesQuery,
   useCreateClassMutation,
   useDeleteClassMutation,
+  useGetActiveSessionQuery,
   type Class,
 } from '@/lib/store/api/schoolAdminApi';
 import toast from 'react-hot-toast';
@@ -31,6 +32,13 @@ export default function ClassesPage() {
   // Get school data
   const { data: schoolResponse } = useGetMySchoolQuery();
   const schoolId = schoolResponse?.data?.id;
+
+  // Get active session
+  const { data: activeSessionResponse } = useGetActiveSessionQuery(
+    { schoolId: schoolId! },
+    { skip: !schoolId }
+  );
+  const activeSession = activeSessionResponse?.data;
 
   // Get classes filtered by current school type
   const {
@@ -123,9 +131,18 @@ export default function ClassesPage() {
               <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
                 {terminology.courses}
               </h1>
-              <p className="text-light-text-secondary dark:text-dark-text-secondary">
+              <p className="text-light-text-secondary dark:text-dark-text-secondary mb-1">
                 Manage all {terminology.courses.toLowerCase()} in your school
               </p>
+              {activeSession?.session && (
+                <div className="flex items-center gap-2 mt-2">
+                  <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                    Active Session: {activeSession.session.name}
+                    {activeSession.term && ` - ${activeSession.term.name}`}
+                  </span>
+                </div>
+              )}
             </div>
             <Button variant="primary" onClick={() => setShowAddClass(true)}>
               <Plus className="h-4 w-4 mr-2" />

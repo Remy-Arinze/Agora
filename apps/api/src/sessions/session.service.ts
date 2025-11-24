@@ -25,12 +25,37 @@ export class SessionService {
       throw new BadRequestException('School not found');
     }
 
+    // Check if there's an active session
+    const activeSession = await this.prisma.academicSession.findFirst({
+      where: {
+        schoolId: school.id,
+        status: SessionStatus.ACTIVE,
+      },
+    });
+
+    if (activeSession) {
+      throw new ConflictException(
+        `Cannot create a new session while ${activeSession.name} is active. Please end the current session first.`
+      );
+    }
+
     // Validate dates
     const startDate = new Date(dto.startDate);
     const endDate = new Date(dto.endDate);
 
     if (startDate >= endDate) {
       throw new BadRequestException('Start date must be before end date');
+    }
+
+    // Validate session duration (must be at least 10 months, approximately a year)
+    const monthsDiff = (endDate.getFullYear() - startDate.getFullYear()) * 12 + 
+                       (endDate.getMonth() - startDate.getMonth());
+    const daysDiff = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (monthsDiff < 10 || daysDiff < 300) {
+      throw new BadRequestException(
+        'An academic session must span at least 10 months (approximately one year). Please select appropriate start and end dates.'
+      );
     }
 
     // Check if session name already exists
@@ -178,12 +203,39 @@ export class SessionService {
     let term: any;
 
     if (dto.type === SessionType.NEW_SESSION) {
+      // Check if there's an active session
+      const activeSession = await this.prisma.academicSession.findFirst({
+        where: {
+          schoolId: school.id,
+          status: SessionStatus.ACTIVE,
+        },
+      });
+
+      if (activeSession) {
+        throw new ConflictException(
+          `Cannot start a new session while ${activeSession.name} is active. Please end the current session first.`
+        );
+      }
+
+      // Validate session duration (must be at least 10 months)
+      const startDate = new Date(dto.startDate);
+      const endDate = new Date(dto.endDate);
+      const monthsDiff = (endDate.getFullYear() - startDate.getFullYear()) * 12 + 
+                         (endDate.getMonth() - startDate.getMonth());
+      const daysDiff = Math.floor((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+
+      if (monthsDiff < 10 || daysDiff < 300) {
+        throw new BadRequestException(
+          'An academic session must span at least 10 months (approximately one year). Please select appropriate start and end dates.'
+        );
+      }
+
       // Create new session
       session = await this.prisma.academicSession.create({
         data: {
           name: dto.name,
-          startDate: new Date(dto.startDate),
-          endDate: new Date(dto.endDate),
+          startDate: startDate,
+          endDate: endDate,
           status: SessionStatus.ACTIVE,
           schoolId: school.id,
         },
@@ -492,6 +544,43 @@ export class SessionService {
     }
 
     return carriedOverCount;
+  }
+
+  /**
+   * End the current active term
+   */
+  async endTerm(schoolId: string): Promise<{ term: TermDto }> {
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    // Find active term
+    const activeTerm = await this.prisma.term.findFirst({
+      where: {
+        academicSession: {
+          schoolId: school.id,
+        },
+        status: TermStatus.ACTIVE,
+      },
+      include: {
+        academicSession: true,
+      },
+    });
+
+    if (!activeTerm) {
+      throw new NotFoundException('No active term found');
+    }
+
+    // Update term status to COMPLETED
+    const updatedTerm = await this.prisma.term.update({
+      where: { id: activeTerm.id },
+      data: { status: TermStatus.COMPLETED },
+    });
+
+    return {
+      term: this.mapToTermDto(updatedTerm),
+    };
   }
 
   /**

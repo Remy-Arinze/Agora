@@ -43,7 +43,7 @@ export const apiSlice = createApi({
       return headers;
     },
   }),
-  tagTypes: ['Student', 'School', 'User'],
+  tagTypes: ['Student', 'School', 'User', 'Timetable', 'Event', 'Session', 'ClassLevel', 'ClassArm', 'Subject', 'Room'],
   endpoints: () => ({}),
 });
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
@@ -8,9 +9,11 @@ import { AnalyticsChart } from '@/components/dashboard/AnalyticsChart';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { motion } from 'framer-motion';
-import { GraduationCap, Users, BookOpen, UserPlus, Palette, Loader2, AlertCircle } from 'lucide-react';
+import { GraduationCap, Users, BookOpen, UserPlus, Palette, Loader2, AlertCircle, Calendar, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useGetSchoolAdminDashboardQuery } from '@/lib/store/api/schoolAdminApi';
+import { useGetSchoolAdminDashboardQuery, useGetActiveSessionQuery, useGetMySchoolQuery, useEndTermMutation } from '@/lib/store/api/schoolAdminApi';
+import { EndTermModal } from '@/components/modals';
+import toast from 'react-hot-toast';
 import { useSchoolType } from '@/hooks/useSchoolType';
 import { getTerminology } from '@/lib/utils/terminology';
 
@@ -43,6 +46,67 @@ export default function AdminOverviewPage() {
   const { currentType } = useSchoolType();
   const terminology = getTerminology(currentType);
 
+  // Get school and active session
+  const { data: schoolResponse } = useGetMySchoolQuery();
+  const schoolId = schoolResponse?.data?.id;
+  const { data: activeSessionResponse, refetch: refetchActiveSession } = useGetActiveSessionQuery(
+    { schoolId: schoolId! },
+    { skip: !schoolId }
+  );
+  const activeSession = activeSessionResponse?.data;
+
+  const [endTerm, { isLoading: isEndingTerm }] = useEndTermMutation();
+  const [showEndTermModal, setShowEndTermModal] = useState(false);
+
+  // Determine button state
+  const hasActiveSession = !!activeSession?.session;
+  const hasActiveTerm = !!activeSession?.term;
+  
+  const getButtonConfig = () => {
+    if (!hasActiveSession) {
+      return {
+        text: 'Start Session',
+        icon: Calendar,
+        onClick: () => router.push('/dashboard/school/settings/session'),
+        variant: 'primary' as const,
+      };
+    } else if (!hasActiveTerm) {
+      return {
+        text: 'Start Term',
+        icon: Calendar,
+        onClick: () => router.push('/dashboard/school/settings/session'),
+        variant: 'primary' as const,
+      };
+    } else {
+      return {
+        text: 'End Term',
+        icon: XCircle,
+        onClick: () => setShowEndTermModal(true),
+        variant: 'danger' as const,
+      };
+    }
+  };
+
+  const handleEndTerm = async () => {
+    if (!schoolId) {
+      toast.error('School not found');
+      return;
+    }
+
+    try {
+      await endTerm({ schoolId }).unwrap();
+      toast.success('Term ended successfully');
+      setShowEndTermModal(false);
+      refetchActiveSession();
+      refetch();
+    } catch (error: any) {
+      toast.error(error?.data?.message || 'Failed to end term');
+    }
+  };
+
+  const buttonConfig = getButtonConfig();
+  const ButtonIcon = buttonConfig.icon;
+
   // Extract dashboard data
   const dashboard = data?.data;
   const stats = dashboard?.stats;
@@ -68,15 +132,36 @@ export default function AdminOverviewPage() {
                 Manage your school, students, teachers, and academic activities
               </p>
             </div>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => router.push('/dashboard/school/site-builder/templates')}
-              className="flex items-center gap-2"
-            >
-              <Palette className="h-4 w-4" />
-              Site Builder
-            </Button>
+            <div className="flex items-center gap-3">
+              <Button
+                variant={buttonConfig.variant}
+                size="sm"
+                onClick={buttonConfig.onClick}
+                disabled={isEndingTerm}
+                className="flex items-center gap-2"
+              >
+                {isEndingTerm ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Ending Term...
+                  </>
+                ) : (
+                  <>
+                    <ButtonIcon className="h-4 w-4" />
+                    {buttonConfig.text}
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => router.push('/dashboard/school/site-builder/templates')}
+                className="flex items-center gap-2"
+              >
+                <Palette className="h-4 w-4" />
+                Site Builder
+              </Button>
+            </div>
           </div>
         </motion.div>
 
@@ -254,6 +339,16 @@ export default function AdminOverviewPage() {
             </Card>
           </>
         )}
+
+        {/* End Term Modal */}
+        <EndTermModal
+          isOpen={showEndTermModal}
+          onClose={() => setShowEndTermModal(false)}
+          onConfirm={handleEndTerm}
+          isLoading={isEndingTerm}
+          termName={activeSession?.term?.name}
+          sessionName={activeSession?.session?.name}
+        />
       </div>
     </ProtectedRoute>
   );

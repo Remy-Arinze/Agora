@@ -16,6 +16,7 @@ import { TenantModule } from './tenant/tenant.module';
 import { TenantMiddleware } from './tenant/tenant.middleware';
 import { SessionsModule } from './sessions/sessions.module';
 import { TimetableModule } from './timetable/timetable.module';
+import { EventsModule } from './events/events.module';
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { TimetableModule } from './timetable/timetable.module';
     EmailModule,
     SessionsModule,
     TimetableModule,
+    EventsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

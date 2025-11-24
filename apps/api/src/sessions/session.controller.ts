@@ -107,5 +107,18 @@ export class SessionController {
     const data = await this.sessionService.getSessions(schoolId);
     return ResponseDto.ok(data, 'Sessions retrieved successfully');
   }
+
+  @Post('end-term')
+  @ApiOperation({ summary: 'End the current active term' })
+  @ApiResponse({
+    status: 200,
+    description: 'Term ended successfully',
+  })
+  async endTerm(
+    @Param('schoolId') schoolId: string
+  ): Promise<ResponseDto<{ term: TermDto }>> {
+    const data = await this.sessionService.endTerm(schoolId);
+    return ResponseDto.ok(data, 'Term ended successfully');
+  }
 }
 

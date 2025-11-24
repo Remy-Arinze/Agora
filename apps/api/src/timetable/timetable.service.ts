@@ -3,7 +3,7 @@ import { PrismaService } from '../database/prisma.service';
 import { SchoolRepository } from '../schools/domain/repositories/school.repository';
 import { CreateTimetablePeriodDto, CreateMasterScheduleDto } from './dto/create-timetable-period.dto';
 import { TimetablePeriodDto, ConflictInfo } from './dto/timetable.dto';
-import { DayOfWeek, PeriodType } from '@prisma/client';
+import { DayOfWeek, PeriodType } from './dto/create-timetable-period.dto';
 
 /**
  * Service for managing timetables with conflict detection
