@@ -4,7 +4,10 @@ export class BulkImportRowDto {
   @ApiProperty({ example: 'John', description: 'Student first name' })
   firstName: string;
 
-  @ApiProperty({ example: 'Doe', description: 'Student last name' })
+  @ApiProperty({ example: 'Doe', description: 'Student middle name (optional)', required: false })
+  middleName?: string;
+
+  @ApiProperty({ example: 'Smith', description: 'Student last name' })
   lastName: string;
 
   @ApiProperty({
@@ -13,21 +16,90 @@ export class BulkImportRowDto {
   })
   dateOfBirth: string;
 
-  @ApiProperty({ example: 'JSS 1', description: 'Class level' })
+  @ApiProperty({ example: 'JSS1', description: 'Class level (must match existing class name)' })
   class: string;
 
+  @ApiProperty({ 
+    example: 'student@example.com', 
+    description: 'Student email (optional, but recommended)',
+    required: false 
+  })
+  email?: string;
+
+  @ApiProperty({ 
+    example: '+2348012345678', 
+    description: 'Student phone number (optional)',
+    required: false 
+  })
+  phone?: string;
+
   @ApiProperty({
-    example: '+2348012345678',
+    example: 'John Doe',
+    description: 'Parent/Guardian name',
+  })
+  parentName?: string;
+
+  @ApiProperty({
+    example: '+2348012345679',
     description: 'Parent phone number',
   })
   parentPhone: string;
 
   @ApiProperty({
     example: 'parent@example.com',
-    description: 'Parent email address',
+    description: 'Parent email address (optional)',
     required: false,
   })
   parentEmail?: string;
+
+  @ApiProperty({
+    example: 'Father',
+    description: 'Parent relationship (e.g., Father, Mother, Guardian)',
+    required: false,
+  })
+  parentRelationship?: string;
+
+  @ApiProperty({
+    example: 'O+',
+    description: 'Blood group (optional)',
+    required: false,
+  })
+  bloodGroup?: string;
+
+  @ApiProperty({
+    example: 'Peanuts, Shellfish',
+    description: 'Allergies (optional)',
+    required: false,
+  })
+  allergies?: string;
+
+  @ApiProperty({
+    example: 'Inhaler',
+    description: 'Medications (optional)',
+    required: false,
+  })
+  medications?: string;
+
+  @ApiProperty({
+    example: 'Jane Doe',
+    description: 'Emergency contact name (optional)',
+    required: false,
+  })
+  emergencyContact?: string;
+
+  @ApiProperty({
+    example: '+2348012345680',
+    description: 'Emergency contact phone (optional)',
+    required: false,
+  })
+  emergencyContactPhone?: string;
+
+  @ApiProperty({
+    example: 'Student has asthma',
+    description: 'Medical notes (optional)',
+    required: false,
+  })
+  medicalNotes?: string;
 }
 
 export class ImportSummaryDto {

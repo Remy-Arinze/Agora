@@ -19,129 +19,183 @@ import {
   User,
   Calendar,
   MapPin,
-  Award
+  Award,
+  Shield,
+  Loader2,
+  AlertCircle,
+  Send
 } from 'lucide-react';
+import {
+  useGetStaffMemberQuery,
+  useGetAdminPermissionsQuery,
+  useGetMySchoolQuery,
+  useResendPasswordResetForStaffMutation,
+  useGetClassesQuery,
+  PermissionResource,
+  PermissionType,
+} from '@/lib/store/api/schoolAdminApi';
+import { PermissionAssignmentModal } from '@/components/permissions/PermissionAssignmentModal';
+import { EditTeacherProfileModal } from '@/components/modals/EditTeacherProfileModal';
+import toast from 'react-hot-toast';
 
-// Mock data - will be replaced with API calls later
-const getTeacherData = (id: string) => {
-  return {
-    id,
-    firstName: 'Sarah',
-    lastName: 'Williams',
-    email: 'sarah.w@school.com',
-    phone: '+234 801 234 5678',
-    address: '456 Teacher Street, Lagos',
-    dateOfBirth: '1985-03-20',
-    gender: 'Female',
-    subject: 'Mathematics',
-    classLevels: ['JSS1', 'JSS2', 'JSS3'],
-    qualification: 'B.Ed Mathematics, M.Ed Curriculum Development',
-    yearsOfExperience: 8,
-    joinedDate: '2019-09-01', // Date they joined the school
-    status: 'active' as const,
-    createdAt: '2019-09-01',
-    classes: [
-      {
-        id: '1',
-        subject: 'Mathematics',
-        code: 'MATH101',
-        classLevel: 'JSS1',
-        students: 45,
-        schedule: 'Mon, Wed, Fri - 9:00 AM',
-        room: 'Room 101',
-        description: 'Introduction to algebra and basic mathematics',
-      },
-      {
-        id: '2',
-        subject: 'Mathematics',
-        code: 'MATH102',
-        classLevel: 'JSS2',
-        students: 42,
-        schedule: 'Tue, Thu - 10:30 AM',
-        room: 'Room 102',
-        description: 'Advanced algebra and geometry',
-      },
-      {
-        id: '3',
-        subject: 'Further Mathematics',
-        code: 'MATH201',
-        classLevel: 'JSS3',
-        students: 38,
-        schedule: 'Mon, Wed - 2:00 PM',
-        room: 'Room 201',
-        description: 'Calculus and advanced mathematics',
-      },
-    ],
-    timetable: [
-      {
-        day: 'Monday',
-        periods: [
-          { time: '8:00 - 9:00', subject: 'Mathematics', classLevel: 'JSS1', room: 'Room 101' },
-          { time: '9:00 - 10:00', subject: 'Mathematics', classLevel: 'JSS2', room: 'Room 102' },
-          { time: '10:00 - 10:30', subject: 'Break', classLevel: '', room: '' },
-          { time: '2:00 - 3:00', subject: 'Further Mathematics', classLevel: 'JSS3', room: 'Room 201' },
-        ],
-      },
-      {
-        day: 'Tuesday',
-        periods: [
-          { time: '10:30 - 11:30', subject: 'Mathematics', classLevel: 'JSS2', room: 'Room 102' },
-          { time: '11:30 - 12:30', subject: 'Free Period', classLevel: '', room: '' },
-          { time: '12:30 - 1:30', subject: 'Lunch', classLevel: '', room: '' },
-          { time: '1:30 - 2:30', subject: 'Mathematics', classLevel: 'JSS1', room: 'Room 101' },
-        ],
-      },
-      {
-        day: 'Wednesday',
-        periods: [
-          { time: '8:00 - 9:00', subject: 'Mathematics', classLevel: 'JSS1', room: 'Room 101' },
-          { time: '9:00 - 10:00', subject: 'Mathematics', classLevel: 'JSS2', room: 'Room 102' },
-          { time: '10:00 - 10:30', subject: 'Break', classLevel: '', room: '' },
-          { time: '2:00 - 3:00', subject: 'Further Mathematics', classLevel: 'JSS3', room: 'Room 201' },
-        ],
-      },
-      {
-        day: 'Thursday',
-        periods: [
-          { time: '10:30 - 11:30', subject: 'Mathematics', classLevel: 'JSS2', room: 'Room 102' },
-          { time: '11:30 - 12:30', subject: 'Free Period', classLevel: '', room: '' },
-          { time: '12:30 - 1:30', subject: 'Lunch', classLevel: '', room: '' },
-          { time: '1:30 - 2:30', subject: 'Mathematics', classLevel: 'JSS1', room: 'Room 101' },
-        ],
-      },
-      {
-        day: 'Friday',
-        periods: [
-          { time: '8:00 - 9:00', subject: 'Mathematics', classLevel: 'JSS1', room: 'Room 101' },
-          { time: '9:00 - 10:00', subject: 'Mathematics', classLevel: 'JSS2', room: 'Room 102' },
-          { time: '10:00 - 10:30', subject: 'Break', classLevel: '', room: '' },
-          { time: '10:30 - 11:30', subject: 'Staff Meeting', classLevel: '', room: 'Conference Room' },
-        ],
-      },
-    ],
-  };
+const RESOURCE_LABELS: Record<PermissionResource, string> = {
+  OVERVIEW: 'Dashboard Overview',
+  ANALYTICS: 'Analytics',
+  SUBSCRIPTIONS: 'Subscriptions',
+  STUDENTS: 'Students',
+  STAFF: 'Staff',
+  CLASSES: 'Classes',
+  SUBJECTS: 'Subjects',
+  TIMETABLES: 'Timetables',
+  CALENDAR: 'Calendar',
+  ADMISSIONS: 'Admissions',
+  SESSIONS: 'Sessions',
+  EVENTS: 'Events',
 };
 
-type TabType = 'profile' | 'classes' | 'timetable';
+const TYPE_LABELS: Record<PermissionType, string> = {
+  READ: 'Read',
+  WRITE: 'Write',
+  ADMIN: 'Admin (Full Access)',
+};
 
-export default function TeacherDetailPage() {
+type TabType = 'profile' | 'permissions';
+
+// Passport-style photo component
+const PassportPhoto = ({
+  profileImage,
+  firstName,
+  lastName,
+}: {
+  profileImage?: string | null;
+  firstName?: string;
+  lastName?: string;
+}) => {
+  const [imageError, setImageError] = useState(false);
+  
+  const getInitials = (firstName?: string, lastName?: string) => {
+    const first = firstName?.[0]?.toUpperCase() || '';
+    const last = lastName?.[0]?.toUpperCase() || '';
+    return first + last || '?';
+  };
+
+  return (
+    <div className="flex justify-center">
+      <div className="relative w-48 h-60 bg-white dark:bg-gray-800 border-4 border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden">
+        {profileImage && !imageError ? (
+          <img
+            src={profileImage}
+            alt={`${firstName} ${lastName}`}
+            className="w-full h-full object-cover"
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 flex items-center justify-center">
+            <span className="text-white font-bold text-4xl">
+              {getInitials(firstName, lastName)}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default function StaffDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const teacherId = params.id as string;
+  const staffId = params.id as string;
   const [activeTab, setActiveTab] = useState<TabType>('profile');
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
 
-  const teacher = getTeacherData(teacherId);
+  // Get school ID
+  const { data: schoolResponse } = useGetMySchoolQuery();
+  const schoolId = schoolResponse?.data?.id;
+
+  // Get staff member data
+  const { data: staffResponse, isLoading, error, refetch: refetchStaff } = useGetStaffMemberQuery(
+    { schoolId: schoolId!, staffId },
+    { skip: !schoolId || !staffId }
+  );
+
+  const staff = staffResponse?.data;
+  const isTeacher = staff?.type === 'teacher';
+  const isAdmin = staff?.type === 'admin';
+
+  // Get admin permissions if this is an admin
+  const { data: permissionsResponse } = useGetAdminPermissionsQuery(
+    { schoolId: schoolId!, adminId: staffId },
+    { skip: !schoolId || !staffId || !isAdmin }
+  );
+
+  // Get classes assigned to teacher (only if teacher, not admin)
+  const { data: classesResponse } = useGetClassesQuery(
+    { schoolId: schoolId!, teacherId: isTeacher ? staffId : undefined },
+    { skip: !schoolId || !staffId || !isTeacher }
+  );
+
+  const teacherClasses = classesResponse?.data || [];
+  const permissions = permissionsResponse?.data?.permissions || [];
+  const isPrincipal = isAdmin && staff?.role?.toLowerCase() === 'principal';
+  
+  // Resend password reset mutation
+  const [resendPasswordReset, { isLoading: isResendingPasswordReset }] = useResendPasswordResetForStaffMutation();
+  
+  // Check if user hasn't set their password yet
+  const hasNotSetPassword = staff?.user?.accountStatus === 'SHADOW';
+  
+  const handleResendPasswordReset = async () => {
+    if (!schoolId || !staffId) return;
+    
+    try {
+      await resendPasswordReset({ schoolId, staffId }).unwrap();
+      toast.success('Password reset email sent successfully');
+    } catch (error: any) {
+      toast.error(error?.data?.message || 'Failed to send password reset email');
+    }
+  };
 
   const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
     { id: 'profile', label: 'Profile', icon: <User className="h-4 w-4" /> },
-    { id: 'classes', label: 'Classes', icon: <BookOpen className="h-4 w-4" /> },
-    { id: 'timetable', label: 'Timetable', icon: <Clock className="h-4 w-4" /> },
+    ...(isAdmin ? [{ id: 'permissions' as TabType, label: 'Permissions', icon: <Shield className="h-4 w-4" /> }] : []),
   ];
 
-  // Calculate years at school
-  const yearsAtSchool = Math.floor(
-    (new Date().getTime() - new Date(teacher.joinedDate).getTime()) / (1000 * 60 * 60 * 24 * 365)
-  );
+  if (isLoading) {
+    return (
+      <ProtectedRoute roles={['SCHOOL_ADMIN']}>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4 animate-spin" />
+            <p className="text-light-text-secondary dark:text-dark-text-secondary">
+              Loading staff details...
+            </p>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  if (error || !staff) {
+    return (
+      <ProtectedRoute roles={['SCHOOL_ADMIN']}>
+        <div className="w-full">
+          <Link href="/dashboard/school/teachers">
+            <Button variant="ghost" size="sm" className="mb-4">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Staff
+            </Button>
+          </Link>
+          <div className="text-center py-12">
+            <AlertCircle className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+            <p className="text-light-text-secondary dark:text-dark-text-secondary">
+              Staff member not found or error loading details.
+            </p>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
 
   return (
     <ProtectedRoute roles={['SCHOOL_ADMIN']}>
@@ -155,22 +209,41 @@ export default function TeacherDetailPage() {
           <Link href="/dashboard/school/teachers">
             <Button variant="ghost" size="sm" className="mb-4">
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Teachers
+              Back to Staff
             </Button>
           </Link>
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
-                {teacher.firstName} {teacher.lastName}
+                {staff.firstName} {staff.lastName}
               </h1>
               <p className="text-light-text-secondary dark:text-dark-text-secondary">
-                {teacher.subject} • {teacher.classLevels.join(', ')}
+                {staff.role || (isAdmin ? 'Administrator' : 'Teacher')} {staff.subject ? `• ${staff.subject}` : ''}
               </p>
             </div>
-            <Button variant="ghost" size="sm">
-              <Edit className="h-4 w-4 mr-2" />
-              Edit Profile
-            </Button>
+            <div className="flex items-center gap-2">
+              {hasNotSetPassword && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleResendPasswordReset}
+                  disabled={isResendingPasswordReset}
+                >
+                  <Send className="h-4 w-4 mr-2" />
+                  {isResendingPasswordReset ? 'Sending...' : 'Resend Password Setup Email'}
+                </Button>
+              )}
+              {isAdmin && !isPrincipal && (
+                <Button variant="ghost" size="sm" onClick={() => setShowPermissionModal(true)}>
+                  <Shield className="h-4 w-4 mr-2" />
+                  Manage Permissions
+                </Button>
+              )}
+              <Button variant="ghost" size="sm" onClick={() => setShowEditProfileModal(true)}>
+                <Edit className="h-4 w-4 mr-2" />
+                Edit Profile
+              </Button>
+            </div>
           </div>
         </motion.div>
 
@@ -222,7 +295,7 @@ export default function TeacherDetailPage() {
                           Full Name
                         </p>
                         <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                          {teacher.firstName} {teacher.lastName}
+                          {staff.firstName} {staff.lastName}
                         </p>
                       </div>
                       <div>
@@ -230,7 +303,7 @@ export default function TeacherDetailPage() {
                           Email
                         </p>
                         <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                          {teacher.email}
+                          {staff.email || 'N/A'}
                         </p>
                       </div>
                       <div>
@@ -238,182 +311,182 @@ export default function TeacherDetailPage() {
                           Phone
                         </p>
                         <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                          {teacher.phone}
+                          {staff.phone}
                         </p>
                       </div>
                       <div>
                         <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                          Date of Birth
+                          Role
                         </p>
-                        <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                          {new Date(teacher.dateOfBirth).toLocaleDateString()}
-                        </p>
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            isPrincipal
+                              ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400'
+                              : staff.role === 'Teacher'
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                              : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                          }`}
+                        >
+                          {staff.role || (isAdmin ? 'Administrator' : 'Teacher')}
+                        </span>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                          Gender
-                        </p>
-                        <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                          {teacher.gender}
-                        </p>
-                      </div>
+                      {staff.subject && (
+                        <div>
+                          <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
+                            Subject
+                          </p>
+                          <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
+                            {staff.subject}
+                          </p>
+                        </div>
+                      )}
                       <div>
                         <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
                           Status
                         </p>
                         <span
                           className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            teacher.status === 'active'
+                            staff.status === 'active'
                               ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                               : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
                           }`}
                         >
-                          {teacher.status}
+                          {staff.status}
                         </span>
                       </div>
-                      <div className="md:col-span-2">
-                        <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                          Address
-                        </p>
-                        <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                          {teacher.address}
-                        </p>
-                      </div>
+                      {staff.employeeId && (
+                        <div>
+                          <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
+                            Employee ID
+                          </p>
+                          <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
+                            {staff.employeeId}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
 
-                {/* Academic Information */}
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center gap-3">
-                      <BookOpen className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-                      <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
-                        Academic Information
-                      </CardTitle>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div>
-                        <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                          Subject
-                        </p>
-                        <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                          {teacher.subject}
-                        </p>
+                {/* Classes Assigned (only for teachers) */}
+                {staff.type === 'teacher' && (
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center gap-3">
+                        <BookOpen className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                        <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
+                          Classes Assigned
+                        </CardTitle>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                          Class Levels
-                        </p>
-                        <div className="flex flex-wrap gap-2 mt-1">
-                          {teacher.classLevels.map((level) => (
-                            <span
-                              key={level}
-                              className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 rounded text-xs font-medium"
-                            >
-                              {level}
-                            </span>
-                          ))}
+                    </CardHeader>
+                    <CardContent>
+                      {teacherClasses.length === 0 ? (
+                        <div className="text-center py-8">
+                          <BookOpen className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+                          <p className="text-light-text-secondary dark:text-dark-text-secondary">
+                            This teacher is not assigned to any classes yet.
+                          </p>
                         </div>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                          Qualification
-                        </p>
-                        <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                          {teacher.qualification}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                          Years of Experience
-                        </p>
-                        <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                          {teacher.yearsOfExperience} years
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                      ) : (
+                        <div className="space-y-3">
+                          {teacherClasses.map((classItem) => {
+                            // Find the teacher's assignment for this class
+                            const assignment = classItem.teachers?.find(
+                              (t) => t.teacherId === staffId
+                            );
+                            return (
+                              <div
+                                key={classItem.id}
+                                className="border border-light-border dark:border-dark-border rounded-lg p-4 hover:bg-light-surface dark:hover:bg-dark-surface transition-colors"
+                              >
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary mb-1">
+                                      {classItem.name}
+                                    </h3>
+                                    <div className="space-y-1 text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                                      {classItem.classLevel && (
+                                        <p>
+                                          <span className="font-medium">Level:</span> {classItem.classLevel}
+                                        </p>
+                                      )}
+                                      {assignment?.subject && (
+                                        <p>
+                                          <span className="font-medium">Subject:</span> {assignment.subject}
+                                        </p>
+                                      )}
+                                      {assignment?.isPrimary && (
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">
+                                          Primary Teacher
+                                        </span>
+                                      )}
+                                      <p>
+                                        <span className="font-medium">Academic Year:</span> {classItem.academicYear}
+                                      </p>
+                                      <p>
+                                        <span className="font-medium">Students:</span> {classItem.studentsCount || 0}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
               </div>
 
               {/* Sidebar */}
               <div className="space-y-6">
-                {/* School Information */}
+                {/* Passport Photo */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
+                      Photo
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <PassportPhoto
+                      profileImage={staff.profileImage || null}
+                      firstName={staff.firstName}
+                      lastName={staff.lastName}
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* Additional Information */}
                 <Card>
                   <CardHeader>
                     <div className="flex items-center gap-3">
-                      <Award className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                      <Calendar className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                       <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
-                        School Information
+                        Additional Information
                       </CardTitle>
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-4">
+                    <div className="space-y-3">
                       <div>
                         <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                          Date Joined
+                          Created At
                         </p>
                         <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                          {new Date(teacher.joinedDate).toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric',
-                          })}
+                          {new Date(staff.createdAt).toLocaleDateString()}
                         </p>
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                          Years at School
-                        </p>
-                        <p className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary">
-                          {yearsAtSchool} {yearsAtSchool === 1 ? 'year' : 'years'}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                          Total Classes
-                        </p>
-                        <p className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary">
-                          {teacher.classes.length}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                          Total Students
-                        </p>
-                        <p className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary">
-                          {teacher.classes.reduce((sum, cls) => sum + cls.students, 0)}
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                {/* Quick Actions */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg font-bold text-light-text-primary dark:text-dark-text-primary">
-                      Quick Actions
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      <Button variant="ghost" className="w-full justify-start">
-                        <Edit className="h-4 w-4 mr-2" />
-                        Edit Profile
-                      </Button>
-                      <Button variant="ghost" className="w-full justify-start">
-                        <BookOpen className="h-4 w-4 mr-2" />
-                        View Schedule
-                      </Button>
-                      <Button variant="ghost" className="w-full justify-start">
-                        <Users className="h-4 w-4 mr-2" />
-                        View Students
-                      </Button>
+                      {staff.isTemporary && (
+                        <div>
+                          <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
+                            Employment Type
+                          </p>
+                          <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
+                            Temporary
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -421,145 +494,121 @@ export default function TeacherDetailPage() {
             </div>
           )}
 
-          {activeTab === 'classes' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {teacher.classes.map((classItem, index) => (
-                <motion.div
-                  key={classItem.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                >
-                  <Card className="h-full">
-                    <CardHeader>
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <CardTitle className="text-lg font-bold text-light-text-primary dark:text-dark-text-primary">
-                            {classItem.subject}
-                          </CardTitle>
-                          <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-1">
-                            {classItem.code}
-                          </p>
-                        </div>
-                        <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 text-xs font-medium rounded">
-                          {classItem.classLevel}
-                        </span>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        <div>
-                          <p className="text-xs font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                            Students
-                          </p>
-                          <p className="text-sm font-semibold text-light-text-primary dark:text-dark-text-primary">
-                            {classItem.students} students
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                            Schedule
-                          </p>
-                          <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                            {classItem.schedule}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                            Room
-                          </p>
-                          <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                            {classItem.room}
-                          </p>
-                        </div>
-                        <div className="pt-2 border-t border-light-border dark:border-dark-border">
-                          <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">
-                            {classItem.description}
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === 'timetable' && (
+          {activeTab === 'permissions' && isAdmin && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary flex items-center gap-2">
-                  <Clock className="h-5 w-5" />
-                  Weekly Timetable
-                </CardTitle>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Shield className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                    <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
+                      Assigned Permissions
+                    </CardTitle>
+                  </div>
+                  {!isPrincipal && (
+                    <Button variant="primary" size="sm" onClick={() => setShowPermissionModal(true)}>
+                      <Shield className="h-4 w-4 mr-2" />
+                      Manage Permissions
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-6">
-                  {teacher.timetable.map((day, dayIndex) => (
-                    <div key={dayIndex}>
-                      <h3 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary mb-3">
-                        {day.day}
-                      </h3>
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead>
-                            <tr className="border-b border-light-border dark:border-dark-border">
-                              <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                                Time
-                              </th>
-                              <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                                Subject
-                              </th>
-                              <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                                Class Level
-                              </th>
-                              <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                                Room
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {day.periods.map((period, periodIndex) => (
-                              <tr
-                                key={periodIndex}
-                                className={`border-b border-light-border dark:border-dark-border ${
-                                  period.subject === 'Break' || period.subject === 'Lunch' || period.subject === 'Free Period' || period.subject === 'Staff Meeting'
-                                    ? 'bg-gray-50 dark:bg-dark-surface/50'
-                                    : 'hover:bg-gray-50 dark:hover:bg-dark-surface/50'
-                                }`}
-                              >
-                                <td className="py-3 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                                  {period.time}
-                                </td>
-                                <td className="py-3 px-4">
-                                  <p
-                                    className={`text-sm font-medium ${
-                                      period.subject === 'Break' || period.subject === 'Lunch' || period.subject === 'Free Period' || period.subject === 'Staff Meeting'
-                                        ? 'text-light-text-muted dark:text-dark-text-muted italic'
-                                        : 'text-light-text-primary dark:text-dark-text-primary'
-                                    }`}
-                                  >
-                                    {period.subject}
-                                  </p>
-                                </td>
-                                <td className="py-3 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                                  {period.classLevel || '-'}
-                                </td>
-                                <td className="py-3 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                                  {period.room || '-'}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                {isPrincipal ? (
+                  <div className="text-center py-12">
+                    <Shield className="h-12 w-12 text-purple-600 dark:text-purple-400 mx-auto mb-4" />
+                    <p className="text-light-text-primary dark:text-dark-text-primary font-semibold mb-2">
+                      Principal - Full Access
+                    </p>
+                    <p className="text-light-text-secondary dark:text-dark-text-secondary">
+                      Principals have full administrative access to all resources and features.
+                    </p>
+                  </div>
+                ) : permissions.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Shield className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+                    <p className="text-light-text-secondary dark:text-dark-text-secondary mb-4">
+                      No permissions assigned yet.
+                    </p>
+                    <Button variant="primary" size="sm" onClick={() => setShowPermissionModal(true)}>
+                      <Shield className="h-4 w-4 mr-2" />
+                      Assign Permissions
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {Object.entries(
+                      permissions.reduce((acc, perm) => {
+                        if (!acc[perm.resource]) {
+                          acc[perm.resource] = [];
+                        }
+                        acc[perm.resource].push(perm);
+                        return acc;
+                      }, {} as Record<PermissionResource, typeof permissions>)
+                    ).map(([resource, resourcePerms]) => (
+                      <div key={resource} className="border border-light-border dark:border-dark-border rounded-lg p-4">
+                        <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary mb-3">
+                          {RESOURCE_LABELS[resource as PermissionResource]}
+                        </h3>
+                        <div className="space-y-2">
+                          {resourcePerms.map((perm) => (
+                            <div
+                              key={perm.id}
+                              className="flex items-center justify-between p-2 bg-light-surface dark:bg-dark-surface rounded"
+                            >
+                              <span className="text-sm text-light-text-primary dark:text-dark-text-primary">
+                                {TYPE_LABELS[perm.type]}
+                              </span>
+                              {perm.type === PermissionType.ADMIN && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">
+                                  Full Access
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
         </motion.div>
+
+        {/* Permission Assignment Modal */}
+        {showPermissionModal && isAdmin && (
+          <PermissionAssignmentModal
+            isOpen={showPermissionModal}
+            onClose={() => setShowPermissionModal(false)}
+            adminId={staffId}
+            adminName={`${staff.firstName} ${staff.lastName}`}
+            adminRole={staff.role || 'Administrator'}
+          />
+        )}
+
+        {/* Edit Profile Modal */}
+        {showEditProfileModal && staff && (
+          <EditTeacherProfileModal
+            isOpen={showEditProfileModal}
+            onClose={() => setShowEditProfileModal(false)}
+            teacher={{
+              id: staff.id,
+              firstName: staff.firstName,
+              lastName: staff.lastName,
+              phone: staff.phone,
+              subject: staff.subject,
+              isTemporary: staff.isTemporary,
+              role: staff.role,
+              profileImage: staff.profileImage || null,
+            }}
+            schoolId={schoolId!}
+            staffType={staff.type}
+            onSuccess={() => {
+              // Refetch staff data
+              refetchStaff();
+            }}
+          />
+        )}
       </div>
     </ProtectedRoute>
   );

@@ -1,14 +1,18 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { SchoolRepository } from '../schools/domain/repositories/school.repository';
 import { CreateEventDto } from './dto/create-event.dto';
 import { EventDto } from './dto/event.dto';
+import { GoogleCalendarService } from '../integrations/google-calendar/google-calendar.service';
 
 @Injectable()
 export class EventService {
+  private readonly logger = new Logger(EventService.name);
+
   constructor(
     private readonly prisma: PrismaService,
-    private readonly schoolRepository: SchoolRepository
+    private readonly schoolRepository: SchoolRepository,
+    private readonly googleCalendarService?: GoogleCalendarService
   ) {}
 
   // Access Prisma models using bracket notation for reserved keywords
@@ -74,13 +78,23 @@ export class EventService {
         schoolId: school.id,
         createdBy: createdBy || null,
         isAllDay: dto.isAllDay || false,
+        syncStatus: 'PENDING',
       },
       include: {
         room: true,
       },
     });
 
-    return this.mapToEventDto(event);
+    const eventDto = this.mapToEventDto(event);
+
+    // Sync to Google Calendar if user has sync enabled (async, don't block)
+    if (createdBy && this.googleCalendarService) {
+      this.syncToGoogleCalendar(eventDto, createdBy, school.id).catch((error) => {
+        this.logger.error(`Failed to sync event ${eventDto.id} to Google Calendar`, error);
+      });
+    }
+
+    return eventDto;
   }
 
   /**
@@ -221,13 +235,25 @@ export class EventService {
 
     const updated = await this.eventModel.update({
       where: { id: eventId },
-      data: updateData,
+      data: {
+        ...updateData,
+        syncStatus: event.googleEventId ? 'PENDING' : undefined,
+      },
       include: {
         room: true,
       },
     });
 
-    return this.mapToEventDto(updated);
+    const eventDto = this.mapToEventDto(updated);
+
+    // Sync to Google Calendar if event was previously synced
+    if (eventDto.googleEventId && event.createdBy && this.googleCalendarService) {
+      this.syncToGoogleCalendar(eventDto, event.createdBy, school.id).catch((error) => {
+        this.logger.error(`Failed to sync event ${eventDto.id} to Google Calendar`, error);
+      });
+    }
+
+    return eventDto;
   }
 
   /**
@@ -247,9 +273,60 @@ export class EventService {
       throw new NotFoundException('Event not found');
     }
 
+    // Delete from Google Calendar if synced
+    if (event.googleEventId && event.createdBy && this.googleCalendarService) {
+      this.googleCalendarService.deleteEventFromGoogle(
+        event.googleEventId,
+        event.createdBy,
+        school.id
+      ).catch((error) => {
+        this.logger.error(`Failed to delete event ${eventId} from Google Calendar`, error);
+      });
+    }
+
     await this.eventModel.delete({
       where: { id: eventId },
     });
+  }
+
+  /**
+   * Sync event to Google Calendar
+   */
+  private async syncToGoogleCalendar(
+    event: EventDto,
+    userId: string,
+    schoolId: string
+  ): Promise<void> {
+    if (!this.googleCalendarService) return;
+
+    try {
+      const googleEventId = await this.googleCalendarService.syncEventToGoogle(
+        event,
+        userId,
+        schoolId
+      );
+
+      if (googleEventId) {
+        // Update event with Google Calendar ID
+        await this.eventModel.update({
+          where: { id: event.id },
+          data: {
+            googleEventId,
+            syncStatus: 'SYNCED',
+            syncedAt: new Date(),
+          }
+        });
+      }
+    } catch (error) {
+      // Log error but don't fail event creation
+      this.logger.error(`Failed to sync event ${event.id} to Google Calendar`, error);
+      
+      // Update sync status to failed
+      await this.eventModel.update({
+        where: { id: event.id },
+        data: { syncStatus: 'FAILED' }
+      });
+    }
   }
 
   /**
@@ -270,6 +347,9 @@ export class EventService {
       schoolId: event.schoolId,
       createdBy: event.createdBy,
       isAllDay: event.isAllDay,
+      googleEventId: event.googleEventId,
+      syncedAt: event.syncedAt,
+      syncStatus: event.syncStatus,
       createdAt: event.createdAt,
       updatedAt: event.updatedAt,
     };

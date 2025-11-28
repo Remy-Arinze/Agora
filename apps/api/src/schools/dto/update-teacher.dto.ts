@@ -27,6 +27,11 @@ export class UpdateTeacherDto {
   @IsBoolean()
   isTemporary?: boolean;
 
+  @ApiPropertyOptional({ description: 'Profile image URL (Cloudinary)' })
+  @IsOptional()
+  @IsString()
+  profileImage?: string;
+
   // Note: Email is not editable
 }
 

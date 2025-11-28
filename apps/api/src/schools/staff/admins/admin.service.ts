@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, ConflictException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service';
 import { AuthService } from '../../../auth/auth.service';
 import { SchoolRepository } from '../../domain/repositories/school.repository';
@@ -8,6 +8,7 @@ import { IdGeneratorService } from '../../shared/id-generator.service';
 import { StaffValidatorService } from '../../shared/staff-validator.service';
 import { AddAdminDto } from '../../dto/add-admin.dto';
 import { UpdateAdminDto } from '../../dto/update-admin.dto';
+import { CloudinaryService } from '../../../storage/cloudinary/cloudinary.service';
 import * as bcrypt from 'bcrypt';
 
 /**
@@ -23,7 +24,8 @@ export class AdminService {
     private readonly staffRepository: StaffRepository,
     private readonly staffMapper: StaffMapper,
     private readonly idGenerator: IdGeneratorService,
-    private readonly staffValidator: StaffValidatorService
+    private readonly staffValidator: StaffValidatorService,
+    private readonly cloudinaryService: CloudinaryService
   ) {}
 
   /**
@@ -123,6 +125,7 @@ export class AdminService {
             email: adminData.email,
             phone: adminData.phone,
             role: adminData.role.trim(),
+            profileImage: adminData.profileImage || null,
             userId: adminUser.id,
             schoolId: school.id,
           },
@@ -151,7 +154,8 @@ export class AdminService {
         adminData.email,
         `${adminData.firstName} ${adminData.lastName}`,
         isPrincipal ? 'Principal' : adminData.role,
-        result.admin.publicId
+        result.admin.publicId,
+        result.admin.school.name
       );
     } catch (error) {
       console.error('Failed to send password reset email to admin:', error);
@@ -217,6 +221,7 @@ export class AdminService {
       lastName: updateData.lastName,
       phone: updateData.phone,
       role: updateData.role,
+      profileImage: updateData.profileImage,
     });
 
     return this.staffMapper.toAdminDto(updatedAdmin);
@@ -465,6 +470,82 @@ export class AdminService {
         });
       }
     });
+  }
+
+  /**
+   * Get an admin by ID
+   */
+  async getAdminById(schoolId: string, adminId: string): Promise<any | null> {
+    const admin = await this.staffRepository.findAdminById(adminId);
+    if (!admin || admin.schoolId !== schoolId) {
+      return null;
+    }
+    return this.staffMapper.toAdminDto(admin);
+  }
+
+  /**
+   * Upload admin profile image
+   */
+  async uploadProfileImage(
+    schoolId: string,
+    adminId: string,
+    file: Express.Multer.File
+  ): Promise<any> {
+    // Validate school exists
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    // Validate admin exists in school
+    const admin = await this.staffRepository.findAdminById(adminId);
+    if (!admin || admin.schoolId !== school.id) {
+      throw new NotFoundException('Admin not found in this school');
+    }
+
+    // Validate file
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    // Validate file type
+    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+      throw new BadRequestException('Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed');
+    }
+
+    // Validate file size (5MB max)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      throw new BadRequestException('File size exceeds maximum limit of 5MB');
+    }
+
+    // Delete old image if exists
+    if (admin.profileImage) {
+      const oldPublicId = this.cloudinaryService.extractPublicId(admin.profileImage);
+      if (oldPublicId) {
+        try {
+          await this.cloudinaryService.deleteImage(oldPublicId);
+        } catch (error) {
+          console.error('Error deleting old profile image:', error);
+          // Continue even if deletion fails
+        }
+      }
+    }
+
+    // Upload to Cloudinary
+    const { url } = await this.cloudinaryService.uploadImage(
+      file,
+      `schools/${schoolId}/staff/admins`,
+      `admin-${adminId}`
+    );
+
+    // Update admin with new image URL
+    const updatedAdmin = await this.staffRepository.updateAdmin(adminId, {
+      profileImage: url,
+    });
+
+    return this.staffMapper.toAdminDto(updatedAdmin);
   }
 }
 

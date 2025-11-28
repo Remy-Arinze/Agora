@@ -22,11 +22,47 @@ export class StudentDto {
   @ApiProperty({ example: false, description: 'Whether profile is locked' })
   profileLocked: boolean;
 
+  @ApiProperty({ example: 'https://res.cloudinary.com/...', description: 'Profile image URL', required: false, nullable: true })
+  profileImage: string | null;
+
+  @ApiProperty({
+    description: 'Health information',
+    required: false,
+    nullable: true,
+    example: {
+      bloodGroup: 'O+',
+      allergies: 'Peanuts',
+      medications: 'Inhaler',
+      emergencyContact: 'John Doe',
+      emergencyContactPhone: '+1234567890',
+      medicalNotes: 'Asthma condition',
+    },
+  })
+  healthInfo?: {
+    bloodGroup?: string;
+    allergies?: string;
+    medications?: string;
+    emergencyContact?: string;
+    emergencyContactPhone?: string;
+    medicalNotes?: string;
+  } | null;
+
   @ApiProperty({ example: '2024-01-15T10:00:00Z', description: 'Creation timestamp' })
   createdAt: string;
 
   @ApiProperty({ example: '2024-01-15T10:00:00Z', description: 'Last update timestamp' })
   updatedAt: string;
+
+  @ApiProperty({
+    description: 'User account information',
+    required: false,
+  })
+  user?: {
+    id: string;
+    email: string | null;
+    phone: string | null;
+    accountStatus: 'SHADOW' | 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
+  };
 }
 
 export class StudentWithEnrollmentDto extends StudentDto {
@@ -38,6 +74,7 @@ export class StudentWithEnrollmentDto extends StudentDto {
     id: string;
     classLevel: string;
     academicYear: string;
+    enrollmentDate: string;
     school: {
       id: string;
       name: string;

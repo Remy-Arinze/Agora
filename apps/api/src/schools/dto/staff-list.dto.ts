@@ -34,6 +34,9 @@ export class StaffListItemDto {
   @ApiProperty({ description: 'Account status' })
   status: 'active' | 'inactive';
 
+  @ApiProperty({ description: 'Profile image URL', nullable: true })
+  profileImage: string | null;
+
   @ApiProperty({ description: 'Created date' })
   createdAt: Date;
 }

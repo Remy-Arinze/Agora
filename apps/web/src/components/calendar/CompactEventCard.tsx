@@ -45,7 +45,7 @@ export function CompactEventCard({
   return (
     <div
       onClick={onClick}
-      className={`p-3 rounded-lg border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-surface hover:bg-gray-50 dark:hover:bg-dark-surface/80 transition-colors cursor-pointer ${
+      className={`p-3 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-100 dark:bg-blue-950/30 hover:bg-blue-100 dark:hover:bg-blue-950/50 transition-colors cursor-pointer ${
         onClick ? '' : 'cursor-default'
       }`}
     >

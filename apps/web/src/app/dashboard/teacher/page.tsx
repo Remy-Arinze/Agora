@@ -8,7 +8,7 @@ export default function TeacherDashboard() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace('/dashboard/teacher/classes');
+    router.replace('/dashboard/teacher/timetables');
   }, [router]);
 
   return (

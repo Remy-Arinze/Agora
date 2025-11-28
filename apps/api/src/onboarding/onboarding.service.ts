@@ -1,12 +1,16 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, forwardRef, Inject } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { BulkImportRowDto, ImportSummaryDto } from './dto/bulk-import.dto';
 import * as XLSX from 'xlsx';
-import * as bcrypt from 'bcrypt';
+import { StudentAdmissionService } from '../students/student-admission.service';
 
 @Injectable()
 export class OnboardingService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => StudentAdmissionService))
+    private readonly studentAdmissionService: StudentAdmissionService
+  ) {}
 
   async bulkImport(
     file: Express.Multer.File,
@@ -40,92 +44,41 @@ export class OnboardingService {
         if (!row.firstName || !row.lastName || !row.dateOfBirth || !row.class || !row.parentPhone) {
           summary.errors.push({
             row: rowNumber,
-            error: 'Missing required fields',
+            error: 'Missing required fields: firstName, lastName, dateOfBirth, class, or parentPhone',
           });
           summary.errorCount++;
           continue;
         }
 
-        // Generate UID (format: AGO-YYYY-XXXX)
-        const year = new Date().getFullYear();
-        const sequence = String(summary.successCount + 1).padStart(3, '0');
-        const uid = `AGO-${year}-${sequence}`;
-
-        // Create or find parent user
-        let parentUser = await this.prisma.user.findUnique({
-          where: { phone: row.parentPhone },
-        });
-
-        if (!parentUser) {
-          // Create shadow parent user
-          parentUser = await this.prisma.user.create({
-            data: {
-              phone: row.parentPhone,
-              email: row.parentEmail || null,
-              accountStatus: 'SHADOW',
-              role: 'PARENT',
-            },
-          });
-
-          // Create parent profile
-          await this.prisma.parent.create({
-            data: {
-              userId: parentUser.id,
-              firstName: row.parentPhone, // Placeholder, will be updated on claim
-              lastName: '',
-              phone: row.parentPhone,
-              email: row.parentEmail || null,
-            },
-          });
-        }
-
-        // Create shadow student user
-        const studentUser = await this.prisma.user.create({
-          data: {
-            accountStatus: 'SHADOW',
-            role: 'STUDENT',
-          },
-        });
-
-        // Create student profile
-        const student = await this.prisma.student.create({
-          data: {
-            userId: studentUser.id,
-            uid,
-            firstName: row.firstName,
-            lastName: row.lastName,
-            dateOfBirth: new Date(row.dateOfBirth),
-            profileLocked: false,
-          },
-        });
-
-        // Link parent to student
-        await this.prisma.studentGuardian.create({
-          data: {
-            studentId: student.id,
-            parentId: parentUser.id,
-            relationship: 'Primary',
-            isPrimary: true,
-          },
-        });
-
-        // Create enrollment
-        await this.prisma.enrollment.create({
-          data: {
-            studentId: student.id,
-            schoolId: tenantId,
-            classLevel: row.class,
-            academicYear: `${year}/${year + 1}`,
-            isActive: true,
-          },
+        // Use StudentAdmissionService to add student (reuses existing flow)
+        const result = await this.studentAdmissionService.addStudent(tenantId, {
+          firstName: row.firstName.trim(),
+          lastName: row.lastName.trim(),
+          middleName: row.middleName?.trim(),
+          dateOfBirth: row.dateOfBirth,
+          classLevel: row.class.trim(),
+          email: row.email?.trim(),
+          phone: row.phone?.trim(),
+          parentName: row.parentName?.trim() || row.parentPhone.trim(), // Fallback to phone if name not provided
+          parentPhone: row.parentPhone.trim(),
+          parentEmail: row.parentEmail?.trim(),
+          parentRelationship: row.parentRelationship?.trim() || 'Guardian',
+          bloodGroup: row.bloodGroup?.trim(),
+          allergies: row.allergies?.trim(),
+          medications: row.medications?.trim(),
+          emergencyContact: row.emergencyContact?.trim(),
+          emergencyContactPhone: row.emergencyContactPhone?.trim(),
+          medicalNotes: row.medicalNotes?.trim(),
         });
 
         summary.successCount++;
-        summary.generatedUids.push(uid);
-      } catch (error) {
+        if (result.publicId) {
+          summary.generatedUids.push(result.publicId);
+        }
+      } catch (error: any) {
         summary.errors.push({
           row: rowNumber,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: error.message || 'Unknown error',
         });
         summary.errorCount++;
       }

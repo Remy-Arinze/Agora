@@ -22,7 +22,7 @@ export function CustomToolbar<T = any>({ label, onNavigate, onView, view }: Tool
   };
 
   return (
-    <div className="flex items-center justify-between mb-4 p-4 bg-light-card dark:bg-dark-surface rounded-lg border border-light-border dark:border-dark-border">
+    <div className="flex items-center justify-between mb-4 p-4 bg-blue-50 dark:bg-dark-surface rounded-lg border border-light-border dark:border-dark-border">
       <div className="flex items-center gap-2">
         <Button variant="outline" size="sm" onClick={goToBack}>
           <ChevronLeft className="h-4 w-4" />
@@ -49,10 +49,6 @@ export function CustomToolbar<T = any>({ label, onNavigate, onView, view }: Tool
           <option value="day">Day</option>
           <option value="agenda">Agenda</option>
         </select>
-        <Button variant="outline" size="sm" className="flex items-center gap-2">
-          <Calendar className="h-4 w-4" />
-          Sync to Google
-        </Button>
       </div>
     </div>
   );

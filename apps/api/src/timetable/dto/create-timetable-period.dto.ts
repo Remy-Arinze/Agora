@@ -40,10 +40,15 @@ export class CreateTimetablePeriodDto {
   @IsOptional()
   type?: PeriodType;
 
-  @ApiProperty({ description: 'Subject ID', required: false })
+  @ApiProperty({ description: 'Subject ID (for PRIMARY/SECONDARY schools)', required: false })
   @IsString()
   @IsOptional()
   subjectId?: string;
+
+  @ApiProperty({ description: 'Course ID (for TERTIARY schools)', required: false })
+  @IsString()
+  @IsOptional()
+  courseId?: string;
 
   @ApiProperty({ description: 'Teacher ID', required: false })
   @IsString()
@@ -55,10 +60,15 @@ export class CreateTimetablePeriodDto {
   @IsOptional()
   roomId?: string;
 
-  @ApiProperty({ description: 'Class Arm ID' })
+  @ApiProperty({ description: 'Class ID (for PRIMARY/SECONDARY - direct class assignment)', required: false })
   @IsString()
-  @IsNotEmpty()
-  classArmId: string;
+  @IsOptional()
+  classId?: string;
+
+  @ApiProperty({ description: 'Class Arm ID (optional, for sections)', required: false })
+  @IsString()
+  @IsOptional()
+  classArmId?: string;
 
   @ApiProperty({ description: 'Term ID' })
   @IsString()

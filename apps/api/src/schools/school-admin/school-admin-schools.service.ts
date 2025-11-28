@@ -5,7 +5,9 @@ import { SchoolMapper } from '../domain/mappers/school.mapper';
 import { SchoolDto } from '../dto/school.dto';
 import { SchoolDashboardDto, DashboardStatsDto, GrowthTrendDataDto, WeeklyActivityDataDto, RecentStudentDto } from '../dto/dashboard.dto';
 import { StaffListResponseDto, StaffListItemDto, StaffListMetaDto, GetStaffListQueryDto } from '../dto/staff-list.dto';
+import { UpdateSchoolDto } from '../dto/update-school.dto';
 import { UserWithContext } from '../../auth/types/user-with-context.type';
+import { CloudinaryService } from '../../storage/cloudinary/cloudinary.service';
 
 /**
  * Service for school admin operations on their own school
@@ -16,7 +18,8 @@ export class SchoolAdminSchoolsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly schoolRepository: SchoolRepository,
-    private readonly schoolMapper: SchoolMapper
+    private readonly schoolMapper: SchoolMapper,
+    private readonly cloudinaryService: CloudinaryService
   ) {}
 
   /**
@@ -131,9 +134,7 @@ export class SchoolAdminSchoolsService {
       this.prisma.enrollment.findMany({
         where: { schoolId, isActive: true },
         include: {
-          student: {
-            include: { user: true },
-          },
+          student: true,
         },
         orderBy: { createdAt: 'desc' },
         take: 5,
@@ -227,9 +228,9 @@ export class SchoolAdminSchoolsService {
     // Map recent students
     const recentStudents: RecentStudentDto[] = recentEnrollments.map((enrollment) => ({
       id: enrollment.student.id,
-      name: `${enrollment.student.user.firstName} ${enrollment.student.user.lastName}`,
+      name: `${enrollment.student.firstName} ${enrollment.student.middleName ? `${enrollment.student.middleName} ` : ''}${enrollment.student.lastName}`.trim(),
       classLevel: enrollment.classLevel || 'N/A',
-      admissionNumber: enrollment.student.studentId || 'N/A',
+      admissionNumber: enrollment.student.uid || enrollment.student.publicId || 'N/A',
       status: enrollment.isActive ? 'active' : 'inactive',
       createdAt: enrollment.createdAt.toISOString().split('T')[0],
     }));
@@ -349,6 +350,7 @@ export class SchoolAdminSchoolsService {
         employeeId: null,
         isTemporary: false,
         status: admin.user?.accountStatus === 'ACTIVE' ? 'active' : 'inactive',
+        profileImage: admin.profileImage,
         createdAt: admin.createdAt,
       })),
       ...allTeachers.map((teacher) => ({
@@ -363,6 +365,7 @@ export class SchoolAdminSchoolsService {
         employeeId: teacher.employeeId,
         isTemporary: teacher.isTemporary,
         status: teacher.user?.accountStatus === 'ACTIVE' ? 'active' : 'inactive',
+        profileImage: teacher.profileImage,
         createdAt: teacher.createdAt,
       })),
     ];
@@ -414,6 +417,113 @@ export class SchoolAdminSchoolsService {
       meta,
       availableRoles: Array.from(availableRoles).sort(),
     };
+  }
+
+  /**
+   * Upload school logo
+   */
+  async uploadLogo(user: UserWithContext, file: Express.Multer.File): Promise<SchoolDto> {
+    const schoolId = user.currentSchoolId;
+
+    if (!schoolId) {
+      throw new BadRequestException('You are not associated with any school');
+    }
+
+    const school = await this.schoolRepository.findById(schoolId);
+
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    // Validate file
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    // Validate file type
+    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+      throw new BadRequestException('Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed');
+    }
+
+    // Validate file size (5MB max)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      throw new BadRequestException('File size exceeds maximum limit of 5MB');
+    }
+
+    // Delete old logo if exists
+    if (school.logo) {
+      const oldPublicId = this.cloudinaryService.extractPublicId(school.logo);
+      if (oldPublicId) {
+        try {
+          await this.cloudinaryService.deleteImage(oldPublicId);
+        } catch (error) {
+          console.error('Error deleting old logo:', error);
+          // Continue even if deletion fails
+        }
+      }
+    }
+
+    // Upload to Cloudinary
+    const { url } = await this.cloudinaryService.uploadImage(
+      file,
+      `schools/${schoolId}/logo`,
+      `school-${schoolId}-logo`
+    );
+
+    // Update school with new logo URL
+    const updatedSchool = await this.prisma.school.update({
+      where: { id: school.id },
+      data: { logo: url },
+      include: {
+        admins: {
+          include: { user: true },
+          orderBy: { role: 'asc' },
+        },
+        teachers: true,
+        enrollments: {
+          where: { isActive: true },
+        },
+      },
+    });
+
+    return this.schoolMapper.toDto(updatedSchool);
+  }
+
+  /**
+   * Update school information
+   */
+  async updateSchool(user: UserWithContext, updateSchoolDto: UpdateSchoolDto): Promise<SchoolDto> {
+    const schoolId = user.currentSchoolId;
+
+    if (!schoolId) {
+      throw new BadRequestException('You are not associated with any school');
+    }
+
+    const school = await this.schoolRepository.findById(schoolId);
+
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    // Update school
+    const updatedSchool = await this.prisma.school.update({
+      where: { id: school.id },
+      data: updateSchoolDto,
+      include: {
+        admins: {
+          include: { user: true },
+          orderBy: { role: 'asc' },
+        },
+        teachers: true,
+        enrollments: {
+          where: { isActive: true },
+        },
+      },
+    });
+
+    return this.schoolMapper.toDto(updatedSchool);
   }
 }
 

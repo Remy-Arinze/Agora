@@ -17,6 +17,9 @@ import { TenantMiddleware } from './tenant/tenant.middleware';
 import { SessionsModule } from './sessions/sessions.module';
 import { TimetableModule } from './timetable/timetable.module';
 import { EventsModule } from './events/events.module';
+import { GradesModule } from './grades/grades.module';
+import { GoogleCalendarModule } from './integrations/google-calendar/google-calendar.module';
+import { CloudinaryModule } from './storage/cloudinary/cloudinary.module';
 
 @Module({
   imports: [
@@ -43,6 +46,9 @@ import { EventsModule } from './events/events.module';
     SessionsModule,
     TimetableModule,
     EventsModule,
+    GradesModule,
+    GoogleCalendarModule,
+    CloudinaryModule,
   ],
   controllers: [AppController],
   providers: [AppService],

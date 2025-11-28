@@ -9,6 +9,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
+import { ImageUpload } from '@/components/ui/ImageUpload';
 import { motion } from 'framer-motion';
 import { ArrowLeft, UserPlus, Users } from 'lucide-react';
 import { useAddTeacher, useAddAdmin } from '@/hooks/useSchools';
@@ -18,6 +19,8 @@ import type { RootState } from '@/lib/store/store';
 import { useApi } from '@/hooks/useApi';
 import { useSchoolType } from '@/hooks/useSchoolType';
 import { getTerminology } from '@/lib/utils/terminology';
+import { useUploadTeacherImageMutation, useUploadAdminImageMutation } from '@/lib/store/api/schoolsApi';
+import toast from 'react-hot-toast';
 
 type StaffType = 'teacher' | 'admin';
 
@@ -58,7 +61,12 @@ export default function AddStaffPage() {
     subject: '',
     employeeId: '',
     isTemporary: false,
+    profileImage: null as string | null,
   });
+
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  const [uploadTeacherImage] = useUploadTeacherImageMutation();
+  const [uploadAdminImage] = useUploadAdminImageMutation();
 
   // Get school ID from localStorage (stored during login) or fetch from API
   useEffect(() => {
@@ -163,6 +171,24 @@ export default function AddStaffPage() {
     setIsLoading(true);
 
     try {
+      let profileImageUrl: string | undefined = undefined;
+
+      // Upload image first if selected
+      if (selectedImageFile && schoolId) {
+        try {
+          // For now, we'll upload the image after creating the staff member
+          // We'll need to get the staff ID from the response
+          // For simplicity, we'll include the image URL in the creation payload if we have it
+          // Otherwise, we'll upload it after creation
+          profileImageUrl = formData.profileImage || undefined;
+        } catch (error: any) {
+          console.error('Image upload error:', error);
+          toast.error('Failed to upload image. Please try again.');
+          setIsLoading(false);
+          return;
+        }
+      }
+
       if (staffType === 'teacher') {
         const teacherData = {
           firstName: capitalizeWords(formData.firstName),
@@ -172,9 +198,25 @@ export default function AddStaffPage() {
           subject: formData.subject.trim() ? capitalizeWords(formData.subject) : undefined,
           isTemporary: formData.isTemporary,
           employeeId: formData.employeeId.trim() || undefined,
+          profileImage: profileImageUrl,
         };
 
-        await addTeacher(teacherData);
+        const result = await addTeacher(teacherData);
+        
+        // Upload image after creation if we have a file but no URL
+        if (selectedImageFile && result?.data?.id && schoolId) {
+          try {
+            await uploadTeacherImage({
+              schoolId,
+              teacherId: result.data.id,
+              file: selectedImageFile,
+            }).unwrap();
+          } catch (error: any) {
+            console.error('Failed to upload image after creation:', error);
+            // Don't fail the whole operation, just log the error
+          }
+        }
+
         router.push('/dashboard/school/teachers');
       } else {
         const adminData = {
@@ -184,9 +226,25 @@ export default function AddStaffPage() {
           phone: formData.phone.trim(),
           role: capitalizeWords(adminRole),
           employeeId: formData.employeeId.trim() || undefined,
+          profileImage: profileImageUrl,
         };
 
-        await addAdmin(adminData);
+        const result = await addAdmin(adminData);
+        
+        // Upload image after creation if we have a file but no URL
+        if (selectedImageFile && result?.data?.id && schoolId) {
+          try {
+            await uploadAdminImage({
+              schoolId,
+              adminId: result.data.id,
+              file: selectedImageFile,
+            }).unwrap();
+          } catch (error: any) {
+            console.error('Failed to upload image after creation:', error);
+            // Don't fail the whole operation, just log the error
+          }
+        }
+
         router.push('/dashboard/school/teachers');
       }
     } catch (error: any) {
@@ -347,6 +405,26 @@ export default function AddStaffPage() {
                   />
                 </div>
               )}
+
+              {/* Profile Image */}
+              <div className="pt-4 border-t border-light-border dark:border-dark-border">
+                <h3 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary mb-4">
+                  Profile Image
+                </h3>
+                <ImageUpload
+                  value={formData.profileImage}
+                  onChange={(url) => {
+                    setFormData({ ...formData, profileImage: url });
+                  }}
+                  onUpload={async (file) => {
+                    setSelectedImageFile(file);
+                    // Return a temporary URL for preview
+                    return URL.createObjectURL(file);
+                  }}
+                  helperText="Upload a passport-sized profile image (optional). Image will be cropped to square format."
+                  maxSizeMB={5}
+                />
+              </div>
 
               {/* Personal Information */}
               <div className="pt-4 border-t border-light-border dark:border-dark-border">

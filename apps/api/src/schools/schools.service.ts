@@ -365,7 +365,8 @@ export class SchoolsService {
             emailData.email,
             emailData.name,
             emailData.role,
-            emailData.publicId
+            emailData.publicId,
+            result.school.name
           );
         } catch (error) {
           console.error(`Failed to send password reset email to ${emailData.email}:`, error);
@@ -870,7 +871,8 @@ export class SchoolsService {
         adminData.email,
         `${adminData.firstName} ${adminData.lastName}`,
         isPrincipal ? 'Principal' : roleToStore,
-        result.admin.publicId
+        result.admin.publicId,
+        school.name
       );
     } catch (error) {
       console.error('Failed to send password reset email to admin:', error);
@@ -1045,7 +1047,8 @@ export class SchoolsService {
         teacherData.email,
         `${teacherData.firstName} ${teacherData.lastName}`,
         'Teacher',
-        result.teacher.publicId
+        result.teacher.publicId,
+        school.name
       );
     } catch (error) {
       console.error('Failed to send password reset email to teacher:', error);

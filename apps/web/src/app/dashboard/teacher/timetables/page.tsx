@@ -1,75 +1,96 @@
 'use client';
 
+import { useState, useMemo } from 'react';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
 import { motion } from 'framer-motion';
-import { Clock, Calendar } from 'lucide-react';
-
-// Mock data - will be replaced with API calls later
-const timetableData = [
-  {
-    day: 'Monday',
-    periods: [
-      { time: '8:00 - 9:00', subject: 'Mathematics', classLevel: 'JSS2', room: 'Room 101' },
-      { time: '9:00 - 10:00', subject: 'Mathematics', classLevel: 'SS1', room: 'Room 205' },
-      { time: '10:00 - 10:30', subject: 'Break', classLevel: '', room: '' },
-      { time: '10:30 - 11:30', subject: 'Mathematics', classLevel: 'SS2', room: 'Room 302' },
-      { time: '11:30 - 12:30', subject: 'Free Period', classLevel: '', room: '' },
-      { time: '12:30 - 1:30', subject: 'Lunch', classLevel: '', room: '' },
-      { time: '1:30 - 2:30', subject: 'Mathematics', classLevel: 'JSS2', room: 'Room 101' },
-    ],
-  },
-  {
-    day: 'Tuesday',
-    periods: [
-      { time: '8:00 - 9:00', subject: 'Mathematics', classLevel: 'SS1', room: 'Room 205' },
-      { time: '9:00 - 10:00', subject: 'Mathematics', classLevel: 'JSS2', room: 'Room 101' },
-      { time: '10:00 - 10:30', subject: 'Break', classLevel: '', room: '' },
-      { time: '10:30 - 11:30', subject: 'Mathematics', classLevel: 'SS2', room: 'Room 302' },
-      { time: '11:30 - 12:30', subject: 'Free Period', classLevel: '', room: '' },
-      { time: '12:30 - 1:30', subject: 'Lunch', classLevel: '', room: '' },
-      { time: '1:30 - 2:30', subject: 'Staff Meeting', classLevel: '', room: 'Staff Room' },
-    ],
-  },
-  {
-    day: 'Wednesday',
-    periods: [
-      { time: '8:00 - 9:00', subject: 'Mathematics', classLevel: 'JSS2', room: 'Room 101' },
-      { time: '9:00 - 10:00', subject: 'Mathematics', classLevel: 'SS2', room: 'Room 302' },
-      { time: '10:00 - 10:30', subject: 'Break', classLevel: '', room: '' },
-      { time: '10:30 - 11:30', subject: 'Mathematics', classLevel: 'SS1', room: 'Room 205' },
-      { time: '11:30 - 12:30', subject: 'Free Period', classLevel: '', room: '' },
-      { time: '12:30 - 1:30', subject: 'Lunch', classLevel: '', room: '' },
-      { time: '1:30 - 2:30', subject: 'Mathematics', classLevel: 'JSS2', room: 'Room 101' },
-    ],
-  },
-  {
-    day: 'Thursday',
-    periods: [
-      { time: '8:00 - 9:00', subject: 'Mathematics', classLevel: 'SS2', room: 'Room 302' },
-      { time: '9:00 - 10:00', subject: 'Mathematics', classLevel: 'SS1', room: 'Room 205' },
-      { time: '10:00 - 10:30', subject: 'Break', classLevel: '', room: '' },
-      { time: '10:30 - 11:30', subject: 'Mathematics', classLevel: 'JSS2', room: 'Room 101' },
-      { time: '11:30 - 12:30', subject: 'Free Period', classLevel: '', room: '' },
-      { time: '12:30 - 1:30', subject: 'Lunch', classLevel: '', room: '' },
-      { time: '1:30 - 2:30', subject: 'Mathematics', classLevel: 'SS2', room: 'Room 302' },
-    ],
-  },
-  {
-    day: 'Friday',
-    periods: [
-      { time: '8:00 - 9:00', subject: 'Mathematics', classLevel: 'JSS2', room: 'Room 101' },
-      { time: '9:00 - 10:00', subject: 'Mathematics', classLevel: 'SS1', room: 'Room 205' },
-      { time: '10:00 - 10:30', subject: 'Break', classLevel: '', room: '' },
-      { time: '10:30 - 11:30', subject: 'Mathematics', classLevel: 'SS2', room: 'Room 302' },
-      { time: '11:30 - 12:30', subject: 'Free Period', classLevel: '', room: '' },
-      { time: '12:30 - 1:30', subject: 'Lunch', classLevel: '', room: '' },
-      { time: '1:30 - 2:30', subject: 'Assembly', classLevel: '', room: 'Hall' },
-    ],
-  },
-];
+import { Clock, Calendar, Loader2, AlertCircle, ChevronDown } from 'lucide-react';
+import { 
+  useGetMyTeacherSchoolQuery, 
+  useGetMyTeacherProfileQuery,
+  useGetActiveSessionQuery,
+  useGetSessionsQuery,
+  useGetTimetableForTeacherQuery,
+} from '@/lib/store/api/schoolAdminApi';
+import { TeacherTimetableGrid } from '@/components/timetable/TeacherTimetableGrid';
+import { useSchoolType } from '@/hooks/useSchoolType';
+import { getTerminology } from '@/lib/utils/terminology';
 
 export default function TeacherTimetablesPage() {
+  const [selectedTermId, setSelectedTermId] = useState<string>('');
+
+  // Get teacher's school and profile
+  const { data: schoolResponse } = useGetMyTeacherSchoolQuery();
+  const { data: teacherResponse } = useGetMyTeacherProfileQuery();
+  const schoolId = schoolResponse?.data?.id;
+  const teacherId = teacherResponse?.data?.id; // Database ID
+
+  const { currentType } = useSchoolType();
+  const terminology = getTerminology(currentType) || {
+    courses: 'Classes',
+    courseSingular: 'Class',
+    staff: 'Teachers',
+    staffSingular: 'Teacher',
+    periods: 'Terms',
+    periodSingular: 'Term',
+    subjects: 'Subjects',
+    subjectSingular: 'Subject',
+  };
+
+  // Get active session
+  const { data: activeSessionResponse } = useGetActiveSessionQuery(
+    { schoolId: schoolId! },
+    { skip: !schoolId }
+  );
+  const activeSession = activeSessionResponse?.data;
+
+  // Get all sessions to populate term selector
+  const { data: sessionsResponse } = useGetSessionsQuery(
+    { schoolId: schoolId! },
+    { skip: !schoolId }
+  );
+
+  // Determine which term to use (selected or active)
+  const currentTermId = selectedTermId || activeSession?.term?.id || '';
+
+  // Get timetable for teacher
+  const { data: timetableResponse, isLoading, error } = useGetTimetableForTeacherQuery(
+    {
+      schoolId: schoolId!,
+      teacherId: teacherId!,
+      termId: currentTermId,
+    },
+    { skip: !schoolId || !teacherId || !currentTermId }
+  );
+
+  const timetable = timetableResponse?.data || [];
+
+  // Get all terms from sessions for term selector
+  const allTerms = useMemo(() => {
+    if (!sessionsResponse?.data) return [];
+    const terms: Array<{ id: string; name: string; sessionName: string }> = [];
+    sessionsResponse.data.forEach((session) => {
+      if (session.terms) {
+        session.terms.forEach((term) => {
+          terms.push({
+            id: term.id,
+            name: term.name,
+            sessionName: session.name,
+          });
+        });
+      }
+    });
+    return terms.sort((a, b) => b.name.localeCompare(a.name)); // Most recent first
+  }, [sessionsResponse]);
+
+  // Set default term to active term when available
+  useMemo(() => {
+    if (!selectedTermId && activeSession?.term?.id) {
+      setSelectedTermId(activeSession.term.id);
+    }
+  }, [activeSession, selectedTermId]);
+
   return (
     <ProtectedRoute roles={['TEACHER']}>
       <div className="w-full">
@@ -83,88 +104,69 @@ export default function TeacherTimetablesPage() {
             My Timetable
           </h1>
           <p className="text-light-text-secondary dark:text-dark-text-secondary">
-            View your weekly teaching schedule for the current term
+            View your weekly teaching schedule for the current {terminology.periodSingular.toLowerCase()}
           </p>
         </motion.div>
 
-        {/* Timetable */}
-        <div className="space-y-6">
-          {timetableData.map((day, dayIndex) => (
-            <motion.div
-              key={day.day}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: dayIndex * 0.1 }}
-            >
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary flex items-center gap-2">
-                    <Calendar className="h-5 w-5" />
-                    {day.day}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-light-border dark:border-dark-border">
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                            Time
-                          </th>
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                            Subject
-                          </th>
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                            Class
-                          </th>
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                            Room
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {day.periods.map((period, periodIndex) => (
-                          <tr
-                            key={periodIndex}
-                            className={`border-b border-light-border dark:border-dark-border ${
-                              period.subject === 'Break' || period.subject === 'Lunch' || period.subject === 'Assembly' || period.subject === 'Free Period' || period.subject === 'Staff Meeting'
-                                ? 'bg-gray-50 dark:bg-dark-surface/50'
-                                : 'hover:bg-gray-50 dark:hover:bg-dark-surface/50'
-                            }`}
-                          >
-                            <td className="py-3 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                              <div className="flex items-center gap-2">
-                                <Clock className="h-4 w-4" />
-                                {period.time}
-                              </div>
-                            </td>
-                            <td className="py-3 px-4">
-                              <p className={`text-sm font-medium ${
-                                period.subject === 'Break' || period.subject === 'Lunch' || period.subject === 'Assembly' || period.subject === 'Free Period' || period.subject === 'Staff Meeting'
-                                  ? 'text-light-text-muted dark:text-dark-text-muted italic'
-                                  : 'text-light-text-primary dark:text-dark-text-primary'
-                              }`}>
-                                {period.subject}
-                              </p>
-                            </td>
-                            <td className="py-3 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                              {period.classLevel || '-'}
-                            </td>
-                            <td className="py-3 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                              {period.room || '-'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
+
+        {/* Error State */}
+        {error && (
+          <Card className="mb-6">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3 text-red-600 dark:text-red-400">
+                <AlertCircle className="h-5 w-5" />
+                <div>
+                  <p className="font-medium">Failed to load timetable</p>
+                  <p className="text-sm text-light-text-muted dark:text-dark-text-muted">
+                    Please try refreshing the page or contact support if the issue persists.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Loading State */}
+        {isLoading && (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <Loader2 className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4 animate-spin" />
+              <p className="text-light-text-secondary dark:text-dark-text-secondary">
+                Loading timetable...
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Timetable Grid */}
+        {!isLoading && !error && (
+          <TeacherTimetableGrid
+            timetable={timetable}
+            schoolType={currentType}
+            isLoading={isLoading}
+            allTerms={allTerms}
+            selectedTermId={currentTermId}
+            onTermChange={setSelectedTermId}
+            activeTermId={activeSession?.term?.id}
+            terminology={terminology}
+          />
+        )}
+
+        {/* Empty State - No Term Selected */}
+        {!isLoading && !error && !currentTermId && (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <Calendar className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+              <p className="text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                No {terminology.periodSingular.toLowerCase()} selected
+              </p>
+              <p className="text-sm text-light-text-muted dark:text-dark-text-muted">
+                Please select a {terminology.periodSingular.toLowerCase()} from the dropdown above to view your timetable.
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </ProtectedRoute>
   );
 }
-

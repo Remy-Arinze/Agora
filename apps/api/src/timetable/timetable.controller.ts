@@ -9,7 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { TimetableService } from './timetable.service';
 import { ResourcesService } from './resources.service';
 import { CreateTimetablePeriodDto, CreateMasterScheduleDto } from './dto/create-timetable-period.dto';
@@ -22,6 +22,8 @@ import {
   CreateClassArmDto,
   CreateRoomDto,
   CreateSubjectDto,
+  UpdateSubjectDto,
+  AssignTeacherToSubjectDto,
 } from './dto/resource.dto';
 import { ResponseDto } from '../common/dto/response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -83,6 +85,53 @@ export class TimetableController {
     return ResponseDto.ok(data, 'Timetable retrieved successfully');
   }
 
+  @Get('teacher/:teacherId')
+  @ApiOperation({ summary: 'Get timetable for a teacher' })
+  @ApiResponse({
+    status: 200,
+    description: 'Timetable retrieved successfully',
+    type: [TimetablePeriodDto],
+  })
+  async getTimetableForTeacher(
+    @Param('schoolId') schoolId: string,
+    @Param('teacherId') teacherId: string,
+    @Query('termId') termId: string
+  ): Promise<ResponseDto<TimetablePeriodDto[]>> {
+    const data = await this.timetableService.getTimetableForTeacher(schoolId, teacherId, termId);
+    return ResponseDto.ok(data, 'Timetable retrieved successfully');
+  }
+
+  @Get('class/:classId')
+  @ApiOperation({ summary: 'Get timetable for a class' })
+  @ApiResponse({
+    status: 200,
+    description: 'Timetable retrieved successfully',
+    type: [TimetablePeriodDto],
+  })
+  async getTimetableForClass(
+    @Param('schoolId') schoolId: string,
+    @Param('classId') classId: string,
+    @Query('termId') termId: string
+  ): Promise<ResponseDto<TimetablePeriodDto[]>> {
+    const data = await this.timetableService.getTimetableForClass(schoolId, classId, termId);
+    return ResponseDto.ok(data, 'Timetable retrieved successfully');
+  }
+
+  @Get('timetables')
+  @ApiOperation({ summary: 'Get all timetables for a school type (grouped by class)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Timetables retrieved successfully',
+  })
+  async getTimetablesForSchoolType(
+    @Param('schoolId') schoolId: string,
+    @Query('schoolType') schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY',
+    @Query('termId') termId?: string
+  ): Promise<ResponseDto<Record<string, TimetablePeriodDto[]>>> {
+    const data = await this.timetableService.getTimetablesForSchoolType(schoolId, schoolType, termId);
+    return ResponseDto.ok(data, 'Timetables retrieved successfully');
+  }
+
   @Patch('periods/:periodId')
   @ApiOperation({ summary: 'Update a timetable period' })
   @ApiResponse({
@@ -112,6 +161,22 @@ export class TimetableController {
   ): Promise<ResponseDto<void>> {
     await this.timetableService.deletePeriod(schoolId, periodId);
     return ResponseDto.ok(undefined, 'Period deleted successfully');
+  }
+
+  @Delete('class/:classId')
+  @ApiOperation({ summary: 'Delete all timetable periods for a class and term' })
+  @ApiQuery({ name: 'termId', required: true, type: String })
+  @ApiResponse({
+    status: 200,
+    description: 'Timetable deleted successfully',
+  })
+  async deleteTimetableForClass(
+    @Param('schoolId') schoolId: string,
+    @Param('classId') classId: string,
+    @Query('termId') termId: string
+  ): Promise<ResponseDto<void>> {
+    await this.timetableService.deleteTimetableForClass(schoolId, classId, termId);
+    return ResponseDto.ok(undefined, 'Timetable deleted successfully');
   }
 
   // Resource endpoints (ClassArms, Subjects, Rooms)
@@ -169,9 +234,11 @@ export class TimetableController {
     type: [SubjectDto],
   })
   async getSubjects(
-    @Param('schoolId') schoolId: string
+    @Param('schoolId') schoolId: string,
+    @Query('schoolType') schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY',
+    @Query('classLevelId') classLevelId?: string
   ): Promise<ResponseDto<SubjectDto[]>> {
-    const data = await this.resourcesService.getSubjects(schoolId);
+    const data = await this.resourcesService.getSubjects(schoolId, schoolType, classLevelId);
     return ResponseDto.ok(data, 'Subjects retrieved successfully');
   }
 
@@ -188,6 +255,68 @@ export class TimetableController {
   ): Promise<ResponseDto<SubjectDto>> {
     const data = await this.resourcesService.createSubject(schoolId, dto);
     return ResponseDto.ok(data, 'Subject created successfully');
+  }
+
+  @Patch('subjects/:subjectId')
+  @ApiOperation({ summary: 'Update a subject' })
+  @ApiResponse({
+    status: 200,
+    description: 'Subject updated successfully',
+    type: SubjectDto,
+  })
+  async updateSubject(
+    @Param('schoolId') schoolId: string,
+    @Param('subjectId') subjectId: string,
+    @Body() dto: UpdateSubjectDto
+  ): Promise<ResponseDto<SubjectDto>> {
+    const data = await this.resourcesService.updateSubject(schoolId, subjectId, dto);
+    return ResponseDto.ok(data, 'Subject updated successfully');
+  }
+
+  @Delete('subjects/:subjectId')
+  @ApiOperation({ summary: 'Delete a subject' })
+  @ApiResponse({
+    status: 200,
+    description: 'Subject deleted successfully',
+  })
+  async deleteSubject(
+    @Param('schoolId') schoolId: string,
+    @Param('subjectId') subjectId: string
+  ): Promise<ResponseDto<void>> {
+    await this.resourcesService.deleteSubject(schoolId, subjectId);
+    return ResponseDto.ok(undefined, 'Subject deleted successfully');
+  }
+
+  @Post('subjects/:subjectId/teachers')
+  @ApiOperation({ summary: 'Assign a teacher to a subject' })
+  @ApiResponse({
+    status: 200,
+    description: 'Teacher assigned successfully',
+    type: SubjectDto,
+  })
+  async assignTeacherToSubject(
+    @Param('schoolId') schoolId: string,
+    @Param('subjectId') subjectId: string,
+    @Body() dto: AssignTeacherToSubjectDto
+  ): Promise<ResponseDto<SubjectDto>> {
+    const data = await this.resourcesService.assignTeacherToSubject(schoolId, subjectId, dto.teacherId);
+    return ResponseDto.ok(data, 'Teacher assigned successfully');
+  }
+
+  @Delete('subjects/:subjectId/teachers/:teacherId')
+  @ApiOperation({ summary: 'Remove a teacher from a subject' })
+  @ApiResponse({
+    status: 200,
+    description: 'Teacher removed successfully',
+    type: SubjectDto,
+  })
+  async removeTeacherFromSubject(
+    @Param('schoolId') schoolId: string,
+    @Param('subjectId') subjectId: string,
+    @Param('teacherId') teacherId: string
+  ): Promise<ResponseDto<SubjectDto>> {
+    const data = await this.resourcesService.removeTeacherFromSubject(schoolId, subjectId, teacherId);
+    return ResponseDto.ok(data, 'Teacher removed successfully');
   }
 
   @Get('rooms')
@@ -217,6 +346,20 @@ export class TimetableController {
   ): Promise<ResponseDto<RoomDto>> {
     const data = await this.resourcesService.createRoom(schoolId, dto);
     return ResponseDto.ok(data, 'Room created successfully');
+  }
+
+  @Get('courses')
+  @ApiOperation({ summary: 'Get all courses for a school (for TERTIARY schools)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Courses retrieved successfully',
+  })
+  async getCourses(
+    @Param('schoolId') schoolId: string,
+    @Query('schoolType') schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY'
+  ): Promise<ResponseDto<any[]>> {
+    const data = await this.resourcesService.getCourses(schoolId, schoolType);
+    return ResponseDto.ok(data, 'Courses retrieved successfully');
   }
 }
 

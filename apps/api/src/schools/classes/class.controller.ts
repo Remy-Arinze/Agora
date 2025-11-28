@@ -52,8 +52,15 @@ export class ClassController {
   async getClasses(
     @Param('schoolId') schoolId: string,
     @Query('academicYear') academicYear?: string,
-    @Query('type') type?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY'
+    @Query('type') type?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY',
+    @Query('teacherId') teacherId?: string
   ): Promise<ResponseDto<ClassDto[]>> {
+    // If teacherId is provided, get classes for that teacher
+    if (teacherId) {
+      const data = await this.classService.getTeacherClasses(schoolId, teacherId);
+      return ResponseDto.ok(data, 'Teacher classes retrieved successfully');
+    }
+    
     const data = await this.classService.getClasses(schoolId, academicYear, type);
     return ResponseDto.ok(data, 'Classes retrieved successfully');
   }
@@ -140,6 +147,21 @@ export class ClassController {
   ): Promise<ResponseDto<void>> {
     await this.classService.removeTeacherFromClass(schoolId, classId, teacherId, subject);
     return ResponseDto.ok(undefined, 'Teacher removed from class successfully');
+  }
+
+  @Get(':classId/students')
+  @ApiOperation({ summary: 'Get all students enrolled in a class' })
+  @ApiResponse({
+    status: 200,
+    description: 'Students retrieved successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Class not found' })
+  async getClassStudents(
+    @Param('schoolId') schoolId: string,
+    @Param('classId') classId: string
+  ): Promise<ResponseDto<any[]>> {
+    const data = await this.classService.getClassStudents(schoolId, classId);
+    return ResponseDto.ok(data, 'Students retrieved successfully');
   }
 }
 

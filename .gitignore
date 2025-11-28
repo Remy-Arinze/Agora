@@ -56,3 +56,10 @@ dump.rdb
 apps/web/src/lib/api/generated/
 apps/web/src/lib/api/openapi.json
 
+# Uploads
+uploads/
+apps/api/uploads/
+
+# Markdown files (Palm documents)
+*.md
+

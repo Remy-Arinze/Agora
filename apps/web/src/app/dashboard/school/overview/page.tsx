@@ -9,9 +9,9 @@ import { AnalyticsChart } from '@/components/dashboard/AnalyticsChart';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { motion } from 'framer-motion';
-import { GraduationCap, Users, BookOpen, UserPlus, Palette, Loader2, AlertCircle, Calendar, XCircle } from 'lucide-react';
+import { GraduationCap, Users, BookOpen, UserPlus, Loader2, AlertCircle, Calendar, XCircle, Upload } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useGetSchoolAdminDashboardQuery, useGetActiveSessionQuery, useGetMySchoolQuery, useEndTermMutation } from '@/lib/store/api/schoolAdminApi';
+import { useGetSchoolAdminDashboardQuery, useGetActiveSessionQuery, useGetMySchoolQuery, useEndTermMutation, useUploadSchoolLogoMutation } from '@/lib/store/api/schoolAdminApi';
 import { EndTermModal } from '@/components/modals';
 import toast from 'react-hot-toast';
 import { useSchoolType } from '@/hooks/useSchoolType';
@@ -47,8 +47,11 @@ export default function AdminOverviewPage() {
   const terminology = getTerminology(currentType);
 
   // Get school and active session
-  const { data: schoolResponse } = useGetMySchoolQuery();
-  const schoolId = schoolResponse?.data?.id;
+  const { data: schoolResponse, refetch: refetchSchool } = useGetMySchoolQuery();
+  const school = schoolResponse?.data;
+  const schoolId = school?.id;
+  const [uploadSchoolLogo, { isLoading: isUploadingLogo }] = useUploadSchoolLogoMutation();
+  const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
   const { data: activeSessionResponse, refetch: refetchActiveSession } = useGetActiveSessionQuery(
     { schoolId: schoolId! },
     { skip: !schoolId }
@@ -133,6 +136,102 @@ export default function AdminOverviewPage() {
               </p>
             </div>
             <div className="flex items-center gap-3">
+              {/* School Logo Upload - Passport Size */}
+              <div className="flex items-center gap-2">
+                {school?.logo ? (
+                  <div className="relative group">
+                    <img
+                      src={school.logo}
+                      alt="School Logo"
+                      className="w-12 h-15 object-cover border-2 border-light-border dark:border-dark-border rounded shadow-sm"
+                      style={{ width: '60px', height: '60px' }}
+                    />
+                    <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 rounded transition-opacity flex items-center justify-center opacity-0 group-hover:opacity-100">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          // Trigger file input click
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/jpeg,image/png,image/gif,image/webp';
+                          input.onchange = (e) => {
+                            const file = (e.target as HTMLInputElement).files?.[0];
+                            if (file) {
+                              setSelectedLogoFile(file);
+                            }
+                          };
+                          input.click();
+                        }}
+                        className="text-white text-xs"
+                      >
+                        Change
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    className="border-2 border-dashed border-light-border dark:border-dark-border rounded cursor-pointer hover:border-blue-300 dark:hover:border-blue-700 transition-colors flex items-center justify-center bg-gray-50 dark:bg-gray-800"
+                    style={{ width: '48px', height: '60px' }}
+                    onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'image/jpeg,image/png,image/gif,image/webp';
+                      input.onchange = (e) => {
+                        const file = (e.target as HTMLInputElement).files?.[0];
+                        if (file) {
+                          setSelectedLogoFile(file);
+                        }
+                      };
+                      input.click();
+                    }}
+                  >
+                    <Upload className="h-4 w-4 text-light-text-muted dark:text-dark-text-muted" />
+                  </div>
+                )}
+                {selectedLogoFile && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={async () => {
+                        if (!selectedLogoFile) return;
+                        try {
+                          await uploadSchoolLogo({ file: selectedLogoFile }).unwrap();
+                          toast.success('School logo uploaded successfully!');
+                          setSelectedLogoFile(null);
+                          refetchSchool();
+                        } catch (error: any) {
+                          toast.error(error?.data?.message || 'Failed to upload logo');
+                        }
+                      }}
+                      disabled={isUploadingLogo}
+                    >
+                      {isUploadingLogo ? (
+                        <>
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-3 w-3 mr-1" />
+                          Upload
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedLogoFile(null);
+                      }}
+                      disabled={isUploadingLogo}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                )}
+              </div>
               <Button
                 variant={buttonConfig.variant}
                 size="sm"
@@ -151,15 +250,6 @@ export default function AdminOverviewPage() {
                     {buttonConfig.text}
                   </>
                 )}
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => router.push('/dashboard/school/site-builder/templates')}
-                className="flex items-center gap-2"
-              >
-                <Palette className="h-4 w-4" />
-                Site Builder
               </Button>
             </div>
           </div>

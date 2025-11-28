@@ -32,5 +32,10 @@ export class AddTeacherDto {
   @IsOptional()
   @IsString()
   employeeId?: string;
+
+  @ApiPropertyOptional({ description: 'Profile image URL (Cloudinary)' })
+  @IsOptional()
+  @IsString()
+  profileImage?: string;
 }
 

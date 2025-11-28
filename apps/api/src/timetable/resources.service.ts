@@ -9,6 +9,7 @@ import {
   CreateClassArmDto,
   CreateRoomDto,
   CreateSubjectDto,
+  UpdateSubjectDto,
 } from './dto/resource.dto';
 
 @Injectable()
@@ -85,6 +86,9 @@ export class ResourcesService {
       throw new BadRequestException('School not found');
     }
 
+    // Auto-initialize ClassLevels and default ClassArms if they don't exist
+    await this.initializeClassLevelsAndArms(school, schoolType);
+
     const where: any = {
       classLevel: {
         schoolId: school.id,
@@ -122,6 +126,124 @@ export class ResourcesService {
       classLevelName: ca.classLevel.name,
       isActive: ca.isActive,
     }));
+  }
+
+  /**
+   * Initialize ClassLevels and default ClassArms for a school if they don't exist
+   */
+  private async initializeClassLevelsAndArms(
+    school: any,
+    schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY'
+  ): Promise<void> {
+    const typesToInitialize: Array<'PRIMARY' | 'SECONDARY' | 'TERTIARY'> = [];
+    
+    if (!schoolType) {
+      if (school.hasPrimary) typesToInitialize.push('PRIMARY');
+      if (school.hasSecondary) typesToInitialize.push('SECONDARY');
+      if (school.hasTertiary) typesToInitialize.push('TERTIARY');
+    } else {
+      typesToInitialize.push(schoolType);
+    }
+
+    for (const type of typesToInitialize) {
+      // Check if ClassLevels exist for this type
+      const existingLevels = await this.classLevelModel.findMany({
+        where: {
+          schoolId: school.id,
+          type: type,
+        },
+      });
+
+      if (existingLevels.length === 0) {
+        // Create ClassLevels based on type
+        const levelsToCreate: Array<{ name: string; code: string; level: number; type: string }> = [];
+
+        if (type === 'PRIMARY') {
+          for (let i = 1; i <= 6; i++) {
+            levelsToCreate.push({
+              name: `Class ${i}`,
+              code: `CLASS${i}`,
+              level: i,
+              type: 'PRIMARY',
+            });
+          }
+        } else if (type === 'SECONDARY') {
+          // JSS levels
+          for (let i = 1; i <= 3; i++) {
+            levelsToCreate.push({
+              name: `JSS ${i}`,
+              code: `JSS${i}`,
+              level: i,
+              type: 'SECONDARY',
+            });
+          }
+          // SS levels
+          for (let i = 1; i <= 3; i++) {
+            levelsToCreate.push({
+              name: `SS ${i}`,
+              code: `SS${i}`,
+              level: i + 3,
+              type: 'SECONDARY',
+            });
+          }
+        } else if (type === 'TERTIARY') {
+          // For tertiary, create year levels (100, 200, 300, 400)
+          for (let i = 1; i <= 4; i++) {
+            levelsToCreate.push({
+              name: `Year ${i}`,
+              code: `YEAR${i}`,
+              level: i,
+              type: 'TERTIARY',
+            });
+          }
+        }
+
+        // Create ClassLevels
+        const createdLevels = [];
+        for (const levelData of levelsToCreate) {
+          const level = await this.classLevelModel.create({
+            data: {
+              ...levelData,
+              schoolId: school.id,
+              isActive: true,
+            },
+          });
+          createdLevels.push(level);
+        }
+
+        // Create default ClassArms for each ClassLevel (one default arm per level)
+        for (const level of createdLevels) {
+          await this.classArmModel.create({
+            data: {
+              name: 'A', // Default arm name
+              classLevelId: level.id,
+              isActive: true,
+            },
+          });
+        }
+      } else {
+        // ClassLevels exist, check if they have ClassArms
+        for (const level of existingLevels) {
+          const existingArms = await this.classArmModel.findMany({
+            where: {
+              classLevelId: level.id,
+              isActive: true,
+            },
+          });
+
+          // If no arms exist, create a default one
+          if (existingArms.length === 0) {
+            await this.classArmModel.create({
+              data: {
+                name: 'A',
+                classLevelId: level.id,
+                isActive: true,
+              },
+            });
+          }
+        }
+      }
+    }
   }
 
   async createClassArm(schoolId: string, dto: CreateClassArmDto): Promise<ClassArmDto> {
@@ -244,16 +366,38 @@ export class ResourcesService {
   }
 
   // Subjects
-  async getSubjects(schoolId: string): Promise<SubjectDto[]> {
+  async getSubjects(
+    schoolId: string,
+    schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY',
+    classLevelId?: string
+  ): Promise<SubjectDto[]> {
     const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
     if (!school) {
       throw new BadRequestException('School not found');
     }
 
+    const where: any = {
+      schoolId: school.id,
+      isActive: true,
+    };
+
+    if (schoolType) {
+      where.schoolType = schoolType;
+    }
+
+    if (classLevelId) {
+      where.classLevelId = classLevelId;
+    }
+
     const subjects = await this.subjectModel.findMany({
-      where: {
-        schoolId: school.id,
-        isActive: true,
+      where,
+      include: {
+        classLevel: true,
+        subjectTeachers: {
+          include: {
+            teacher: true,
+          },
+        },
       },
       orderBy: {
         name: 'asc',
@@ -265,7 +409,16 @@ export class ResourcesService {
       name: s.name,
       code: s.code,
       schoolId: s.schoolId,
+      schoolType: s.schoolType,
+      classLevelId: s.classLevelId,
+      classLevelName: s.classLevel?.name,
+      description: s.description,
       isActive: s.isActive,
+      teachers: s.subjectTeachers?.map((st: any) => ({
+        id: st.teacher.id,
+        firstName: st.teacher.firstName,
+        lastName: st.teacher.lastName,
+      })) || [],
     }));
   }
 
@@ -273,6 +426,20 @@ export class ResourcesService {
     const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
     if (!school) {
       throw new BadRequestException('School not found');
+    }
+
+    // Validate classLevel if provided
+    if (dto.classLevelId) {
+      const classLevel = await this.classLevelModel.findUnique({
+        where: { id: dto.classLevelId },
+      });
+      if (!classLevel || classLevel.schoolId !== school.id) {
+        throw new NotFoundException('Class level not found');
+      }
+      // Ensure schoolType matches if provided
+      if (dto.schoolType && classLevel.type !== dto.schoolType) {
+        throw new BadRequestException('Class level type does not match school type');
+      }
     }
 
     // Check if subject code already exists
@@ -294,7 +461,18 @@ export class ResourcesService {
         name: dto.name,
         code: dto.code,
         schoolId: school.id,
+        schoolType: dto.schoolType,
+        classLevelId: dto.classLevelId,
+        description: dto.description,
         isActive: true,
+      },
+      include: {
+        classLevel: true,
+        subjectTeachers: {
+          include: {
+            teacher: true,
+          },
+        },
       },
     });
 
@@ -303,8 +481,327 @@ export class ResourcesService {
       name: subject.name,
       code: subject.code,
       schoolId: subject.schoolId,
+      schoolType: subject.schoolType,
+      classLevelId: subject.classLevelId,
+      classLevelName: subject.classLevel?.name,
+      description: subject.description,
       isActive: subject.isActive,
+      teachers: subject.subjectTeachers?.map((st: any) => ({
+        id: st.teacher.id,
+        firstName: st.teacher.firstName,
+        lastName: st.teacher.lastName,
+      })) || [],
     };
+  }
+
+  async updateSubject(
+    schoolId: string,
+    subjectId: string,
+    dto: UpdateSubjectDto
+  ): Promise<SubjectDto> {
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    const subject = await this.subjectModel.findUnique({
+      where: { id: subjectId },
+    });
+
+    if (!subject || subject.schoolId !== school.id) {
+      throw new NotFoundException('Subject not found');
+    }
+
+    // Validate classLevel if provided
+    if (dto.classLevelId) {
+      const classLevel = await this.classLevelModel.findUnique({
+        where: { id: dto.classLevelId },
+      });
+      if (!classLevel || classLevel.schoolId !== school.id) {
+        throw new NotFoundException('Class level not found');
+      }
+      if (dto.schoolType && classLevel.type !== dto.schoolType) {
+        throw new BadRequestException('Class level type does not match school type');
+      }
+    }
+
+    // Check if subject code already exists (if changing code)
+    if (dto.code && dto.code !== subject.code) {
+      const existing = await this.subjectModel.findFirst({
+        where: {
+          schoolId: school.id,
+          code: dto.code,
+        },
+      });
+
+      if (existing) {
+        throw new BadRequestException(`Subject with code "${dto.code}" already exists`);
+      }
+    }
+
+    const updated = await this.subjectModel.update({
+      where: { id: subjectId },
+      data: {
+        name: dto.name,
+        code: dto.code,
+        schoolType: dto.schoolType,
+        classLevelId: dto.classLevelId,
+        description: dto.description,
+        isActive: dto.isActive,
+      },
+      include: {
+        classLevel: true,
+        subjectTeachers: {
+          include: {
+            teacher: true,
+          },
+        },
+      },
+    });
+
+    return {
+      id: updated.id,
+      name: updated.name,
+      code: updated.code,
+      schoolId: updated.schoolId,
+      schoolType: updated.schoolType,
+      classLevelId: updated.classLevelId,
+      classLevelName: updated.classLevel?.name,
+      description: updated.description,
+      isActive: updated.isActive,
+      teachers: updated.subjectTeachers?.map((st: any) => ({
+        id: st.teacher.id,
+        firstName: st.teacher.firstName,
+        lastName: st.teacher.lastName,
+      })) || [],
+    };
+  }
+
+  async deleteSubject(schoolId: string, subjectId: string): Promise<void> {
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    const subject = await this.subjectModel.findUnique({
+      where: { id: subjectId },
+    });
+
+    if (!subject || subject.schoolId !== school.id) {
+      throw new NotFoundException('Subject not found');
+    }
+
+    // Check if subject is used in timetable periods
+    const periodsCount = await this.prisma.timetablePeriod.count({
+      where: { subjectId: subjectId },
+    });
+
+    if (periodsCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete subject. It is used in ${periodsCount} timetable period(s). Please remove it from timetables first.`
+      );
+    }
+
+    await this.subjectModel.delete({
+      where: { id: subjectId },
+    });
+  }
+
+  async assignTeacherToSubject(
+    schoolId: string,
+    subjectId: string,
+    teacherId: string
+  ): Promise<SubjectDto> {
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    const subject = await this.subjectModel.findUnique({
+      where: { id: subjectId },
+      include: {
+        subjectTeachers: true,
+      },
+    });
+
+    if (!subject || subject.schoolId !== school.id) {
+      throw new NotFoundException('Subject not found');
+    }
+
+    // Determine school type from subject's schoolType field
+    // If subject doesn't have schoolType, infer from school flags (for backward compatibility)
+    let schoolType = subject.schoolType;
+    if (!schoolType) {
+      if (school.hasPrimary && !school.hasSecondary && !school.hasTertiary) {
+        schoolType = 'PRIMARY';
+      } else if (school.hasSecondary && !school.hasPrimary && !school.hasTertiary) {
+        schoolType = 'SECONDARY';
+      } else if (school.hasTertiary) {
+        schoolType = 'TERTIARY';
+      }
+    }
+
+    // For PRIMARY schools, only allow one teacher per subject
+    if (schoolType === 'PRIMARY' && subject.subjectTeachers && subject.subjectTeachers.length > 0) {
+      throw new BadRequestException('Primary schools can only have one teacher per subject. Please remove the existing teacher first.');
+    }
+
+    // Verify teacher belongs to school
+    const teacher = await this.prisma.teacher.findUnique({
+      where: { id: teacherId },
+    });
+
+    if (!teacher || teacher.schoolId !== school.id) {
+      throw new NotFoundException('Teacher not found');
+    }
+
+    // Check if assignment already exists
+    const existing = await this.prisma.subjectTeacher.findUnique({
+      where: {
+        subjectId_teacherId: {
+          subjectId,
+          teacherId,
+        },
+      },
+    });
+
+    if (existing) {
+      throw new BadRequestException('Teacher is already assigned to this subject');
+    }
+
+    await this.prisma.subjectTeacher.create({
+      data: {
+        subjectId,
+        teacherId,
+      },
+    });
+
+    // Return updated subject
+    const updated = await this.subjectModel.findUnique({
+      where: { id: subjectId },
+      include: {
+        classLevel: true,
+        subjectTeachers: {
+          include: {
+            teacher: true,
+          },
+        },
+      },
+    });
+
+    return {
+      id: updated!.id,
+      name: updated!.name,
+      code: updated!.code,
+      schoolId: updated!.schoolId,
+      schoolType: updated!.schoolType,
+      classLevelId: updated!.classLevelId,
+      classLevelName: updated!.classLevel?.name,
+      description: updated!.description,
+      isActive: updated!.isActive,
+      teachers: updated!.subjectTeachers?.map((st: any) => ({
+        id: st.teacher.id,
+        firstName: st.teacher.firstName,
+        lastName: st.teacher.lastName,
+      })) || [],
+    };
+  }
+
+  async removeTeacherFromSubject(
+    schoolId: string,
+    subjectId: string,
+    teacherId: string
+  ): Promise<SubjectDto> {
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    const subject = await this.subjectModel.findUnique({
+      where: { id: subjectId },
+    });
+
+    if (!subject || subject.schoolId !== school.id) {
+      throw new NotFoundException('Subject not found');
+    }
+
+    await this.prisma.subjectTeacher.deleteMany({
+      where: {
+        subjectId,
+        teacherId,
+      },
+    });
+
+    // Return updated subject
+    const updated = await this.subjectModel.findUnique({
+      where: { id: subjectId },
+      include: {
+        classLevel: true,
+        subjectTeachers: {
+          include: {
+            teacher: true,
+          },
+        },
+      },
+    });
+
+    return {
+      id: updated!.id,
+      name: updated!.name,
+      code: updated!.code,
+      schoolId: updated!.schoolId,
+      schoolType: updated!.schoolType,
+      classLevelId: updated!.classLevelId,
+      classLevelName: updated!.classLevel?.name,
+      description: updated!.description,
+      isActive: updated!.isActive,
+      teachers: updated!.subjectTeachers?.map((st: any) => ({
+        id: st.teacher.id,
+        firstName: st.teacher.firstName,
+        lastName: st.teacher.lastName,
+      })) || [],
+    };
+  }
+
+  // Courses (for TERTIARY schools)
+  async getCourses(
+    schoolId: string,
+    schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY'
+  ): Promise<any[]> {
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    const where: any = {
+      schoolId: school.id,
+      isActive: true,
+    };
+
+    // Only return courses for TERTIARY schools
+    if (schoolType === 'TERTIARY') {
+      where.type = 'TERTIARY';
+    } else {
+      // For primary/secondary, return empty array or filter by type
+      where.type = { not: 'TERTIARY' };
+    }
+
+    const courses = await this.prisma.class.findMany({
+      where,
+      orderBy: {
+        name: 'asc',
+      },
+    });
+
+    return courses.map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      code: c.code,
+      creditHours: c.creditHours,
+      schoolId: c.schoolId,
+      type: c.type,
+      isActive: c.isActive,
+    }));
   }
 }
 

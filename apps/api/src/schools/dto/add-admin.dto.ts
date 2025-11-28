@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsEmail } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsString, IsEmail, IsOptional } from 'class-validator';
 import { AdminRole } from './create-school.dto';
 
 export class AddAdminDto {
@@ -25,5 +25,10 @@ export class AddAdminDto {
   })
   @IsString()
   role: string; // Changed to string to accept custom roles
+
+  @ApiPropertyOptional({ description: 'Profile image URL (Cloudinary)' })
+  @IsOptional()
+  @IsString()
+  profileImage?: string;
 }
 

@@ -1,150 +1,276 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
+import { Modal } from '@/components/ui/Modal';
 import { motion } from 'framer-motion';
-import { 
-  ArrowRightLeft, 
-  Search, 
-  CheckCircle2, 
-  XCircle, 
-  Clock, 
-  Eye, 
-  Plus, 
-  Download,
+import {
+  Search,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Eye,
+  Plus,
   Copy,
   Key,
   ArrowDown,
-  ArrowUp
+  ArrowUp,
+  Loader2,
+  GraduationCap,
+  Trash2,
+  X,
 } from 'lucide-react';
-
-// Mock data - will be replaced with API calls later
-const mockOutgoingTransfers = [
-  {
-    id: '1',
-    studentName: 'John Doe',
-    studentId: 'STU001',
-    admissionNumber: 'ADM001',
-    classLevel: 'JSS2',
-    toSchool: 'Premier High School',
-    transferKey: 'TRF-ABC123-XYZ789',
-    generatedAt: '2024-03-01',
-    status: 'pending' as const,
-    expiresAt: '2024-04-01',
-  },
-  {
-    id: '2',
-    studentName: 'Jane Smith',
-    studentId: 'STU002',
-    admissionNumber: 'ADM002',
-    classLevel: 'SS1',
-    toSchool: 'Elite Secondary School',
-    transferKey: 'TRF-DEF456-UVW012',
-    generatedAt: '2024-03-05',
-    status: 'completed' as const,
-    expiresAt: '2024-04-05',
-  },
-];
-
-const mockIncomingTransfers = [
-  {
-    id: '1',
-    studentName: 'Michael Johnson',
-    studentId: 'STU003',
-    fromSchool: 'Test Academy',
-    classLevel: 'JSS3',
-    receivedAt: '2024-03-10',
-    status: 'pending' as const,
-  },
-  {
-    id: '2',
-    studentName: 'Sarah Williams',
-    studentId: 'STU004',
-    fromSchool: 'Elite Secondary School',
-    classLevel: 'SS2',
-    receivedAt: '2024-03-15',
-    status: 'completed' as const,
-  },
-];
+import {
+  useGetMySchoolQuery,
+  useGetStudentsQuery,
+  useGenerateTacMutation,
+  useGetOutgoingTransfersQuery,
+  useRevokeTacMutation,
+  useInitiateTransferMutation,
+  useGetIncomingTransfersQuery,
+  useCompleteTransferMutation,
+  useRejectTransferMutation,
+  useGetClassesQuery,
+} from '@/lib/store/api/schoolAdminApi';
+import toast from 'react-hot-toast';
 
 export default function TransfersPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'incoming' | 'outgoing'>('incoming');
   const [searchQuery, setSearchQuery] = useState('');
   const [showIncomingForm, setShowIncomingForm] = useState(false);
-  const [showGenerateKeyModal, setShowGenerateKeyModal] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    transferKey: '',
-    studentPrivateKey: '',
+  const [showGenerateTacModal, setShowGenerateTacModal] = useState(false);
+  const [showTacDisplayModal, setShowTacDisplayModal] = useState<{
+    tac: string;
+    studentId: string;
+    studentName: string;
+    expiresAt: string;
+  } | null>(null);
+  const [showTransferPreview, setShowTransferPreview] = useState<any>(null);
+  const [showCompleteModal, setShowCompleteModal] = useState<string | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [studentSearchQuery, setStudentSearchQuery] = useState('');
+  const [tacFormData, setTacFormData] = useState({ tac: '', studentId: '' });
+  const [completeFormData, setCompleteFormData] = useState({
+    targetClassLevel: '',
+    academicYear: '',
+    classId: '',
+    classArmId: '',
   });
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
 
-  const handleIncomingTransfer = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
-    setIsLoading(true);
+  // Get school ID
+  const { data: schoolResponse } = useGetMySchoolQuery();
+  const schoolId = schoolResponse?.data?.id;
 
-    // TODO: API call to process incoming transfer
+  // Get students for TAC generation
+  const { data: studentsResponse } = useGetStudentsQuery(
+    { schoolId: schoolId!, page: 1, limit: 100 },
+    { skip: !schoolId }
+  );
+  const students = studentsResponse?.data?.items || [];
+
+  // Get classes for transfer completion
+  const { data: classesResponse } = useGetClassesQuery(
+    { schoolId: schoolId! },
+    { skip: !schoolId }
+  );
+  const classes = classesResponse?.data || [];
+
+  // Outgoing transfers
+  const { data: outgoingResponse, refetch: refetchOutgoing } = useGetOutgoingTransfersQuery(
+    { schoolId: schoolId!, page: 1, limit: 50 },
+    { skip: !schoolId }
+  );
+  const outgoingTransfers = outgoingResponse?.data?.transfers || [];
+
+  // Incoming transfers
+  const { data: incomingResponse, refetch: refetchIncoming } = useGetIncomingTransfersQuery(
+    { schoolId: schoolId!, page: 1, limit: 50 },
+    { skip: !schoolId }
+  );
+  const incomingTransfers = incomingResponse?.data?.transfers || [];
+
+  // Mutations
+  const [generateTac, { isLoading: isGeneratingTac }] = useGenerateTacMutation();
+  const [revokeTac, { isLoading: isRevoking }] = useRevokeTacMutation();
+  const [initiateTransfer, { isLoading: isInitiating }] = useInitiateTransferMutation();
+  const [completeTransfer, { isLoading: isCompleting }] = useCompleteTransferMutation();
+  const [rejectTransfer, { isLoading: isRejecting }] = useRejectTransferMutation();
+
+  // Filter students for TAC generation
+  const filteredStudents = useMemo(() => {
+    if (!studentSearchQuery) return students;
+    const query = studentSearchQuery.toLowerCase();
+    return students.filter(
+      (s: any) =>
+        s.firstName?.toLowerCase().includes(query) ||
+        s.lastName?.toLowerCase().includes(query) ||
+        s.uid?.toLowerCase().includes(query) ||
+        `${s.firstName} ${s.lastName}`.toLowerCase().includes(query)
+    );
+  }, [students, studentSearchQuery]);
+
+  // Filter transfers
+  const filteredOutgoing = useMemo(() => {
+    if (!searchQuery) return outgoingTransfers;
+    const query = searchQuery.toLowerCase();
+    return outgoingTransfers.filter(
+      (t: any) =>
+        t.student?.firstName?.toLowerCase().includes(query) ||
+        t.student?.lastName?.toLowerCase().includes(query) ||
+        t.student?.uid?.toLowerCase().includes(query) ||
+        t.tac?.toLowerCase().includes(query)
+    );
+  }, [outgoingTransfers, searchQuery]);
+
+  const filteredIncoming = useMemo(() => {
+    if (!searchQuery) return incomingTransfers;
+    const query = searchQuery.toLowerCase();
+    return incomingTransfers.filter(
+      (t: any) =>
+        t.student?.firstName?.toLowerCase().includes(query) ||
+        t.student?.lastName?.toLowerCase().includes(query) ||
+        t.student?.uid?.toLowerCase().includes(query) ||
+        t.tac?.toLowerCase().includes(query)
+    );
+  }, [incomingTransfers, searchQuery]);
+
+  const handleGenerateTac = async () => {
+    if (!selectedStudentId) {
+      toast.error('Please select a student');
+      return;
+    }
+
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setSuccess('Transfer request processed successfully!');
-      setFormData({ transferKey: '', studentPrivateKey: '' });
-      setShowIncomingForm(false);
-    } catch (err) {
-      setError('Failed to process transfer. Please verify the keys and try again.');
-    } finally {
-      setIsLoading(false);
+      const result = await generateTac({
+        schoolId: schoolId!,
+        studentId: selectedStudentId,
+      }).unwrap();
+
+      if (result.data) {
+        setShowTacDisplayModal({
+          tac: result.data.tac,
+          studentId: result.data.studentId,
+          studentName: result.data.studentName,
+          expiresAt: result.data.expiresAt,
+        });
+        setShowGenerateTacModal(false);
+        setSelectedStudentId('');
+        refetchOutgoing();
+        toast.success('TAC generated successfully');
+      }
+    } catch (error: any) {
+      toast.error(error?.data?.message || 'Failed to generate TAC');
     }
   };
 
-  const handleGenerateTransferKey = async (studentId: string) => {
-    setIsLoading(true);
-    // TODO: API call to generate transfer key
+  const handleInitiateTransfer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tacFormData.tac || !tacFormData.studentId) {
+      toast.error('Please enter both TAC and Student ID');
+      return;
+    }
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setShowGenerateKeyModal(studentId);
-    } catch (err) {
-      setError('Failed to generate transfer key.');
-    } finally {
-      setIsLoading(false);
+      const result = await initiateTransfer({
+        schoolId: schoolId!,
+        tac: tacFormData.tac,
+        studentId: tacFormData.studentId,
+      }).unwrap();
+
+      if (result.data) {
+        setShowTransferPreview(result.data);
+        setShowIncomingForm(false);
+        setTacFormData({ tac: '', studentId: '' });
+        refetchIncoming();
+        toast.success('Transfer initiated successfully');
+      }
+    } catch (error: any) {
+      toast.error(error?.data?.message || 'Failed to initiate transfer');
+    }
+  };
+
+  const handleCompleteTransfer = async () => {
+    if (!showCompleteModal || !completeFormData.targetClassLevel || !completeFormData.academicYear) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    try {
+      await completeTransfer({
+        schoolId: schoolId!,
+        transferId: showCompleteModal,
+        ...completeFormData,
+      }).unwrap();
+
+      setShowCompleteModal(null);
+      setShowTransferPreview(null);
+      setCompleteFormData({ targetClassLevel: '', academicYear: '', classId: '', classArmId: '' });
+      refetchIncoming();
+      toast.success('Transfer completed successfully');
+    } catch (error: any) {
+      toast.error(error?.data?.message || 'Failed to complete transfer');
+    }
+  };
+
+  const handleRejectTransfer = async (transferId: string) => {
+    if (!confirm('Are you sure you want to reject this transfer?')) return;
+
+    try {
+      await rejectTransfer({
+        schoolId: schoolId!,
+        transferId,
+        reason: 'Rejected by admin',
+      }).unwrap();
+
+      refetchIncoming();
+      toast.success('Transfer rejected');
+    } catch (error: any) {
+      toast.error(error?.data?.message || 'Failed to reject transfer');
+    }
+  };
+
+  const handleRevokeTac = async (transferId: string) => {
+    if (!confirm('Are you sure you want to revoke this TAC? It cannot be used after revocation.')) return;
+
+    try {
+      await revokeTac({ schoolId: schoolId!, transferId }).unwrap();
+      refetchOutgoing();
+      toast.success('TAC revoked successfully');
+    } catch (error: any) {
+      toast.error(error?.data?.message || 'Failed to revoke TAC');
     }
   };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    setSuccess('Transfer key copied to clipboard!');
-    setTimeout(() => setSuccess(null), 2000);
+    toast.success('Copied to clipboard!');
   };
-
-  const filteredOutgoing = mockOutgoingTransfers.filter((transfer) =>
-    transfer.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    transfer.studentId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    transfer.admissionNumber.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const filteredIncoming = mockIncomingTransfers.filter((transfer) =>
-    transfer.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    transfer.studentId.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed':
+      case 'COMPLETED':
         return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
-      case 'pending':
+      case 'APPROVED':
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
+      case 'PENDING':
         return 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400';
+      case 'REJECTED':
+        return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+      case 'CANCELLED':
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400';
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400';
     }
+  };
+
+  const formatStatus = (status: string) => {
+    return status.charAt(0) + status.slice(1).toLowerCase();
   };
 
   return (
@@ -227,34 +353,30 @@ export default function TransfersPage() {
                 </CardHeader>
                 {showIncomingForm && (
                   <CardContent>
-                    <form onSubmit={handleIncomingTransfer} className="space-y-4">
-                      {error && <Alert variant="error">{error}</Alert>}
-                      {success && <Alert variant="success">{success}</Alert>}
-
+                    <form onSubmit={handleInitiateTransfer} className="space-y-4">
                       <div>
                         <Input
-                          label="Transfer Key"
-                          placeholder="Enter transfer key from source school"
-                          value={formData.transferKey}
+                          label="Transfer Access Code (TAC)"
+                          placeholder="Enter TAC from source school (e.g., TAC-ABC123-XYZ)"
+                          value={tacFormData.tac}
                           onChange={(e) =>
-                            setFormData({ ...formData, transferKey: e.target.value })
+                            setTacFormData({ ...tacFormData, tac: e.target.value.toUpperCase() })
                           }
                           required
-                          helperText="Get this key from the school the student is transferring from"
+                          helperText="Get this TAC from the school the student is transferring from"
                         />
                       </div>
 
                       <div>
                         <Input
-                          label="Student Private Key"
-                          type="password"
-                          placeholder="Enter student's private key"
-                          value={formData.studentPrivateKey}
+                          label="Student ID"
+                          placeholder="Enter student ID"
+                          value={tacFormData.studentId}
                           onChange={(e) =>
-                            setFormData({ ...formData, studentPrivateKey: e.target.value })
+                            setTacFormData({ ...tacFormData, studentId: e.target.value })
                           }
                           required
-                          helperText="The student's private key for verification"
+                          helperText="The student's ID (must match the TAC)"
                         />
                       </div>
 
@@ -262,19 +384,17 @@ export default function TransfersPage() {
                         <Button
                           type="submit"
                           variant="primary"
-                          isLoading={isLoading}
-                          disabled={!formData.transferKey || !formData.studentPrivateKey}
+                          isLoading={isInitiating}
+                          disabled={!tacFormData.tac || !tacFormData.studentId}
                         >
-                          Process Transfer
+                          Initiate Transfer
                         </Button>
                         <Button
                           type="button"
                           variant="ghost"
                           onClick={() => {
                             setShowIncomingForm(false);
-                            setFormData({ transferKey: '', studentPrivateKey: '' });
-                            setError(null);
-                            setSuccess(null);
+                            setTacFormData({ tac: '', studentId: '' });
                           }}
                         >
                           Cancel
@@ -290,7 +410,7 @@ export default function TransfersPage() {
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
-                      Incoming Transfer Requests
+                      Incoming Transfer Requests ({filteredIncoming.length})
                     </CardTitle>
                     <div className="flex-1 max-w-md ml-4">
                       <div className="relative">
@@ -325,13 +445,10 @@ export default function TransfersPage() {
                               From School
                             </th>
                             <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                              Class Level
-                            </th>
-                            <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                              Received Date
-                            </th>
-                            <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
                               Status
+                            </th>
+                            <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
+                              Created
                             </th>
                             <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
                               Actions
@@ -339,7 +456,7 @@ export default function TransfersPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {filteredIncoming.map((transfer, index) => (
+                          {filteredIncoming.map((transfer: any, index: number) => (
                             <motion.tr
                               key={transfer.id}
                               initial={{ opacity: 0, x: -20 }}
@@ -349,43 +466,52 @@ export default function TransfersPage() {
                             >
                               <td className="py-4 px-4">
                                 <p className="font-medium text-light-text-primary dark:text-dark-text-primary">
-                                  {transfer.studentName}
+                                  {transfer.student?.firstName} {transfer.student?.lastName}
                                 </p>
                                 <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">
-                                  {transfer.studentId}
+                                  {transfer.student?.uid}
                                 </p>
                               </td>
                               <td className="py-4 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                                {transfer.fromSchool}
-                              </td>
-                              <td className="py-4 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                                {transfer.classLevel}
-                              </td>
-                              <td className="py-4 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                                {new Date(transfer.receivedAt).toLocaleDateString()}
+                                {transfer.fromSchool?.name || 'N/A'}
                               </td>
                               <td className="py-4 px-4">
                                 <span
-                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(transfer.status)}`}
+                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
+                                    transfer.status
+                                  )}`}
                                 >
-                                  {transfer.status}
+                                  {formatStatus(transfer.status)}
                                 </span>
                               </td>
+                              <td className="py-4 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                                {new Date(transfer.createdAt).toLocaleDateString()}
+                              </td>
                               <td className="py-4 px-4">
-                                {transfer.status === 'completed' ? (
-                                  <Button
-                                    variant="primary"
-                                    size="sm"
-                                    onClick={() => router.push('/dashboard/school/admissions?new=true&fromTransfer=' + transfer.id)}
-                                  >
-                                    Proceed to Application
-                                  </Button>
-                                ) : (
-                                  <Button variant="ghost" size="sm">
-                                    <Eye className="h-4 w-4 mr-1" />
-                                    View
-                                  </Button>
-                                )}
+                                <div className="flex items-center gap-2">
+                                  {transfer.status === 'APPROVED' && (
+                                    <Button
+                                      variant="primary"
+                                      size="sm"
+                                      onClick={() => setShowCompleteModal(transfer.id)}
+                                    >
+                                      Complete
+                                    </Button>
+                                  )}
+                                  {transfer.status === 'PENDING' && (
+                                    <>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleRejectTransfer(transfer.id)}
+                                        disabled={isRejecting}
+                                      >
+                                        <XCircle className="h-4 w-4 mr-1" />
+                                        Reject
+                                      </Button>
+                                    </>
+                                  )}
+                                </div>
                               </td>
                             </motion.tr>
                           ))}
@@ -405,18 +531,28 @@ export default function TransfersPage() {
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
-                      Outgoing Transfers
+                      Outgoing Transfers ({filteredOutgoing.length})
                     </CardTitle>
-                    <div className="flex-1 max-w-md ml-4">
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-light-text-muted dark:text-dark-text-muted" />
-                        <Input
-                          placeholder="Search by student name, ID, or admission number..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="pl-10"
-                        />
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 max-w-md">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-light-text-muted dark:text-dark-text-muted" />
+                          <Input
+                            placeholder="Search by student name or ID..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="pl-10"
+                          />
+                        </div>
                       </div>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => setShowGenerateTacModal(true)}
+                      >
+                        <Key className="h-4 w-4 mr-2" />
+                        Generate TAC
+                      </Button>
                     </div>
                   </div>
                 </CardHeader>
@@ -425,7 +561,7 @@ export default function TransfersPage() {
                     <div className="text-center py-12">
                       <ArrowUp className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
                       <p className="text-light-text-secondary dark:text-dark-text-secondary">
-                        No outgoing transfers. Generate a transfer key for a student to initiate a transfer.
+                        No outgoing transfers. Generate a TAC for a student to initiate a transfer.
                       </p>
                     </div>
                   ) : (
@@ -437,13 +573,16 @@ export default function TransfersPage() {
                               Student
                             </th>
                             <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
+                              TAC
+                            </th>
+                            <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
                               To School
                             </th>
                             <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                              Transfer Key
+                              Generated
                             </th>
                             <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                              Generated
+                              Expires
                             </th>
                             <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
                               Status
@@ -454,7 +593,7 @@ export default function TransfersPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {filteredOutgoing.map((transfer, index) => (
+                          {filteredOutgoing.map((transfer: any, index: number) => (
                             <motion.tr
                               key={transfer.id}
                               initial={{ opacity: 0, x: -20 }}
@@ -464,50 +603,76 @@ export default function TransfersPage() {
                             >
                               <td className="py-4 px-4">
                                 <p className="font-medium text-light-text-primary dark:text-dark-text-primary">
-                                  {transfer.studentName}
+                                  {transfer.student?.firstName} {transfer.student?.lastName}
                                 </p>
                                 <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">
-                                  {transfer.admissionNumber} • {transfer.classLevel}
+                                  {transfer.student?.uid}
                                 </p>
                               </td>
-                              <td className="py-4 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                                {transfer.toSchool}
-                              </td>
                               <td className="py-4 px-4">
-                                <div className="flex items-center gap-2">
-                                  <code className="text-xs bg-gray-100 dark:bg-dark-surface px-2 py-1 rounded font-mono text-light-text-primary dark:text-dark-text-primary">
-                                    {transfer.transferKey}
-                                  </code>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => copyToClipboard(transfer.transferKey)}
-                                  >
-                                    <Copy className="h-3 w-3" />
-                                  </Button>
-                                </div>
+                                {transfer.tac ? (
+                                  <div className="flex items-center gap-2">
+                                    <code className="text-xs bg-gray-100 dark:bg-dark-surface px-2 py-1 rounded font-mono text-light-text-primary dark:text-dark-text-primary">
+                                      {transfer.tac}
+                                    </code>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => copyToClipboard(transfer.tac)}
+                                    >
+                                      <Copy className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <span className="text-sm text-light-text-muted dark:text-dark-text-muted">
+                                    No TAC
+                                  </span>
+                                )}
                               </td>
                               <td className="py-4 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                                {new Date(transfer.generatedAt).toLocaleDateString()}
+                                {transfer.toSchool?.name || 'Not specified'}
+                              </td>
+                              <td className="py-4 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                                {transfer.tacGeneratedAt
+                                  ? new Date(transfer.tacGeneratedAt).toLocaleDateString()
+                                  : 'N/A'}
+                              </td>
+                              <td className="py-4 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                                {transfer.tacExpiresAt ? (
+                                  <span
+                                    className={
+                                      new Date(transfer.tacExpiresAt) < new Date()
+                                        ? 'text-red-600 dark:text-red-400'
+                                        : ''
+                                    }
+                                  >
+                                    {new Date(transfer.tacExpiresAt).toLocaleDateString()}
+                                  </span>
+                                ) : (
+                                  'N/A'
+                                )}
                               </td>
                               <td className="py-4 px-4">
                                 <span
-                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(transfer.status)}`}
+                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
+                                    transfer.status
+                                  )}`}
                                 >
-                                  {transfer.status}
+                                  {formatStatus(transfer.status)}
                                 </span>
                               </td>
                               <td className="py-4 px-4">
-                                <div className="flex items-center gap-2">
-                                  <Button variant="ghost" size="sm">
-                                    <Download className="h-4 w-4 mr-1" />
-                                    Download
+                                {transfer.tac && !transfer.tacUsedAt && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleRevokeTac(transfer.id)}
+                                    disabled={isRevoking}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-1" />
+                                    Revoke
                                   </Button>
-                                  <Button variant="ghost" size="sm">
-                                    <Eye className="h-4 w-4 mr-1" />
-                                    View
-                                  </Button>
-                                </div>
+                                )}
                               </td>
                             </motion.tr>
                           ))}
@@ -517,83 +682,351 @@ export default function TransfersPage() {
                   )}
                 </CardContent>
               </Card>
-
-              {/* Generate Transfer Key Section */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary flex items-center gap-2">
-                    <Key className="h-5 w-5" />
-                    Generate Transfer Key for Student
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                      To initiate a student transfer, generate a transfer key. This key, along with the student's private key, 
-                      will be used by the receiving school to process the transfer.
-                    </p>
-                    <div className="flex gap-3">
-                      <Input
-                        placeholder="Search for student by name or admission number..."
-                        className="flex-1"
-                      />
-                      <Button variant="primary">
-                        <Key className="h-4 w-4 mr-2" />
-                        Generate Key
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
             </div>
           )}
         </motion.div>
 
-        {/* Generate Key Modal */}
-        {showGenerateKeyModal && (
+        {/* Generate TAC Modal */}
+        {showGenerateTacModal && (
           <Modal
-            isOpen={!!showGenerateKeyModal}
-            onClose={() => setShowGenerateKeyModal(null)}
-            title="Transfer Key Generated"
+            isOpen={showGenerateTacModal}
+            onClose={() => {
+              setShowGenerateTacModal(false);
+              setSelectedStudentId('');
+              setStudentSearchQuery('');
+            }}
+            title="Generate Transfer Access Code (TAC)"
+            size="md"
+          >
+            <div className="space-y-4">
+              <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                Search and select a student to generate a TAC. Share this TAC with the receiving school along with the student's ID.
+              </p>
+              <div>
+                <label className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2 block">
+                  Search Student
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-light-text-muted dark:text-dark-text-muted" />
+                  <Input
+                    placeholder="Search by name or student ID..."
+                    value={studentSearchQuery}
+                    onChange={(e) => {
+                      setStudentSearchQuery(e.target.value);
+                      setSelectedStudentId(''); // Clear selection when searching
+                    }}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
+              {studentSearchQuery && !selectedStudentId && (
+                <div className="max-h-60 overflow-y-auto border border-light-border dark:border-dark-border rounded-lg">
+                  {filteredStudents.length === 0 ? (
+                    <div className="p-4 text-center text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                      No students found matching "{studentSearchQuery}"
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-light-border dark:divide-dark-border">
+                      {filteredStudents.map((student: any) => (
+                        <button
+                          key={student.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedStudentId(student.id);
+                            setStudentSearchQuery(''); // Clear search to hide results
+                          }}
+                          className="w-full text-left p-3 hover:bg-light-hover dark:hover:bg-dark-hover transition-colors"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-medium text-light-text-primary dark:text-dark-text-primary">
+                                {student.firstName} {student.lastName}
+                              </p>
+                              <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">
+                                {student.uid} • {student.enrollment?.classLevel || 'N/A'}
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              {selectedStudentId && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">Selected Student:</p>
+                      <p className="text-sm text-blue-800 dark:text-blue-200">
+                        {students.find((s: any) => s.id === selectedStudentId)?.firstName}{' '}
+                        {students.find((s: any) => s.id === selectedStudentId)?.lastName} (
+                        {students.find((s: any) => s.id === selectedStudentId)?.uid})
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedStudentId('');
+                        setStudentSearchQuery('');
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+              <div className="flex gap-3">
+                <Button
+                  variant="primary"
+                  className="flex-1"
+                  onClick={handleGenerateTac}
+                  isLoading={isGeneratingTac}
+                  disabled={!selectedStudentId}
+                >
+                  Generate TAC
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setShowGenerateTacModal(false);
+                    setSelectedStudentId('');
+                    setStudentSearchQuery('');
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {/* TAC Display Modal */}
+        {showTacDisplayModal && (
+          <Modal
+            isOpen={!!showTacDisplayModal}
+            onClose={() => setShowTacDisplayModal(null)}
+            title="TAC Generated Successfully"
+            size="md"
           >
             <div className="space-y-4">
               <Alert variant="success">
-                Transfer key has been generated successfully. Share this key with the receiving school.
+                TAC has been generated successfully. Share this TAC and the Student ID with the receiving school.
               </Alert>
               <div>
                 <label className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2 block">
-                  Transfer Key
+                  Transfer Access Code (TAC)
                 </label>
                 <div className="flex items-center gap-2">
                   <code className="flex-1 bg-gray-100 dark:bg-dark-surface px-4 py-3 rounded font-mono text-sm text-light-text-primary dark:text-dark-text-primary">
-                    TRF-ABC123-XYZ789-{Date.now()}
+                    {showTacDisplayModal.tac}
                   </code>
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => copyToClipboard(`TRF-ABC123-XYZ789-${Date.now()}`)}
+                    onClick={() => copyToClipboard(showTacDisplayModal.tac)}
                   >
                     <Copy className="h-4 w-4" />
                   </Button>
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2 block">
+                  Student ID
+                </label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-gray-100 dark:bg-dark-surface px-4 py-3 rounded font-mono text-sm text-light-text-primary dark:text-dark-text-primary">
+                    {showTacDisplayModal.studentId}
+                  </code>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => copyToClipboard(showTacDisplayModal.studentId)}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                <p>
+                  <strong>Student:</strong> {showTacDisplayModal.studentName}
+                </p>
+                <p>
+                  <strong>Expires:</strong> {new Date(showTacDisplayModal.expiresAt).toLocaleString()}
+                </p>
+              </div>
+              <Button variant="primary" className="w-full" onClick={() => setShowTacDisplayModal(null)}>
+                Close
+              </Button>
+            </div>
+          </Modal>
+        )}
+
+        {/* Transfer Preview Modal */}
+        {showTransferPreview && (
+          <Modal
+            isOpen={!!showTransferPreview}
+            onClose={() => setShowTransferPreview(null)}
+            title="Transfer Preview"
+            size="lg"
+          >
+            <div className="space-y-4">
+              <Alert variant="info">
+                Review the student data below. You can complete or reject this transfer.
+              </Alert>
+              <div>
+                <h3 className="font-semibold text-lg mb-2">Student Information</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-light-text-secondary dark:text-dark-text-secondary">Name:</p>
+                    <p className="font-medium">
+                      {showTransferPreview.studentData?.student?.firstName}{' '}
+                      {showTransferPreview.studentData?.student?.lastName}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-light-text-secondary dark:text-dark-text-secondary">Student ID:</p>
+                    <p className="font-medium">{showTransferPreview.studentData?.student?.uid}</p>
+                  </div>
+                  <div>
+                    <p className="text-light-text-secondary dark:text-dark-text-secondary">From School:</p>
+                    <p className="font-medium">{showTransferPreview.studentData?.fromSchool?.name}</p>
+                  </div>
+                  <div>
+                    <p className="text-light-text-secondary dark:text-dark-text-secondary">Current Class:</p>
+                    <p className="font-medium">
+                      {showTransferPreview.studentData?.enrollment?.classLevel} (
+                      {showTransferPreview.studentData?.enrollment?.academicYear})
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg mb-2">
+                  Grades ({showTransferPreview.studentData?.grades?.length || 0} records)
+                </h3>
+                <div className="max-h-60 overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-2">Subject</th>
+                        <th className="text-left py-2">Score</th>
+                        <th className="text-left py-2">Term</th>
+                        <th className="text-left py-2">Year</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {showTransferPreview.studentData?.grades?.slice(0, 10).map((grade: any, idx: number) => (
+                        <tr key={idx} className="border-b">
+                          <td className="py-2">{grade.subject}</td>
+                          <td className="py-2">
+                            {grade.score}/{grade.maxScore} ({grade.grade})
+                          </td>
+                          <td className="py-2">{grade.term}</td>
+                          <td className="py-2">{grade.academicYear}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {showTransferPreview.studentData?.grades?.length > 10 && (
+                    <p className="text-xs text-light-text-muted dark:text-dark-text-muted mt-2">
+                      ... and {showTransferPreview.studentData.grades.length - 10} more records
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex gap-3">
                 <Button
                   variant="primary"
                   className="flex-1"
-                  onClick={() => {
-                    // TODO: Download transfer key
-                    setShowGenerateKeyModal(null);
-                  }}
+                  onClick={() => setShowCompleteModal(showTransferPreview.transferId)}
                 >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download Key
+                  Complete Transfer
                 </Button>
                 <Button
                   variant="ghost"
-                  onClick={() => setShowGenerateKeyModal(null)}
+                  onClick={() => handleRejectTransfer(showTransferPreview.transferId)}
+                  disabled={isRejecting}
                 >
-                  Close
+                  Reject
+                </Button>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {/* Complete Transfer Modal */}
+        {showCompleteModal && (
+          <Modal
+            isOpen={!!showCompleteModal}
+            onClose={() => {
+              setShowCompleteModal(null);
+              setCompleteFormData({ targetClassLevel: '', academicYear: '', classId: '', classArmId: '' });
+            }}
+            title="Complete Transfer"
+            size="md"
+          >
+            <div className="space-y-4">
+              <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                Select the target class for the student in your school.
+              </p>
+              <div>
+                <label className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2 block">
+                  Class Level *
+                </label>
+                <select
+                  value={completeFormData.targetClassLevel}
+                  onChange={(e) => {
+                    const selectedClass = classes.find((c: any) => c.name === e.target.value);
+                    setCompleteFormData({
+                      ...completeFormData,
+                      targetClassLevel: e.target.value,
+                      classId: selectedClass?.id || '',
+                    });
+                  }}
+                  className="w-full px-3 py-2 border border-light-border dark:border-dark-border rounded-lg bg-light-bg dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                >
+                  <option value="">Select class...</option>
+                  {classes.map((cls: any) => (
+                    <option key={cls.id} value={cls.name}>
+                      {cls.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2 block">
+                  Academic Year *
+                </label>
+                <Input
+                  placeholder="e.g., 2024/2025"
+                  value={completeFormData.academicYear}
+                  onChange={(e) =>
+                    setCompleteFormData({ ...completeFormData, academicYear: e.target.value })
+                  }
+                  required
+                />
+              </div>
+              <div className="flex gap-3">
+                <Button
+                  variant="primary"
+                  className="flex-1"
+                  onClick={handleCompleteTransfer}
+                  isLoading={isCompleting}
+                  disabled={!completeFormData.targetClassLevel || !completeFormData.academicYear}
+                >
+                  Complete Transfer
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setShowCompleteModal(null);
+                    setCompleteFormData({ targetClassLevel: '', academicYear: '', classId: '', classArmId: '' });
+                  }}
+                >
+                  Cancel
                 </Button>
               </div>
             </div>

@@ -17,7 +17,7 @@ import {
   useGetEventsQuery,
   useGetUpcomingEventsQuery,
   useCreateEventMutation,
-  useGetTimetableForClassArmQuery,
+  useGetTimetablesForSchoolTypeQuery,
   useGetClassArmsQuery,
   useGetRoomsQuery,
   type CalendarEvent,
@@ -141,17 +141,16 @@ export default function CalendarPage() {
   const classArms = classArmsResponse?.data || [];
   const rooms = roomsResponse?.data || [];
 
-  // Get timetable periods for all class arms (for recurring slots)
-  const timetableQueries = classArms.map((arm) =>
-    useGetTimetableForClassArmQuery(
-      {
-        schoolId: schoolId!,
-        classArmId: arm.id,
-        termId: activeSession?.term?.id || '',
-      },
-      { skip: !schoolId || !activeSession?.term?.id }
-    )
+  // Get all timetable periods for the school type (for recurring slots)
+  const { data: timetablesResponse } = useGetTimetablesForSchoolTypeQuery(
+    {
+      schoolId: schoolId!,
+      schoolType: currentType || undefined,
+      termId: activeSession?.term?.id || undefined,
+    },
+    { skip: !schoolId || !activeSession?.term?.id }
   );
+  const timetablesByClass = timetablesResponse?.data || {};
 
   // Combine events, timetable periods, and session/term milestones into calendar events
   const calendarEvents = useMemo<CalendarEventWithType[]>(() => {
@@ -257,58 +256,56 @@ export default function CalendarPage() {
     });
 
     // Add recurring timetable periods (for current week/month)
-    if (activeSession?.term) {
-      timetableQueries.forEach((query, index) => {
-        const periods = query.data?.data || [];
-        const classArm = classArms[index];
+    if (activeSession?.term && timetablesByClass) {
+      // Iterate through all classes and their timetable periods
+      Object.entries(timetablesByClass).forEach(([classId, periods]) => {
+        periods.forEach((period) => {
+          // Convert dayOfWeek and time to actual dates for the current view range
+          const dayNames = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+          const dayIndex = dayNames.indexOf(period.dayOfWeek);
 
-            periods.forEach((period) => {
-              // Convert dayOfWeek and time to actual dates for the current view range
-              const dayNames = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
-              const dayIndex = dayNames.indexOf(period.dayOfWeek);
+          // Get all dates for this day in the current view range
+          const dates: Date[] = [];
+          let current = new Date(dateRange.start);
+          while (current <= dateRange.end) {
+            if (current.getDay() === dayIndex) {
+              dates.push(new Date(current));
+            }
+            current = addDays(current, 1);
+          }
 
-              // Get all dates for this day in the current view range
-              const dates: Date[] = [];
-              let current = new Date(dateRange.start);
-              while (current <= dateRange.end) {
-                if (current.getDay() === dayIndex) {
-                  dates.push(new Date(current));
-                }
-                current = addDays(current, 1);
-              }
+          dates.forEach((date) => {
+            const [startHour, startMin] = period.startTime.split(':').map(Number);
+            const [endHour, endMin] = period.endTime.split(':').map(Number);
 
-              dates.forEach((date) => {
-                const [startHour, startMin] = period.startTime.split(':').map(Number);
-                const [endHour, endMin] = period.endTime.split(':').map(Number);
+            const start = new Date(date);
+            start.setHours(startHour, startMin, 0, 0);
 
-                const start = new Date(date);
-                start.setHours(startHour, startMin, 0, 0);
+            const end = new Date(date);
+            end.setHours(endHour, endMin, 0, 0);
 
-                const end = new Date(date);
-                end.setHours(endHour, endMin, 0, 0);
-
-                combined.push({
-                  id: `timetable-${period.id}-${date.toISOString()}`,
-                  title: period.subjectName || period.classArmName || 'Timetable Period',
-                  startDate: start.toISOString(),
-                  endDate: end.toISOString(),
-                  type: 'TIMETABLE' as const,
-                  location: period.roomName,
-                  roomName: period.roomName,
-                  schoolId: schoolId!,
-                  isAllDay: false,
-                  createdAt: period.createdAt,
-                  updatedAt: period.createdAt,
-                  start,
-                  end,
-                });
-              });
+            combined.push({
+              id: `timetable-${period.id}-${date.toISOString()}`,
+              title: period.subjectName || period.classArmName || 'Timetable Period',
+              startDate: start.toISOString(),
+              endDate: end.toISOString(),
+              type: 'TIMETABLE' as const,
+              location: period.roomName,
+              roomName: period.roomName,
+              schoolId: schoolId!,
+              isAllDay: false,
+              createdAt: period.createdAt,
+              updatedAt: period.createdAt,
+              start,
+              end,
             });
+          });
+        });
       });
     }
 
     return combined;
-  }, [events, timetableQueries, classArms, dateRange, activeSession, schoolId, allSessions]);
+  }, [events, timetablesByClass, dateRange, activeSession, schoolId, allSessions]);
 
   const handleSelectSlot = useCallback((slotInfo: SlotInfo) => {
     setSelectedSlot({ start: slotInfo.start, end: slotInfo.end });
@@ -429,7 +426,7 @@ export default function CalendarPage() {
           <p className="text-light-text-secondary dark:text-dark-text-secondary">
             Unified schedule: Timetable slots and one-off events
           </p>
-        </div>
+              </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Main Calendar Area (3/4 width) */}
@@ -478,7 +475,7 @@ export default function CalendarPage() {
                 <div className="space-y-3">
                   {upcomingEvents.map((event) => (
                     <CompactEventCard
-                      key={event.id}
+                    key={event.id}
                       id={event.id}
                       title={event.title}
                       startDate={new Date(event.startDate)}
@@ -487,8 +484,8 @@ export default function CalendarPage() {
                       location={event.location}
                       roomName={event.roomName}
                     />
-                  ))}
-                </div>
+                ))}
+              </div>
               )}
             </CardContent>
           </Card>

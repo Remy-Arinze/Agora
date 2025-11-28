@@ -42,14 +42,32 @@ export class TimetableService {
       throw new NotFoundException('Term not found');
     }
 
-    // Validate class arm exists
-    const classArm = await this.prisma.classArm.findUnique({
-      where: { id: dto.classArmId },
-      include: { classLevel: true },
-    });
+    // Validate either classId or classArmId is provided
+    if (!dto.classId && !dto.classArmId) {
+      throw new BadRequestException('Either classId or classArmId must be provided');
+    }
 
-    if (!classArm || classArm.classLevel.schoolId !== school.id) {
-      throw new NotFoundException('Class arm not found');
+    // Validate class exists if classId is provided
+    if (dto.classId) {
+      const classData = await this.prisma.class.findUnique({
+        where: { id: dto.classId },
+      });
+
+      if (!classData || classData.schoolId !== school.id) {
+        throw new NotFoundException('Class not found');
+      }
+    }
+
+    // Validate class arm exists if classArmId is provided
+    if (dto.classArmId) {
+      const classArm = await this.prisma.classArm.findUnique({
+        where: { id: dto.classArmId },
+        include: { classLevel: true },
+      });
+
+      if (!classArm || classArm.classLevel.schoolId !== school.id) {
+        throw new NotFoundException('Class arm not found');
+      }
     }
 
     // Check for conflicts
@@ -75,13 +93,17 @@ export class TimetableService {
         endTime: dto.endTime,
         type: dto.type || PeriodType.LESSON,
         subjectId: dto.subjectId || null,
+        courseId: dto.courseId || null,
         teacherId: dto.teacherId || null,
         roomId: dto.roomId || null,
-        classArmId: dto.classArmId,
+        classId: dto.classId || null,
+        classArmId: dto.classArmId || null,
         termId: dto.termId,
       },
       include: {
         subject: true,
+        course: true,
+        class: true,
         teacher: true,
         room: true,
         classArm: {
@@ -186,6 +208,8 @@ export class TimetableService {
       },
       include: {
         subject: true,
+        course: true,
+        class: true,
         teacher: true,
         room: true,
         classArm: {
@@ -201,6 +225,229 @@ export class TimetableService {
     });
 
     return periods.map((p: any) => this.mapToPeriodDto(p));
+  }
+
+  /**
+   * Get timetable for a teacher
+   * Returns all periods where the teacher is assigned, grouped by day
+   * Includes:
+   * 1. Periods where teacherId is explicitly set
+   * 2. Periods for classes where teacher is assigned (via ClassTeacher)
+   *    - For PRIMARY: All periods for assigned classes
+   *    - For SECONDARY: Periods where subject matches teacher's assignment
+   *    - For TERTIARY: Periods for assigned courses
+   */
+  async getTimetableForTeacher(
+    schoolId: string,
+    teacherId: string,
+    termId: string
+  ): Promise<TimetablePeriodDto[]> {
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    // Validate teacher exists and belongs to school
+    // Note: teacherId parameter can be either the database id or the unique teacherId field
+    const teacher = await this.prisma.teacher.findFirst({
+      where: {
+        OR: [
+          { id: teacherId },
+          { teacherId: teacherId },
+        ],
+        schoolId: school.id,
+      },
+      include: {
+        classTeachers: {
+          include: {
+            class: true,
+          },
+        },
+      },
+    });
+
+    if (!teacher) {
+      throw new NotFoundException('Teacher not found');
+    }
+
+    // Get classes where this teacher is assigned
+    const assignedClassIds = teacher.classTeachers.map((ct) => ct.classId);
+    const assignedClasses = teacher.classTeachers.map((ct) => ({
+      classId: ct.classId,
+      subject: ct.subject,
+      classType: ct.class.type,
+    }));
+
+    // Build where clause: periods where teacher is explicitly assigned OR
+    // periods for classes where teacher is assigned
+    const whereClause: any = {
+      termId: termId,
+      OR: [
+        // Periods where teacherId is explicitly set
+        { teacherId: teacher.id },
+      ],
+    };
+
+    // Add periods for classes where teacher is assigned
+    if (assignedClassIds.length > 0) {
+      const classConditions: any[] = [];
+
+      for (const assignedClass of assignedClasses) {
+        if (assignedClass.classType === 'PRIMARY') {
+          // For PRIMARY: Show unassigned periods for assigned classes
+          // (Periods with teacherId = this teacher are already covered by the first OR condition)
+          classConditions.push({
+            classId: assignedClass.classId,
+            teacherId: null, // Only unassigned periods
+          });
+        } else if (assignedClass.classType === 'SECONDARY') {
+          // For SECONDARY: Show unassigned periods for assigned classes
+          classConditions.push({
+            classId: assignedClass.classId,
+            teacherId: null, // Only unassigned periods
+          });
+        } else if (assignedClass.classType === 'TERTIARY') {
+          // For TERTIARY: Show unassigned periods for assigned courses
+          classConditions.push({
+            courseId: assignedClass.classId,
+            teacherId: null, // Only unassigned periods
+          });
+        }
+      }
+
+      if (classConditions.length > 0) {
+        whereClause.OR.push(...classConditions);
+      }
+    }
+
+    // Get all periods for this teacher
+    const periods = await this.timetablePeriodModel.findMany({
+      where: whereClause,
+      include: {
+        subject: true,
+        course: true,
+        class: true,
+        teacher: true,
+        room: true,
+        classArm: {
+          include: {
+            classLevel: true,
+          },
+        },
+        term: true,
+      },
+      orderBy: [
+        { dayOfWeek: 'asc' },
+        { startTime: 'asc' },
+      ],
+    });
+
+    return periods.map((p: any) => this.mapToPeriodDto(p));
+  }
+
+  /**
+   * Get timetable for a class
+   */
+  async getTimetableForClass(
+    schoolId: string,
+    classId: string,
+    termId: string
+  ): Promise<TimetablePeriodDto[]> {
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    const periods = await this.timetablePeriodModel.findMany({
+      where: {
+        classId: classId,
+        termId: termId,
+      },
+      include: {
+        subject: true,
+        course: true,
+        class: true,
+        teacher: true,
+        room: true,
+        classArm: {
+          include: {
+            classLevel: true,
+          },
+        },
+      },
+      orderBy: [
+        { dayOfWeek: 'asc' },
+        { startTime: 'asc' },
+      ],
+    });
+
+    return periods.map((p: any) => this.mapToPeriodDto(p));
+  }
+
+  /**
+   * Get all timetables for a school type (grouped by class)
+   */
+  async getTimetablesForSchoolType(
+    schoolId: string,
+    schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY',
+    termId?: string
+  ): Promise<Record<string, TimetablePeriodDto[]>> {
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    const where: any = {
+      class: {
+        schoolId: school.id,
+      },
+    };
+
+    if (schoolType) {
+      where.class = {
+        ...where.class,
+        type: schoolType,
+      };
+    }
+
+    if (termId) {
+      where.termId = termId;
+    }
+
+    const periods = await this.timetablePeriodModel.findMany({
+      where,
+      include: {
+        subject: true,
+        course: true,
+        class: true,
+        teacher: true,
+        room: true,
+        classArm: {
+          include: {
+            classLevel: true,
+          },
+        },
+        term: true,
+      },
+      orderBy: [
+        { class: { name: 'asc' } },
+        { dayOfWeek: 'asc' },
+        { startTime: 'asc' },
+      ],
+    });
+
+    // Group periods by class
+    const timetablesByClass: Record<string, TimetablePeriodDto[]> = {};
+    periods.forEach((period: any) => {
+      if (period.classId) {
+        if (!timetablesByClass[period.classId]) {
+          timetablesByClass[period.classId] = [];
+        }
+        timetablesByClass[period.classId].push(this.mapToPeriodDto(period));
+      }
+    });
+
+    return timetablesByClass;
   }
 
   /**
@@ -252,19 +499,49 @@ export class TimetableService {
       }
     }
 
+    // Build update data object, only including fields that are provided
+    const updateData: any = {};
+    if (dto.dayOfWeek !== undefined) updateData.dayOfWeek = dto.dayOfWeek;
+    if (dto.startTime !== undefined) updateData.startTime = dto.startTime;
+    if (dto.endTime !== undefined) updateData.endTime = dto.endTime;
+    if (dto.type !== undefined) updateData.type = dto.type;
+    if (dto.subjectId !== undefined) updateData.subjectId = dto.subjectId;
+    if (dto.courseId !== undefined) updateData.courseId = dto.courseId;
+    if (dto.classId !== undefined) updateData.classId = dto.classId;
+    if (dto.teacherId !== undefined) updateData.teacherId = dto.teacherId;
+    if (dto.roomId !== undefined) updateData.roomId = dto.roomId;
+    if (dto.classArmId !== undefined) updateData.classArmId = dto.classArmId;
+
+    // Validate time format if times are being updated
+    if (updateData.startTime) {
+      this.validateTimeFormat(updateData.startTime);
+    }
+    if (updateData.endTime) {
+      this.validateTimeFormat(updateData.endTime);
+    }
+
+    // Validate time range if both times are provided
+    if (updateData.startTime && updateData.endTime) {
+      if (updateData.startTime >= updateData.endTime) {
+        throw new BadRequestException('Start time must be before end time');
+      }
+    } else if (updateData.startTime && period.endTime) {
+      if (updateData.startTime >= period.endTime) {
+        throw new BadRequestException('Start time must be before end time');
+      }
+    } else if (updateData.endTime && period.startTime) {
+      if (period.startTime >= updateData.endTime) {
+        throw new BadRequestException('Start time must be before end time');
+      }
+    }
+
     const updated = await this.timetablePeriodModel.update({
       where: { id: periodId },
-      data: {
-        dayOfWeek: dto.dayOfWeek,
-        startTime: dto.startTime,
-        endTime: dto.endTime,
-        type: dto.type,
-        subjectId: dto.subjectId,
-        teacherId: dto.teacherId,
-        roomId: dto.roomId,
-      },
+      data: updateData,
       include: {
         subject: true,
+        course: true,
+        class: true,
         teacher: true,
         room: true,
         classArm: {
@@ -308,6 +585,49 @@ export class TimetableService {
   }
 
   /**
+   * Delete all timetable periods for a class and term (delete entire timetable)
+   */
+  async deleteTimetableForClass(
+    schoolId: string,
+    classId: string,
+    termId: string
+  ): Promise<void> {
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    // Validate class exists and belongs to school
+    const classData = await this.prisma.class.findUnique({
+      where: { id: classId },
+    });
+
+    if (!classData || classData.schoolId !== school.id) {
+      throw new NotFoundException('Class not found');
+    }
+
+    // Validate term exists and belongs to school
+    const term = await this.prisma.term.findUnique({
+      where: { id: termId },
+      include: {
+        academicSession: true,
+      },
+    });
+
+    if (!term || term.academicSession.schoolId !== school.id) {
+      throw new NotFoundException('Term not found');
+    }
+
+    // Delete all periods for this class and term
+    await this.timetablePeriodModel.deleteMany({
+      where: {
+        classId: classId,
+        termId: termId,
+      },
+    });
+  }
+
+  /**
    * Detect conflicts for teacher and room
    * Time overlap: periods overlap if startTime < other.endTime AND endTime > other.startTime
    * Since times are in HH:mm format, string comparison works for lexicographic ordering
@@ -322,15 +642,27 @@ export class TimetableService {
       return null;
     }
 
+    // Build where clause for conflict detection
+    const where: any = {
+      termId: dto.termId,
+      dayOfWeek: dto.dayOfWeek,
+      type: PeriodType.LESSON,
+      ...(excludePeriodId && { id: { not: excludePeriodId } }),
+    };
+
+    // If classId is provided, check conflicts for that class
+    // If classArmId is provided, check conflicts for that class arm
+    if (dto.classId) {
+      where.classId = dto.classId;
+    } else if (dto.classArmId) {
+      where.classArmId = dto.classArmId;
+    }
+
     // Get all periods for the same day and term
     const allPeriods = await this.timetablePeriodModel.findMany({
-      where: {
-        termId: dto.termId,
-        dayOfWeek: dto.dayOfWeek,
-        type: PeriodType.LESSON,
-        ...(excludePeriodId && { id: { not: excludePeriodId } }),
-      },
+      where,
       include: {
+        class: true,
         classArm: {
           include: {
             classLevel: true,
@@ -379,6 +711,8 @@ export class TimetableService {
         const roomName = roomConflict.room?.name || 'Unknown';
         const classArmName = roomConflict.classArm
           ? `${roomConflict.classArm.classLevel.name} ${roomConflict.classArm.name}`
+          : roomConflict.class
+          ? roomConflict.class.name
           : 'Unknown';
 
         return {
@@ -414,6 +748,8 @@ export class TimetableService {
       type: period.type,
       subjectId: period.subjectId,
       subjectName: period.subject?.name,
+      courseId: period.courseId,
+      courseName: period.course?.name,
       teacherId: period.teacherId,
       teacherName: period.teacher
         ? `${period.teacher.firstName} ${period.teacher.lastName}`

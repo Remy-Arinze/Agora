@@ -1,178 +1,570 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { Calendar as RBCalendar, View, SlotInfo, dateFnsLocalizer } from 'react-big-calendar';
+import { format, parse, startOfWeek, getDay, addDays } from 'date-fns';
+import { enUS } from 'date-fns/locale';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { motion } from 'framer-motion';
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, MapPin } from 'lucide-react';
+import { CustomToolbar } from '@/components/calendar/CustomToolbar';
+import { CustomEvent } from '@/components/calendar/CustomEvent';
+import { CompactEventCard } from '@/components/calendar/CompactEventCard';
+import { CreateEventModal } from '@/components/modals/CreateEventModal';
+import { DayEventsModal } from '@/components/modals/DayEventsModal';
+import { GoogleCalendarConnect, GoogleCalendarStatus } from '@/components/calendar/GoogleCalendarConnect';
+import {
+  useGetMyTeacherSchoolQuery,
+  useGetMyTeacherProfileQuery,
+  useGetActiveSessionQuery,
+  useGetSessionsQuery,
+  useGetEventsQuery,
+  useGetUpcomingEventsQuery,
+  useCreateEventMutation,
+  useGetTimetableForTeacherQuery,
+  useGetRoomsQuery,
+  useGetGoogleCalendarStatusQuery,
+  useDisconnectGoogleCalendarMutation,
+  type CalendarEvent,
+  type CalendarEventType,
+  type AcademicSession,
+  type Term,
+} from '@/lib/store/api/schoolAdminApi';
+import { useSchoolType } from '@/hooks/useSchoolType';
+import toast from 'react-hot-toast';
+import { Calendar as CalendarIcon } from 'lucide-react';
+import 'react-big-calendar/lib/css/react-big-calendar.css';
 
-// Mock data - will be replaced with API calls later
-const mockEvents = [
-  {
-    id: '1',
-    title: 'Parent-Teacher Meeting',
-    date: '2024-03-15',
-    time: '10:00 AM',
-    location: 'School Hall',
-    type: 'meeting' as const,
-  },
-  {
-    id: '2',
-    title: 'Mathematics Test - JSS2',
-    date: '2024-03-18',
-    time: '9:00 AM',
-    location: 'Room 101',
-    type: 'exam' as const,
-  },
-  {
-    id: '3',
-    title: 'Staff Development Workshop',
-    date: '2024-03-20',
-    time: '2:00 PM',
-    location: 'Staff Room',
-    type: 'event' as const,
-  },
-  {
-    id: '4',
-    title: 'Mid-Term Examination',
-    date: '2024-03-25',
-    time: '9:00 AM',
-    location: 'All Classes',
-    type: 'exam' as const,
-  },
-];
+// Create date-fns localizer
+const locales = {
+  'en-US': enUS,
+};
 
-const currentDate = new Date();
-const currentMonth = currentDate.getMonth();
-const currentYear = currentDate.getFullYear();
+const localizer = dateFnsLocalizer({
+  format,
+  parse,
+  startOfWeek,
+  getDay,
+  locales,
+});
+
+interface CalendarEventWithType {
+  id: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  type: CalendarEventType | 'TIMETABLE' | 'SESSION_START' | 'SESSION_END' | 'TERM_START' | 'TERM_END' | 'HALF_TERM';
+  schoolType?: string;
+  location?: string;
+  roomId?: string;
+  roomName?: string;
+  schoolId: string;
+  createdBy?: string;
+  isAllDay: boolean;
+  createdAt: string;
+  updatedAt: string;
+  start: Date;
+  end: Date;
+  allDay?: boolean; // For react-big-calendar all-day event support
+  description?: string;
+}
 
 export default function TeacherCalendarPage() {
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [viewMonth, setViewMonth] = useState(currentMonth);
-  const [viewYear, setViewYear] = useState(currentYear);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [view, setView] = useState<View>('month');
+  const [showCreateEventModal, setShowCreateEventModal] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<{ start: Date; end: Date } | undefined>();
+  const [showDayEventsModal, setShowDayEventsModal] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-  const firstDayOfMonth = new Date(viewYear, viewMonth, 1).getDay();
+  // Get teacher's school and profile
+  const { data: schoolResponse } = useGetMyTeacherSchoolQuery();
+  const { data: teacherResponse } = useGetMyTeacherProfileQuery();
+  const schoolId = schoolResponse?.data?.id;
+  const teacherId = teacherResponse?.data?.id; // Database ID
+  const { currentType } = useSchoolType();
 
-  const monthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ];
+  const { data: activeSessionResponse } = useGetActiveSessionQuery(
+    { schoolId: schoolId! },
+    { skip: !schoolId }
+  );
+  const activeSession = activeSessionResponse?.data;
 
-  const handlePrevMonth = () => {
-    if (viewMonth === 0) {
-      setViewMonth(11);
-      setViewYear(viewYear - 1);
+  // Get all sessions to display session/term milestones
+  const { data: sessionsResponse } = useGetSessionsQuery(
+    { schoolId: schoolId! },
+    { skip: !schoolId }
+  );
+  const allSessions = sessionsResponse?.data || [];
+
+  // Calculate date range for events query
+  const dateRange = useMemo(() => {
+    const date = new Date(currentDate);
+    if (view === 'week') {
+      const start = startOfWeek(date, { locale: enUS });
+      const end = addDays(start, 6);
+      end.setHours(23, 59, 59, 999);
+      return { start, end };
+    }
+    if (view === 'day') {
+      const start = new Date(date);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(date);
+      end.setHours(23, 59, 59, 999);
+      return { start, end };
+    }
+    // Month view
+    const start = new Date(date.getFullYear(), date.getMonth(), 1);
+    const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }, [currentDate, view]);
+
+  // Get events (includes admin-created and teacher-created events)
+  const { data: eventsResponse } = useGetEventsQuery(
+    {
+      schoolId: schoolId!,
+      startDate: dateRange.start.toISOString(),
+      endDate: dateRange.end.toISOString(),
+      schoolType: currentType || undefined,
+    },
+    { skip: !schoolId }
+  );
+
+  const { data: upcomingEventsResponse } = useGetUpcomingEventsQuery(
+    { schoolId: schoolId!, days: 7, schoolType: currentType || undefined },
+    { skip: !schoolId }
+  );
+
+  const { data: roomsResponse } = useGetRoomsQuery(
+    { schoolId: schoolId! },
+    { skip: !schoolId }
+  );
+
+  const [createEvent, { isLoading: isCreatingEvent }] = useCreateEventMutation();
+  const [disconnectGoogleCalendar] = useDisconnectGoogleCalendarMutation();
+
+  const { data: googleCalendarStatusResponse } = useGetGoogleCalendarStatusQuery(
+    { schoolId: schoolId! },
+    { skip: !schoolId }
+  );
+  const googleCalendarStatus = googleCalendarStatusResponse?.data;
+  const isGoogleCalendarConnected = !!googleCalendarStatus;
+
+  // Check for OAuth callback parameters
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('google_calendar_connected') === 'true') {
+      toast.success('Google Calendar connected successfully!');
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (params.get('google_calendar_error') === 'true') {
+      toast.error('Failed to connect Google Calendar. Please try again.');
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  const events = eventsResponse?.data || [];
+  // Upcoming events only includes real events (not timetable periods or milestones)
+  // Timetable periods are generated on the frontend and shown in the calendar view only
+  const upcomingEvents = upcomingEventsResponse?.data || [];
+  const rooms = roomsResponse?.data || [];
+
+  // Get teacher's timetable for the active term
+  const { data: timetableResponse } = useGetTimetableForTeacherQuery(
+    {
+      schoolId: schoolId!,
+      teacherId: teacherId!,
+      termId: activeSession?.term?.id || '',
+    },
+    { skip: !schoolId || !teacherId || !activeSession?.term?.id }
+  );
+  const timetable = timetableResponse?.data || [];
+
+  // Combine events, timetable periods, and session/term milestones into calendar events
+  const calendarEvents = useMemo<CalendarEventWithType[]>(() => {
+    const combined: CalendarEventWithType[] = [];
+
+    // Add one-off events (admin-created and teacher-created)
+    events.forEach((event) => {
+      combined.push({
+        ...event,
+        start: new Date(event.startDate),
+        end: new Date(event.endDate),
+        type: event.type as CalendarEventType,
+        allDay: event.isAllDay,
+        description: event.description,
+      });
+    });
+
+    // Add session and term milestones
+    allSessions.forEach((session: AcademicSession) => {
+      // Session start
+      combined.push({
+        id: `session-start-${session.id}`,
+        title: `Session Start: ${session.name}`,
+        startDate: new Date(session.startDate).toISOString(),
+        endDate: new Date(session.startDate).toISOString(),
+        type: 'SESSION_START' as const,
+        schoolId: schoolId!,
+        isAllDay: true,
+        createdAt: session.createdAt,
+        updatedAt: session.createdAt,
+        start: new Date(session.startDate),
+        end: new Date(session.startDate),
+        allDay: true,
+      });
+
+      // Session end
+      combined.push({
+        id: `session-end-${session.id}`,
+        title: `Session End: ${session.name}`,
+        startDate: new Date(session.endDate).toISOString(),
+        endDate: new Date(session.endDate).toISOString(),
+        type: 'SESSION_END' as const,
+        schoolId: schoolId!,
+        isAllDay: true,
+        createdAt: session.createdAt,
+        updatedAt: session.createdAt,
+        start: new Date(session.endDate),
+        end: new Date(session.endDate),
+        allDay: true,
+      });
+
+      // Term milestones
+      session.terms.forEach((term: Term) => {
+        // Term start
+        combined.push({
+          id: `term-start-${term.id}`,
+          title: `Term Start: ${term.name}`,
+          startDate: new Date(term.startDate).toISOString(),
+          endDate: new Date(term.startDate).toISOString(),
+          type: 'TERM_START' as const,
+          schoolId: schoolId!,
+          isAllDay: true,
+          createdAt: term.createdAt,
+          updatedAt: term.createdAt,
+          start: new Date(term.startDate),
+          end: new Date(term.startDate),
+          allDay: true,
+        });
+
+        // Term end
+        combined.push({
+          id: `term-end-${term.id}`,
+          title: `Term End: ${term.name}`,
+          startDate: new Date(term.endDate).toISOString(),
+          endDate: new Date(term.endDate).toISOString(),
+          type: 'TERM_END' as const,
+          schoolId: schoolId!,
+          isAllDay: true,
+          createdAt: term.createdAt,
+          updatedAt: term.createdAt,
+          start: new Date(term.endDate),
+          end: new Date(term.endDate),
+          allDay: true,
+        });
+
+        // Half-term break (if exists)
+        if (term.halfTermStart && term.halfTermEnd) {
+          combined.push({
+            id: `half-term-${term.id}`,
+            title: `Half-Term Break: ${term.name}`,
+            startDate: new Date(term.halfTermStart).toISOString(),
+            endDate: new Date(term.halfTermEnd).toISOString(),
+            type: 'HALF_TERM' as const,
+            schoolId: schoolId!,
+            isAllDay: true,
+            createdAt: term.createdAt,
+            updatedAt: term.createdAt,
+            start: new Date(term.halfTermStart),
+            end: new Date(term.halfTermEnd),
+            allDay: true,
+          });
+        }
+      });
+    });
+
+    // Add recurring timetable periods (for current week/month)
+    if (activeSession?.term && timetable.length > 0) {
+      timetable.forEach((period) => {
+        // Convert dayOfWeek and time to actual dates for the current view range
+        const dayNames = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+        const dayIndex = dayNames.indexOf(period.dayOfWeek);
+
+        // Get all dates for this day in the current view range
+        const dates: Date[] = [];
+        let current = new Date(dateRange.start);
+        while (current <= dateRange.end) {
+          if (current.getDay() === dayIndex) {
+            dates.push(new Date(current));
+          }
+          current = addDays(current, 1);
+        }
+
+        dates.forEach((date) => {
+          const [startHour, startMin] = period.startTime.split(':').map(Number);
+          const [endHour, endMin] = period.endTime.split(':').map(Number);
+
+          const start = new Date(date);
+          start.setHours(startHour, startMin, 0, 0);
+
+          const end = new Date(date);
+          end.setHours(endHour, endMin, 0, 0);
+
+          // Create title based on school type
+          let title = '';
+          if (currentType === 'PRIMARY') {
+            title = period.classArmName || 'Timetable Period';
+          } else if (currentType === 'SECONDARY') {
+            title = period.subjectName && period.classArmName 
+              ? `${period.subjectName} - ${period.classArmName}`
+              : period.subjectName || period.classArmName || 'Timetable Period';
+          } else if (currentType === 'TERTIARY') {
+            title = period.courseName || 'Timetable Period';
+          } else {
+            title = 'Timetable Period';
+          }
+
+          combined.push({
+            id: `timetable-${period.id}-${date.toISOString()}`,
+            title,
+            startDate: start.toISOString(),
+            endDate: end.toISOString(),
+            type: 'TIMETABLE' as const,
+            location: period.roomName,
+            roomName: period.roomName,
+            schoolId: schoolId!,
+            isAllDay: false,
+            createdAt: period.createdAt ? new Date(period.createdAt).toISOString() : new Date().toISOString(),
+            updatedAt: period.createdAt ? new Date(period.createdAt).toISOString() : new Date().toISOString(),
+            start,
+            end,
+          });
+        });
+      });
+    }
+
+    return combined;
+  }, [events, timetable, dateRange, activeSession, schoolId, allSessions, currentType]);
+
+  // Filter events for the selected date
+  const dayEvents = useMemo(() => {
+    if (!selectedDate) return [];
+    
+    const startOfDay = new Date(selectedDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(selectedDate);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    return calendarEvents.filter((event) => {
+      const eventStart = new Date(event.start);
+      const eventEnd = new Date(event.end);
+      
+      // Check if event overlaps with the selected day
+      return (
+        (eventStart >= startOfDay && eventStart <= endOfDay) ||
+        (eventEnd >= startOfDay && eventEnd <= endOfDay) ||
+        (eventStart <= startOfDay && eventEnd >= endOfDay)
+      );
+    }).map((event) => ({
+      id: event.id,
+      title: event.title,
+      startDate: new Date(event.start),
+      endDate: new Date(event.end),
+      type: event.type,
+      location: event.location,
+      roomName: event.roomName,
+      isAllDay: event.isAllDay || false,
+      description: event.description,
+    }));
+  }, [calendarEvents, selectedDate]);
+
+  const handleSelectSlot = useCallback((slotInfo: SlotInfo) => {
+    // Check if this is a full day click (in month view) or a time slot click
+    // In month view, clicking on a date cell typically selects the entire day
+    const isFullDayClick = 
+      view === 'month' || 
+      (slotInfo.start.getHours() === 0 && 
+       slotInfo.start.getMinutes() === 0 && 
+       slotInfo.end.getHours() === 23 && 
+       slotInfo.end.getMinutes() === 59);
+    
+    // Calculate if the slot spans close to a full day (within 1 hour of full day)
+    const slotDuration = slotInfo.end.getTime() - slotInfo.start.getTime();
+    const fullDayDuration = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+    const isNearFullDay = slotDuration >= fullDayDuration * 0.95; // 95% of a day
+    
+    if ((isFullDayClick || isNearFullDay) && view === 'month') {
+      // Show day events modal for month view date cell clicks
+      const clickedDate = new Date(slotInfo.start);
+      clickedDate.setHours(0, 0, 0, 0); // Normalize to start of day
+      setSelectedDate(clickedDate);
+      setShowDayEventsModal(true);
     } else {
-      setViewMonth(viewMonth - 1);
+      // Show create event modal for time slot clicks (week/day views or specific time slots)
+      setSelectedSlot({ start: slotInfo.start, end: slotInfo.end });
+      setShowCreateEventModal(true);
+    }
+  }, [view]);
+
+  const handleAddEventFromDayModal = useCallback(() => {
+    if (selectedDate) {
+      // Set the slot to the selected date (full day)
+      const startOfDay = new Date(selectedDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(selectedDate);
+      endOfDay.setHours(23, 59, 59, 999);
+      setSelectedSlot({ start: startOfDay, end: endOfDay });
+      setShowCreateEventModal(true);
+    }
+  }, [selectedDate]);
+
+  const handleCreateEvent = async (data: {
+    title: string;
+    description?: string;
+    startDate: string;
+    endDate: string;
+    type: CalendarEventType;
+    location?: string;
+    roomId?: string;
+    isAllDay: boolean;
+  }) => {
+    if (!schoolId) {
+      toast.error('School not found');
+      return;
+    }
+
+    try {
+      await createEvent({
+        schoolId,
+        data: {
+          ...data,
+          schoolType: currentType || undefined,
+        },
+      }).unwrap();
+      toast.success('Event created successfully');
+      setShowCreateEventModal(false);
+      setSelectedSlot(undefined);
+    } catch (error: any) {
+      toast.error(error?.data?.message || 'Failed to create event');
     }
   };
 
-  const handleNextMonth = () => {
-    if (viewMonth === 11) {
-      setViewMonth(0);
-      setViewYear(viewYear + 1);
-    } else {
-      setViewMonth(viewMonth + 1);
-    }
-  };
+  const eventStyleGetter = (event: CalendarEventWithType) => {
+    const colors: Record<string, { backgroundColor: string; borderColor: string; color: string }> = {
+      ACADEMIC: {
+        backgroundColor: '#dbeafe',
+        borderColor: '#3b82f6',
+        color: '#1e40af',
+      },
+      EVENT: {
+        backgroundColor: '#dcfce7',
+        borderColor: '#10b981',
+        color: '#065f46',
+      },
+      EXAM: {
+        backgroundColor: '#fee2e2',
+        borderColor: '#ef4444',
+        color: '#991b1b',
+      },
+      MEETING: {
+        backgroundColor: '#f3e8ff',
+        borderColor: '#a855f7',
+        color: '#6b21a8',
+      },
+      HOLIDAY: {
+        backgroundColor: '#f3f4f6',
+        borderColor: '#6b7280',
+        color: '#374151',
+      },
+      TIMETABLE: {
+        backgroundColor: '#e0e7ff',
+        borderColor: '#6366f1',
+        color: '#312e81',
+      },
+      SESSION_START: {
+        backgroundColor: '#fef3c7',
+        borderColor: '#f59e0b',
+        color: '#92400e',
+      },
+      SESSION_END: {
+        backgroundColor: '#fee2e2',
+        borderColor: '#dc2626',
+        color: '#991b1b',
+      },
+      TERM_START: {
+        backgroundColor: '#d1fae5',
+        borderColor: '#10b981',
+        color: '#065f46',
+      },
+      TERM_END: {
+        backgroundColor: '#fce7f3',
+        borderColor: '#ec4899',
+        color: '#9f1239',
+      },
+      HALF_TERM: {
+        backgroundColor: '#fef3c7',
+        borderColor: '#f59e0b',
+        color: '#92400e',
+      },
+    };
 
-  const getEventsForDate = (date: number) => {
-    const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
-    return mockEvents.filter(event => event.date === dateStr);
+    const style = colors[event.type] || colors.EVENT;
+    return {
+      style: {
+        backgroundColor: style.backgroundColor,
+        borderColor: style.borderColor,
+        color: style.color,
+        borderWidth: event.type?.includes('SESSION') || event.type?.includes('TERM') ? '3px' : '2px',
+        borderRadius: '4px',
+        fontWeight: event.type?.includes('SESSION') || event.type?.includes('TERM') ? '600' : 'normal',
+      },
+    };
   };
 
   return (
     <ProtectedRoute roles={['TEACHER']}>
       <div className="w-full">
         {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
+        <div className="mb-8">
           <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
             Calendar
           </h1>
           <p className="text-light-text-secondary dark:text-dark-text-secondary">
-            View your schedule, meetings, and school events
+            View school events, your timetable, and create your own events
           </p>
-        </motion.div>
+        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Calendar */}
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
-                  {monthNames[viewMonth]} {viewYear}
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm" onClick={handlePrevMonth}>
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={handleNextMonth}>
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-7 gap-2 mb-4">
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-                  <div
-                    key={day}
-                    className="text-center text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary py-2"
-                  >
-                    {day}
-                  </div>
-                ))}
-              </div>
-              <div className="grid grid-cols-7 gap-2">
-                {Array.from({ length: firstDayOfMonth }).map((_, index) => (
-                  <div key={`empty-${index}`} className="aspect-square" />
-                ))}
-                {Array.from({ length: daysInMonth }).map((_, index) => {
-                  const day = index + 1;
-                  const events = getEventsForDate(day);
-                  const isToday = day === currentDate.getDate() && 
-                                  viewMonth === currentMonth && 
-                                  viewYear === currentYear;
-                  
-                  return (
-                    <div
-                      key={day}
-                      className={`aspect-square p-2 border border-light-border dark:border-dark-border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-surface/50 transition-colors ${
-                        isToday ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700' : ''
-                      }`}
-                      onClick={() => setSelectedDate(new Date(viewYear, viewMonth, day))}
-                    >
-                      <div className={`text-sm font-medium mb-1 ${isToday ? 'text-blue-600 dark:text-blue-400' : 'text-light-text-primary dark:text-dark-text-primary'}`}>
-                        {day}
-                      </div>
-                      {events.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {events.slice(0, 2).map((event) => (
-                            <div
-                              key={event.id}
-                              className="h-1.5 w-1.5 rounded-full bg-blue-500"
-                              title={event.title}
-                            />
-                          ))}
-                          {events.length > 2 && (
-                            <div className="h-1.5 w-1.5 rounded-full bg-gray-400" />
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Main Calendar Area (3/4 width) */}
+          <Card className="lg:col-span-3">
+            <CardContent className="pt-6">
+              <div style={{ height: '600px' }}>
+                <RBCalendar
+                  localizer={localizer as any}
+                  events={calendarEvents}
+                  startAccessor="start"
+                  endAccessor="end"
+                  style={{ height: '100%' }}
+                  view={view}
+                  onView={setView}
+                  date={currentDate}
+                  onNavigate={setCurrentDate}
+                  components={{
+                    toolbar: CustomToolbar,
+                    event: CustomEvent,
+                  }}
+                  onSelectSlot={handleSelectSlot}
+                  selectable
+                  eventPropGetter={eventStyleGetter}
+                  className="rbc-custom-calendar"
+                />
               </div>
             </CardContent>
           </Card>
 
-          {/* Events List */}
+          {/* Upcoming Events Sidebar (1/4 width) */}
           <Card>
             <CardHeader>
               <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
@@ -180,56 +572,161 @@ export default function TeacherCalendarPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {mockEvents.map((event, index) => (
-                  <motion.div
-                    key={event.id}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.1 }}
-                    className="p-4 bg-gray-50 dark:bg-dark-surface rounded-lg"
-                  >
-                    <h4 className="font-semibold text-light-text-primary dark:text-dark-text-primary mb-2">
-                      {event.title}
-                    </h4>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex items-center gap-2 text-light-text-secondary dark:text-dark-text-secondary">
-                        <CalendarIcon className="h-4 w-4" />
-                        {new Date(event.date).toLocaleDateString('en-US', {
-                          weekday: 'long',
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        })}
-                      </div>
-                      <div className="flex items-center gap-2 text-light-text-secondary dark:text-dark-text-secondary">
-                        <Clock className="h-4 w-4" />
-                        {event.time}
-                      </div>
-                      <div className="flex items-center gap-2 text-light-text-secondary dark:text-dark-text-secondary">
-                        <MapPin className="h-4 w-4" />
-                        {event.location}
-                      </div>
-                    </div>
-                    <span
-                      className={`inline-block mt-2 px-2 py-1 rounded text-xs font-medium ${
-                        event.type === 'meeting'
-                          ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                          : event.type === 'exam'
-                          ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                          : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                      }`}
-                    >
-                      {event.type}
-                    </span>
-                  </motion.div>
-                ))}
+              {/* Google Calendar Integration */}
+              <div className="mb-6">
+                {isGoogleCalendarConnected ? (
+                  <GoogleCalendarStatus
+                    isConnected={isGoogleCalendarConnected}
+                    onDisconnect={async () => {
+                      if (schoolId) {
+                        await disconnectGoogleCalendar({ schoolId }).unwrap();
+                      }
+                    }}
+                  />
+                ) : (
+                  <GoogleCalendarConnect />
+                )}
               </div>
+              {upcomingEvents.length === 0 ? (
+                <div className="text-center py-12">
+                  <CalendarIcon className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+                  <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                    No upcoming events
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {upcomingEvents.map((event) => (
+                    <CompactEventCard
+                      key={event.id}
+                      id={event.id}
+                      title={event.title}
+                      startDate={new Date(event.startDate)}
+                      endDate={new Date(event.endDate)}
+                      type={event.type}
+                      location={event.location}
+                      roomName={event.roomName}
+                    />
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
+
+        {/* Create Event Modal */}
+        <CreateEventModal
+          isOpen={showCreateEventModal}
+          onClose={() => {
+            setShowCreateEventModal(false);
+            setSelectedSlot(undefined);
+          }}
+          onSubmit={handleCreateEvent}
+          selectedSlot={selectedSlot}
+          rooms={rooms}
+          isLoading={isCreatingEvent}
+          currentSchoolType={currentType}
+        />
+
+        {/* Day Events Modal */}
+        {selectedDate && (
+          <DayEventsModal
+            isOpen={showDayEventsModal}
+            onClose={() => {
+              setShowDayEventsModal(false);
+              setSelectedDate(null);
+            }}
+            date={selectedDate}
+            events={dayEvents}
+            onAddEvent={handleAddEventFromDayModal}
+          />
+        )}
       </div>
+
+      <style jsx global>{`
+        .rbc-custom-calendar {
+          color: var(--light-text-primary);
+        }
+        .rbc-custom-calendar .rbc-header {
+          border-bottom: 1px solid #e5e7eb;
+          padding: 8px;
+          font-weight: 600;
+          color: var(--light-text-primary);
+        }
+        .rbc-custom-calendar .rbc-day-bg {
+          border-color: #e5e7eb;
+        }
+        .rbc-custom-calendar .rbc-time-slot {
+          border-top-color: #e5e7eb;
+        }
+        .rbc-custom-calendar .rbc-time-header-gutter {
+          border-right-color: #e5e7eb;
+        }
+        .rbc-custom-calendar .rbc-time-content {
+          border-top-color: #e5e7eb;
+        }
+        .rbc-custom-calendar .rbc-time-gutter {
+          border-right-color: #e5e7eb;
+        }
+        .rbc-custom-calendar .rbc-day-slot .rbc-time-slot {
+          border-top-color: #f3f4f6;
+        }
+        .rbc-custom-calendar .rbc-today {
+          background-color: #3b82f6 !important;
+        }
+        .rbc-custom-calendar .rbc-today .rbc-day-bg {
+          background-color: #3b82f6 !important;
+        }
+        .rbc-custom-calendar .rbc-current-time-indicator {
+          background-color: #2563eb;
+        }
+        .rbc-custom-calendar .rbc-off-range-bg {
+          background-color: #f9fafb;
+        }
+        .rbc-custom-calendar .rbc-off-range {
+          color: #9ca3af;
+        }
+        .dark .rbc-custom-calendar {
+          color: var(--dark-text-primary);
+        }
+        .dark .rbc-custom-calendar .rbc-header {
+          border-bottom-color: #374151;
+          color: var(--dark-text-primary);
+        }
+        .dark .rbc-custom-calendar .rbc-day-bg {
+          border-color: #374151;
+        }
+        .dark .rbc-custom-calendar .rbc-time-slot {
+          border-top-color: #374151;
+        }
+        .dark .rbc-custom-calendar .rbc-time-header-gutter {
+          border-right-color: #374151;
+        }
+        .dark .rbc-custom-calendar .rbc-time-content {
+          border-top-color: #374151;
+        }
+        .dark .rbc-custom-calendar .rbc-time-gutter {
+          border-right-color: #374151;
+        }
+        .dark .rbc-custom-calendar .rbc-day-slot .rbc-time-slot {
+          border-top-color: #1f2937;
+        }
+        .dark .rbc-custom-calendar .rbc-today {
+          background-color: #2563eb !important;
+        }
+        .dark .rbc-custom-calendar .rbc-today .rbc-day-bg {
+          background-color: #2563eb !important;
+        }
+        .dark .rbc-custom-calendar .rbc-current-time-indicator {
+          background-color: #3b82f6;
+        }
+        .dark .rbc-custom-calendar .rbc-off-range-bg {
+          background-color: #111827;
+        }
+        .dark .rbc-custom-calendar .rbc-off-range {
+          color: #6b7280;
+        }
+      `}</style>
     </ProtectedRoute>
   );
 }
-

@@ -1,5 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
-import { useGetMySchoolQuery } from '@/lib/store/api/schoolAdminApi';
+import { useSelector } from 'react-redux';
+import { RootState } from '@/lib/store/store';
+import { useGetMySchoolQuery, useGetMyStudentSchoolQuery } from '@/lib/store/api/schoolAdminApi';
 import type { SchoolType } from '@/lib/store/api/schoolAdminApi';
 
 export interface SchoolTypeInfo {
@@ -16,10 +18,24 @@ export interface SchoolTypeInfo {
 /**
  * Hook to get school type information and manage current type selection
  * For mixed schools, allows switching between types
+ * Works for both school admins and students
  */
 export function useSchoolType(): SchoolTypeInfo {
-  const { data: schoolResponse } = useGetMySchoolQuery();
-  const school = schoolResponse?.data;
+  const user = useSelector((state: RootState) => state.auth.user);
+  
+  // Use appropriate endpoint based on user role
+  const { data: schoolAdminResponse } = useGetMySchoolQuery(undefined, {
+    skip: user?.role !== 'SCHOOL_ADMIN',
+  });
+  const { data: studentSchoolResponse } = useGetMyStudentSchoolQuery(undefined, {
+    skip: user?.role !== 'STUDENT',
+  });
+  
+  // Get school from appropriate response
+  const school = user?.role === 'STUDENT' 
+    ? studentSchoolResponse?.data 
+    : schoolAdminResponse?.data;
+    
   const [currentType, setCurrentTypeState] = useState<SchoolType | null>(null);
 
   // Get school type context from school data

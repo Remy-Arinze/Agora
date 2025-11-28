@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, ConflictException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service';
 import { AuthService } from '../../../auth/auth.service';
 import { SchoolRepository } from '../../domain/repositories/school.repository';
@@ -8,6 +8,7 @@ import { IdGeneratorService } from '../../shared/id-generator.service';
 import { StaffValidatorService } from '../../shared/staff-validator.service';
 import { AddTeacherDto } from '../../dto/add-teacher.dto';
 import { UpdateTeacherDto } from '../../dto/update-teacher.dto';
+import { CloudinaryService } from '../../../storage/cloudinary/cloudinary.service';
 import * as bcrypt from 'bcrypt';
 
 /**
@@ -23,7 +24,8 @@ export class TeacherService {
     private readonly staffRepository: StaffRepository,
     private readonly staffMapper: StaffMapper,
     private readonly idGenerator: IdGeneratorService,
-    private readonly staffValidator: StaffValidatorService
+    private readonly staffValidator: StaffValidatorService,
+    private readonly cloudinaryService: CloudinaryService
   ) {}
 
   /**
@@ -88,6 +90,7 @@ export class TeacherService {
             email: teacherData.email,
             phone: teacherData.phone,
             subject: teacherData.subject || null,
+            profileImage: teacherData.profileImage || null,
             isTemporary: teacherData.isTemporary || false,
             employeeId: teacherData.employeeId || null,
             userId: teacherUser.id,
@@ -118,7 +121,8 @@ export class TeacherService {
         teacherData.email,
         `${teacherData.firstName} ${teacherData.lastName}`,
         'Teacher',
-        result.teacher.publicId
+        result.teacher.publicId,
+        result.teacher.school.name
       );
     } catch (error) {
       console.error('Failed to send password reset email to teacher:', error);
@@ -163,6 +167,72 @@ export class TeacherService {
       phone: updateData.phone,
       subject: updateData.subject,
       isTemporary: updateData.isTemporary,
+      profileImage: updateData.profileImage,
+    });
+
+    return this.staffMapper.toTeacherDto(updatedTeacher);
+  }
+
+  /**
+   * Upload teacher profile image
+   */
+  async uploadProfileImage(
+    schoolId: string,
+    teacherId: string,
+    file: Express.Multer.File
+  ): Promise<any> {
+    // Validate school exists
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    // Validate teacher exists in school
+    const teacher = await this.staffRepository.findTeacherById(teacherId);
+    if (!teacher || teacher.schoolId !== school.id) {
+      throw new NotFoundException('Teacher not found in this school');
+    }
+
+    // Validate file
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    // Validate file type
+    const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+      throw new BadRequestException('Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed');
+    }
+
+    // Validate file size (5MB max)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      throw new BadRequestException('File size exceeds maximum limit of 5MB');
+    }
+
+    // Delete old image if exists
+    if (teacher.profileImage) {
+      const oldPublicId = this.cloudinaryService.extractPublicId(teacher.profileImage);
+      if (oldPublicId) {
+        try {
+          await this.cloudinaryService.deleteImage(oldPublicId);
+        } catch (error) {
+          console.error('Error deleting old profile image:', error);
+          // Continue even if deletion fails
+        }
+      }
+    }
+
+    // Upload to Cloudinary
+    const { url } = await this.cloudinaryService.uploadImage(
+      file,
+      `schools/${schoolId}/staff/teachers`,
+      `teacher-${teacherId}`
+    );
+
+    // Update teacher with new image URL
+    const updatedTeacher = await this.staffRepository.updateTeacher(teacherId, {
+      profileImage: url,
     });
 
     return this.staffMapper.toTeacherDto(updatedTeacher);
@@ -185,6 +255,17 @@ export class TeacherService {
     }
 
     await this.staffRepository.deleteTeacher(teacherId);
+  }
+
+  /**
+   * Get a teacher by ID
+   */
+  async getTeacherById(schoolId: string, teacherId: string): Promise<any | null> {
+    const teacher = await this.staffRepository.findTeacherById(teacherId);
+    if (!teacher || teacher.schoolId !== schoolId) {
+      return null;
+    }
+    return this.staffMapper.toTeacherDto(teacher);
   }
 }
 

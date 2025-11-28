@@ -25,6 +25,11 @@ export class UpdateAdminDto {
   @IsString()
   role?: string;
 
+  @ApiPropertyOptional({ description: 'Profile image URL (Cloudinary)' })
+  @IsOptional()
+  @IsString()
+  profileImage?: string;
+
   // Note: Email is not editable
 }
 

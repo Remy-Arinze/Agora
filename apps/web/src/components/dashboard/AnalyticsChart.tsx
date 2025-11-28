@@ -21,13 +21,13 @@ import {
 
 interface ChartData {
   name: string;
-  value: number;
-  [key: string]: string | number;
+  value?: number;
+  [key: string]: any;
 }
 
 interface AnalyticsChartProps {
   title: string;
-  data: ChartData[];
+  data: Array<Record<string, any> & { name: string }>;
   type?: 'line' | 'bar' | 'area' | 'pie' | 'donut' | 'horizontal';
   dataKeys: string[];
   colors?: string[];

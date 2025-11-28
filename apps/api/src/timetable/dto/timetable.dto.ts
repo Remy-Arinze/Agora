@@ -24,6 +24,12 @@ export class TimetablePeriodDto {
   subjectName?: string;
 
   @ApiProperty({ required: false })
+  courseId?: string;
+
+  @ApiProperty({ required: false })
+  courseName?: string;
+
+  @ApiProperty({ required: false })
   teacherId?: string;
 
   @ApiProperty({ required: false })
@@ -35,11 +41,17 @@ export class TimetablePeriodDto {
   @ApiProperty({ required: false })
   roomName?: string;
 
-  @ApiProperty()
-  classArmId: string;
+  @ApiProperty({ required: false })
+  classId?: string;
 
-  @ApiProperty()
-  classArmName: string;
+  @ApiProperty({ required: false })
+  className?: string;
+
+  @ApiProperty({ required: false })
+  classArmId?: string;
+
+  @ApiProperty({ required: false })
+  classArmName?: string;
 
   @ApiProperty()
   termId: string;

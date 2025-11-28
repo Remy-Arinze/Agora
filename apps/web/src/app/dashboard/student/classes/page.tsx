@@ -1,91 +1,265 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
 import { motion } from 'framer-motion';
-import { BookOpen, Search, User, Clock, MapPin } from 'lucide-react';
+import { 
+  BookOpen, 
+  Users, 
+  FileText,
+  Clock,
+  User,
+  Mail,
+  Phone,
+  Download,
+  Loader2,
+  AlertCircle,
+} from 'lucide-react';
+import { 
+  useGetMyStudentClassesQuery,
+  useGetTimetableForClassQuery,
+  useGetTimetableForClassArmQuery,
+  useGetActiveSessionQuery,
+  useGetSessionsQuery,
+  useGetCurriculumForClassQuery,
+} from '@/lib/store/api/schoolAdminApi';
+import { TeacherTimetableGrid } from '@/components/timetable/TeacherTimetableGrid';
+import { useSchoolType } from '@/hooks/useSchoolType';
+import { getTerminology } from '@/lib/utils/terminology';
+import toast from 'react-hot-toast';
 
-// Mock data - will be replaced with API calls later
-const mockClasses = [
-  {
-    id: '1',
-    subject: 'Mathematics',
-    code: 'MATH101',
-    teacher: 'Mr. Sarah Williams',
-    teacherEmail: 'sarah.w@school.com',
-    schedule: 'Mon, Wed, Fri - 9:00 AM',
-    room: 'Room 101',
-    credits: 3,
-    description: 'Introduction to algebra, geometry, and basic calculus',
-  },
-  {
-    id: '2',
-    subject: 'English Language',
-    code: 'ENG102',
-    teacher: 'Mrs. David Brown',
-    teacherEmail: 'david.b@school.com',
-    schedule: 'Tue, Thu - 10:30 AM',
-    room: 'Room 205',
-    credits: 3,
-    description: 'Grammar, composition, and literature analysis',
-  },
-  {
-    id: '3',
-    subject: 'Physics',
-    code: 'PHY103',
-    teacher: 'Dr. Emily Davis',
-    teacherEmail: 'emily.d@school.com',
-    schedule: 'Mon, Wed - 2:00 PM',
-    room: 'Lab 3',
-    credits: 4,
-    description: 'Mechanics, thermodynamics, and electromagnetism',
-  },
-  {
-    id: '4',
-    subject: 'Chemistry',
-    code: 'CHEM104',
-    teacher: 'Mr. Michael Johnson',
-    teacherEmail: 'michael.j@school.com',
-    schedule: 'Tue, Thu - 1:00 PM',
-    room: 'Lab 2',
-    credits: 4,
-    description: 'Organic and inorganic chemistry fundamentals',
-  },
-  {
-    id: '5',
-    subject: 'Biology',
-    code: 'BIO105',
-    teacher: 'Ms. Jennifer Wilson',
-    teacherEmail: 'jennifer.w@school.com',
-    schedule: 'Fri - 11:00 AM',
-    room: 'Lab 1',
-    credits: 3,
-    description: 'Cell biology, genetics, and ecology',
-  },
-  {
-    id: '6',
-    subject: 'History',
-    code: 'HIS106',
-    teacher: 'Dr. Robert Martinez',
-    teacherEmail: 'robert.m@school.com',
-    schedule: 'Mon, Wed - 3:30 PM',
-    room: 'Room 302',
-    credits: 2,
-    description: 'World history and Nigerian history',
-  },
-];
+type TabType = 'overview' | 'teachers' | 'resources' | 'curriculum' | 'timetable';
 
 export default function StudentClassesPage() {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [selectedTermId, setSelectedTermId] = useState<string>('');
 
-  const filteredClasses = mockClasses.filter(
-    (classItem) =>
-      classItem.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      classItem.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      classItem.teacher.toLowerCase().includes(searchQuery.toLowerCase())
+  const { currentType } = useSchoolType();
+  const terminology = getTerminology(currentType) || {
+    courses: 'Classes',
+    courseSingular: 'Class',
+    staff: 'Teachers',
+    staffSingular: 'Teacher',
+    periods: 'Terms',
+    periodSingular: 'Term',
+    subjects: 'Subjects',
+    subjectSingular: 'Subject',
+  };
+
+  // Get student's classes
+  const { data: classesResponse, isLoading: isLoadingClasses } = useGetMyStudentClassesQuery();
+  const classes = classesResponse?.data || [];
+  
+  // Get the active/primary class (first one, or could filter by isActive enrollment)
+  const classData = useMemo(() => {
+    // If multiple classes, show the first one (most recent enrollment)
+    // In practice, students typically have one active class
+    return classes[0] || null;
+  }, [classes]);
+
+  // Get school ID from class data
+  const schoolId = classData?.enrollment?.school?.id;
+
+  // Get active session
+  const { data: activeSessionResponse } = useGetActiveSessionQuery(
+    { schoolId: schoolId! },
+    { skip: !schoolId }
   );
+  const activeSession = activeSessionResponse?.data;
+
+  // Get curriculum for class
+  // Note: For students, we don't filter by subject - they should see all curriculum for their class
+  const { data: curriculumResponse } = useGetCurriculumForClassQuery(
+    {
+      schoolId: schoolId!,
+      classId: classData?.id!,
+      // Don't filter by subject for students - show all curriculum for the class
+      subject: undefined,
+      academicYear: classData?.academicYear || activeSession?.session?.name,
+      termId: activeSession?.term?.id || undefined,
+    },
+    { skip: !schoolId || !classData?.id || activeTab !== 'curriculum' }
+  );
+
+  // Get all sessions for term selector
+  const { data: sessionsResponse } = useGetSessionsQuery(
+    { schoolId: schoolId! },
+    { skip: !schoolId }
+  );
+
+  // Determine which term to use
+  const currentTermId = selectedTermId || activeSession?.term?.id || '';
+
+  // Get timetable for the class (the timetable assigned to this class)
+  const { data: classTimetableResponse, isLoading: isLoadingClassTimetable } = useGetTimetableForClassQuery(
+    {
+      schoolId: schoolId!,
+      classId: classData?.id!,
+      termId: currentTermId,
+    },
+    { skip: !schoolId || !classData?.id || !currentTermId }
+  );
+
+  // Also get timetable for classArm if student is in a classArm
+  const classArmId = classData?.classArmId || classData?.enrollment?.classArmId;
+  const { data: classArmTimetableResponse, isLoading: isLoadingClassArmTimetable } = useGetTimetableForClassArmQuery(
+    {
+      schoolId: schoolId!,
+      classArmId: classArmId!,
+      termId: currentTermId,
+    },
+    { skip: !schoolId || !classArmId || !currentTermId }
+  );
+
+  // Combine both timetables (class and classArm)
+  const timetable = useMemo(() => {
+    const classPeriods = classTimetableResponse?.data || [];
+    const classArmPeriods = classArmTimetableResponse?.data || [];
+    
+    // Combine and deduplicate by period id
+    const allPeriods = [...classPeriods, ...classArmPeriods];
+    const uniquePeriods = Array.from(
+      new Map(allPeriods.map((p: any) => [p.id, p])).values()
+    );
+    
+    return uniquePeriods;
+  }, [classTimetableResponse, classArmTimetableResponse]);
+
+  const isLoadingTimetable = isLoadingClassTimetable || isLoadingClassArmTimetable;
+
+  // Extract all terms from sessions for selector
+  const allTerms = useMemo(() => {
+    if (!sessionsResponse?.data) return [];
+    
+    const terms: Array<{ id: string; name: string; sessionName: string }> = [];
+    sessionsResponse.data.forEach((session: any) => {
+      if (session.terms) {
+        session.terms.forEach((term: any) => {
+          terms.push({
+            id: term.id,
+            name: term.name,
+            sessionName: session.name,
+          });
+        });
+      }
+    });
+    
+    return terms.sort((a, b) => {
+      if (a.sessionName !== b.sessionName) {
+        return b.sessionName.localeCompare(a.sessionName);
+      }
+      return b.name.localeCompare(a.name);
+    });
+  }, [sessionsResponse]);
+
+  const isLoading = isLoadingClasses || isLoadingTimetable;
+
+  // Handle resource download
+  const handleDownload = async (resource: any) => {
+    try {
+      if (!schoolId || !classData?.id) {
+        toast.error('Unable to download resource');
+        return;
+      }
+
+      const baseUrl = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL) || 'http://localhost:4000/api';
+      const downloadUrl = `${baseUrl}/schools/${schoolId}/classes/${classData.id}/resources/${resource.id}/download`;
+
+      // Get auth token from localStorage
+      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') || localStorage.getItem('token') : null;
+      
+      // Fetch and create blob for download
+      const response = await fetch(downloadUrl, {
+        headers: token ? {
+          'Authorization': `Bearer ${token}`,
+        } : {},
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to download resource');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = resource.name || resource.fileName || 'resource';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to download resource');
+    }
+  };
+
+  const tabs = [
+    {
+      id: 'overview' as TabType,
+      label: 'Overview',
+      icon: <BookOpen className="h-4 w-4" />,
+      available: true,
+    },
+    {
+      id: 'teachers' as TabType,
+      label: terminology.staff,
+      icon: <Users className="h-4 w-4" />,
+      available: true,
+    },
+    {
+      id: 'resources' as TabType,
+      label: 'Resources',
+      icon: <FileText className="h-4 w-4" />,
+      available: true,
+    },
+    {
+      id: 'curriculum' as TabType,
+      label: 'Curriculum',
+      icon: <BookOpen className="h-4 w-4" />,
+      available: true,
+    },
+    {
+      id: 'timetable' as TabType,
+      label: 'Timetable',
+      icon: <Clock className="h-4 w-4" />,
+      available: true,
+    },
+  ];
+
+  if (isLoading) {
+    return (
+      <ProtectedRoute roles={['STUDENT']}>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4 animate-spin" />
+            <p className="text-light-text-secondary dark:text-dark-text-secondary">
+              Loading {terminology.courseSingular.toLowerCase()}...
+            </p>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  if (!classData) {
+    return (
+      <ProtectedRoute roles={['STUDENT']}>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <p className="text-light-text-secondary dark:text-dark-text-secondary mb-2">
+              No {terminology.courseSingular.toLowerCase()} found
+            </p>
+            <p className="text-sm text-light-text-muted dark:text-dark-text-muted">
+              You may not be enrolled in any {terminology.courses.toLowerCase()} for the current term.
+            </p>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
 
   return (
     <ProtectedRoute roles={['STUDENT']}>
@@ -96,99 +270,348 @@ export default function StudentClassesPage() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
-            My Classes
-          </h1>
-          <p className="text-light-text-secondary dark:text-dark-text-secondary">
-            View all your enrolled classes for the current term
-          </p>
-        </motion.div>
-
-        {/* Search */}
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-light-text-muted dark:text-dark-text-muted" />
-              <Input
-                placeholder="Search by subject, code, or teacher..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Classes Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredClasses.length === 0 ? (
-            <div className="col-span-full text-center py-12">
-              <BookOpen className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
+                {classData.name}
+              </h1>
               <p className="text-light-text-secondary dark:text-dark-text-secondary">
-                No classes found matching your search.
+                {classData.code && `${classData.code} • `}
+                {classData.classLevel && `${classData.classLevel} • `}
+                {classData.academicYear}
+                {activeSession?.term && ` • ${activeSession.term.name}`}
               </p>
             </div>
-          ) : (
-            filteredClasses.map((classItem, index) => (
-              <motion.div
-                key={classItem.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
+          </div>
+        </motion.div>
+
+        {/* Tabs */}
+        <div className="mb-6 border-b border-light-border dark:border-dark-border">
+          <div className="flex space-x-1 overflow-x-auto">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? 'border-b-2 border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400'
+                    : 'text-light-text-secondary dark:text-dark-text-secondary hover:text-light-text-primary dark:hover:text-dark-text-primary'
+                }`}
               >
-                <Card className="h-full hover:shadow-lg transition-shadow">
-                  <CardHeader>
-                    <div className="flex items-start justify-between mb-2">
+                {tab.icon}
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          {/* Overview Tab */}
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-light-text-primary dark:text-dark-text-primary">
+                    {terminology.courseSingular} Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {classData.description && (
                       <div>
-                        <CardTitle className="text-lg font-bold text-light-text-primary dark:text-dark-text-primary">
-                          {classItem.subject}
-                        </CardTitle>
-                        <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-1">
-                          {classItem.code}
+                        <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                          Description
+                        </p>
+                        <p className="text-light-text-primary dark:text-dark-text-primary">
+                          {classData.description}
                         </p>
                       </div>
-                      <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 text-xs font-medium rounded">
-                        {classItem.credits} Credits
-                      </span>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      <div className="flex items-start gap-2">
-                        <User className="h-4 w-4 text-light-text-muted dark:text-dark-text-muted mt-0.5 flex-shrink-0" />
+                    )}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                          Academic Year
+                        </p>
+                        <p className="text-light-text-primary dark:text-dark-text-primary">
+                          {classData.academicYear}
+                        </p>
+                      </div>
+                      {classData.type && (
                         <div>
-                          <p className="text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
-                            {classItem.teacher}
+                          <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                            Type
                           </p>
-                          <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">
-                            {classItem.teacherEmail}
+                          <p className="text-light-text-primary dark:text-dark-text-primary capitalize">
+                            {classData.type.toLowerCase()}
                           </p>
                         </div>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <Clock className="h-4 w-4 text-light-text-muted dark:text-dark-text-muted mt-0.5 flex-shrink-0" />
-                        <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                          {classItem.schedule}
-                        </p>
-                      </div>
-                      <div className="flex items-start gap-2">
-                        <MapPin className="h-4 w-4 text-light-text-muted dark:text-dark-text-muted mt-0.5 flex-shrink-0" />
-                        <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                          {classItem.room}
-                        </p>
-                      </div>
-                      <div className="pt-2 border-t border-light-border dark:border-dark-border">
-                        <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">
-                          {classItem.description}
-                        </p>
-                      </div>
+                      )}
                     </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))
+                    {classData.enrollment && (
+                      <div>
+                        <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                          Enrollment Date
+                        </p>
+                        <p className="text-light-text-primary dark:text-dark-text-primary">
+                          {new Date(classData.enrollment.enrollmentDate).toLocaleDateString()}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           )}
-        </div>
+
+          {/* Teachers Tab */}
+          {activeTab === 'teachers' && (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-light-text-primary dark:text-dark-text-primary">
+                    {terminology.staff}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {classData.teachers && classData.teachers.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {classData.teachers.map((teacher: any) => (
+                        <Card key={teacher.id} className="border border-light-border dark:border-dark-border">
+                          <CardContent className="pt-6">
+                            <div className="flex items-start gap-4">
+                              <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+                                <User className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary mb-1">
+                                  {teacher.firstName} {teacher.lastName}
+                                  {teacher.isPrimary && (
+                                    <span className="ml-2 text-xs text-blue-600 dark:text-blue-400">(Primary)</span>
+                                  )}
+                                </h3>
+                                {teacher.subject && (
+                                  <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                                    {teacher.subject}
+                                  </p>
+                                )}
+                                <div className="space-y-1">
+                                  {teacher.email && (
+                                    <div className="flex items-center gap-2 text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                                      <Mail className="h-4 w-4" />
+                                      <a href={`mailto:${teacher.email}`} className="hover:text-blue-600 dark:hover:text-blue-400">
+                                        {teacher.email}
+                                      </a>
+                                    </div>
+                                  )}
+                                  {teacher.phone && (
+                                    <div className="flex items-center gap-2 text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                                      <Phone className="h-4 w-4" />
+                                      <a href={`tel:${teacher.phone}`} className="hover:text-blue-600 dark:hover:text-blue-400">
+                                        {teacher.phone}
+                                      </a>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <Users className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+                      <p className="text-light-text-secondary dark:text-dark-text-secondary">
+                        No {terminology.staffSingular.toLowerCase()} assigned to this {terminology.courseSingular.toLowerCase()}
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Curriculum Tab */}
+          {activeTab === 'curriculum' && (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-light-text-primary dark:text-dark-text-primary">
+                    Curriculum Overview
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {curriculumResponse?.data ? (
+                    <div className="space-y-6">
+                      {curriculumResponse.data.items.map((item: any, index: number) => (
+                        <div
+                          key={item.id || index}
+                          className="pb-6 border-b border-light-border dark:border-dark-border last:border-0 last:pb-0"
+                        >
+                          <div className="flex items-start gap-4 mb-4">
+                            <div className="flex-shrink-0 w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                              <span className="text-blue-600 dark:text-blue-400 font-bold text-sm text-center leading-tight">
+                                Week {item.week}
+                              </span>
+                            </div>
+                            <div className="flex-1">
+                              <h3 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary mb-2">
+                                {item.topic}
+                              </h3>
+                              {item.objectives && item.objectives.length > 0 && (
+                                <div className="space-y-2 mb-3">
+                                  <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary">
+                                    Learning Objectives:
+                                  </p>
+                                  <ul className="list-disc list-inside space-y-1 ml-2">
+                                    {item.objectives.map((objective: string, objIndex: number) => (
+                                      <li
+                                        key={objIndex}
+                                        className="text-sm text-light-text-secondary dark:text-dark-text-secondary"
+                                      >
+                                        {objective}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                              {item.resources && item.resources.length > 0 && (
+                                <div>
+                                  <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                                    Resources:
+                                  </p>
+                                  <div className="flex flex-wrap gap-2">
+                                    {item.resources.map((resource: string, resIndex: number) => (
+                                      <span
+                                        key={resIndex}
+                                        className="px-3 py-1 bg-light-bg dark:bg-dark-surface rounded-md text-xs text-light-text-secondary dark:text-dark-text-secondary"
+                                      >
+                                        {resource}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <BookOpen className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+                      <p className="text-light-text-secondary dark:text-dark-text-secondary mb-4">
+                        No curriculum created yet.
+                      </p>
+                      <p className="text-sm text-light-text-muted dark:text-dark-text-muted mb-4">
+                        Teachers can create a curriculum with weekly topics, objectives, and resources.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Resources Tab */}
+          {activeTab === 'resources' && (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-light-text-primary dark:text-dark-text-primary">
+                    Resources
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {classData.resources && classData.resources.length > 0 ? (
+                    <div className="space-y-3">
+                      {classData.resources.map((resource: any) => (
+                        <Card key={resource.id} className="border border-light-border dark:border-dark-border">
+                          <CardContent className="pt-6">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-4 flex-1 min-w-0">
+                                <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+                                  <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary truncate">
+                                    {resource.name}
+                                  </h3>
+                                  {resource.description && (
+                                    <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary truncate">
+                                      {resource.description}
+                                    </p>
+                                  )}
+                                  <p className="text-xs text-light-text-muted dark:text-dark-text-muted mt-1">
+                                    {resource.fileType} • {new Date(resource.createdAt).toLocaleDateString()}
+                                  </p>
+                                </div>
+                              </div>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => handleDownload(resource)}
+                              >
+                                <Download className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <FileText className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+                      <p className="text-light-text-secondary dark:text-dark-text-secondary">
+                        No resources available for this {terminology.courseSingular.toLowerCase()}
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Timetable Tab */}
+          {activeTab === 'timetable' && (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-light-text-primary dark:text-dark-text-primary">
+                    Weekly Timetable
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {timetable.length > 0 ? (
+                    <TeacherTimetableGrid
+                      timetable={timetable}
+                      schoolType={currentType}
+                      isLoading={isLoadingTimetable}
+                      allTerms={allTerms}
+                      selectedTermId={currentTermId}
+                      onTermChange={setSelectedTermId}
+                      activeTermId={activeSession?.term?.id}
+                      terminology={terminology}
+                    />
+                  ) : (
+                    <div className="text-center py-12">
+                      <Clock className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+                      <p className="text-light-text-secondary dark:text-dark-text-secondary">
+                        No timetable available for the selected {terminology.periodSingular.toLowerCase()}
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </motion.div>
       </div>
     </ProtectedRoute>
   );

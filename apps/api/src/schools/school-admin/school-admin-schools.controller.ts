@@ -1,9 +1,12 @@
-import { Controller, Get, UseGuards, Request, Query } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Post, Patch, UseGuards, UseInterceptors, UploadedFile, Request, Query, Body } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiConsumes } from '@nestjs/swagger';
 import { SchoolAdminSchoolsService } from './school-admin-schools.service';
 import { SchoolDto } from '../dto/school.dto';
 import { SchoolDashboardDto } from '../dto/dashboard.dto';
 import { StaffListResponseDto } from '../dto/staff-list.dto';
+import { UpdateSchoolDto } from '../dto/update-school.dto';
 import { ResponseDto } from '../../common/dto/response.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { SchoolDataAccessGuard } from '../../common/guards/school-data-access.guard';
@@ -65,6 +68,45 @@ export class SchoolAdminSchoolsController {
     };
     const data = await this.schoolAdminSchoolsService.getStaffList(req.user, query);
     return ResponseDto.ok(data, 'Staff list retrieved successfully');
+  }
+
+  @Post('school/logo')
+  @UseInterceptors(
+    FileInterceptor('logo', {
+      storage: memoryStorage(),
+      limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB
+      },
+    })
+  )
+  @ApiOperation({ summary: 'Upload school logo' })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({
+    status: 200,
+    description: 'Logo uploaded successfully',
+    type: ResponseDto<SchoolDto>,
+  })
+  async uploadLogo(
+    @Request() req: any,
+    @UploadedFile() file: Express.Multer.File
+  ): Promise<ResponseDto<SchoolDto>> {
+    const data = await this.schoolAdminSchoolsService.uploadLogo(req.user, file);
+    return ResponseDto.ok(data, 'Logo uploaded successfully');
+  }
+
+  @Patch('school')
+  @ApiOperation({ summary: 'Update school information' })
+  @ApiResponse({
+    status: 200,
+    description: 'School updated successfully',
+    type: ResponseDto<SchoolDto>,
+  })
+  async updateSchool(
+    @Request() req: any,
+    @Body() updateSchoolDto: UpdateSchoolDto
+  ): Promise<ResponseDto<SchoolDto>> {
+    const data = await this.schoolAdminSchoolsService.updateSchool(req.user, updateSchoolDto);
+    return ResponseDto.ok(data, 'School updated successfully');
   }
 }
 

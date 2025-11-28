@@ -17,6 +17,7 @@ export class StaffMapper {
       email: admin.email,
       phone: admin.phone,
       role: admin.role,
+      profileImage: admin.profileImage,
       publicId: admin.publicId,
       createdAt: admin.createdAt,
       user: admin.user ? {
@@ -48,6 +49,7 @@ export class StaffMapper {
       employeeId: teacher.employeeId,
       subject: teacher.subject,
       isTemporary: teacher.isTemporary,
+      profileImage: teacher.profileImage,
       publicId: teacher.publicId,
       createdAt: teacher.createdAt,
       user: teacher.user ? {

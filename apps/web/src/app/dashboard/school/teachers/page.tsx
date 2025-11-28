@@ -14,6 +14,9 @@ import { useGetStaffListQuery } from '@/lib/store/api/schoolAdminApi';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useSchoolType } from '@/hooks/useSchoolType';
 import { getTerminology } from '@/lib/utils/terminology';
+import { PermissionAssignmentModal } from '@/components/permissions/PermissionAssignmentModal';
+import { StaffImportModal } from '@/components/modals/StaffImportModal';
+import { useGetMySchoolQuery } from '@/lib/store/api/schoolAdminApi';
 
 export default function StaffPage() {
   const router = useRouter();
@@ -21,6 +24,16 @@ export default function StaffPage() {
   const [roleFilter, setRoleFilter] = useState<string>('All');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const [selectedAdminForPermissions, setSelectedAdminForPermissions] = useState<{
+    id: string;
+    name: string;
+    role: string;
+  } | null>(null);
+  const [showImportModal, setShowImportModal] = useState(false);
+
+  // Get school ID
+  const { data: schoolResponse } = useGetMySchoolQuery();
+  const schoolId = schoolResponse?.data?.id;
 
   // Get school type and terminology
   const { currentType } = useSchoolType();
@@ -62,6 +75,45 @@ export default function StaffPage() {
     return phone;
   };
 
+  // Get initials from name
+  const getInitials = (firstName?: string, lastName?: string) => {
+    const first = firstName?.[0]?.toUpperCase() || '';
+    const last = lastName?.[0]?.toUpperCase() || '';
+    return first + last || '?';
+  };
+
+  // Avatar component for staff
+  const StaffAvatar = ({ 
+    profileImage, 
+    firstName, 
+    lastName 
+  }: { 
+    profileImage?: string | null; 
+    firstName?: string; 
+    lastName?: string; 
+  }) => {
+    const [imageError, setImageError] = useState(false);
+    
+    if (profileImage && !imageError) {
+      return (
+        <div className="relative w-12 h-12 flex-shrink-0">
+          <img
+            src={profileImage}
+            alt={`${firstName} ${lastName}`}
+            className="w-12 h-12 rounded-full object-cover border-2 border-light-border dark:border-dark-border shadow-sm"
+            onError={() => setImageError(true)}
+          />
+        </div>
+      );
+    }
+    
+    return (
+      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 flex items-center justify-center text-white font-semibold text-sm border-2 border-light-border dark:border-dark-border shadow-sm flex-shrink-0">
+        {getInitials(firstName, lastName)}
+      </div>
+    );
+  };
+
   return (
     <ProtectedRoute roles={['SCHOOL_ADMIN']}>
       <div className="w-full">
@@ -74,25 +126,23 @@ export default function StaffPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
-                {terminology.staff}
+                Staff
               </h1>
               <p className="text-light-text-secondary dark:text-dark-text-secondary">
-                Manage all {terminology.staff.toLowerCase()} in your school
+                Manage all staff in your school
               </p>
             </div>
             <div className="flex items-center gap-3">
               <Link href="/dashboard/school/teachers/add">
                 <Button variant="primary" size="sm">
                   <Plus className="h-4 w-4 mr-2" />
-                  Add {terminology.staffSingular}
+                  Add Staff
                 </Button>
               </Link>
-              <Link href="/dashboard/school/import">
-                <Button variant="ghost" size="sm">
-                  <FileSpreadsheet className="h-4 w-4 mr-2" />
-                  Import CSV
-                </Button>
-              </Link>
+              <Button variant="ghost" size="sm" onClick={() => setShowImportModal(true)}>
+                <FileSpreadsheet className="h-4 w-4 mr-2" />
+                Import CSV
+              </Button>
             </div>
           </div>
         </motion.div>
@@ -122,103 +172,39 @@ export default function StaffPage() {
           </Alert>
         )}
 
-        {/* Search and Filters */}
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-light-text-muted dark:text-dark-text-muted" />
+        {/* Staff Table */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-4">
+              <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
+                All Staff {meta ? `(${meta.total})` : ''}
+              </CardTitle>
+              {/* Search and Filters */}
+              <div className="flex items-center gap-3">
+                <div className="relative w-64">
+                  <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-light-text-muted dark:text-dark-text-muted" />
                   <Input
                     placeholder="Search by name, email, or subject..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10"
+                    className="pl-8 h-9 text-sm"
                   />
                 </div>
-              </div>
-              <div className="w-48">
-                <select
-                  value={roleFilter}
-                  onChange={(e) => setRoleFilter(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-light-border dark:border-dark-border rounded-lg bg-light-bg dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
-                >
-                  <option value="All">All Roles</option>
-                  {availableRoles.map((role) => (
-                    <option key={role} value={role}>
-                      {role}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Staff Table */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
-                All {terminology.staff} {meta ? `(${meta.total})` : ''}
-              </CardTitle>
-              {/* Pagination at top right */}
-              {meta && meta.totalPages > 1 && (
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handlePageChange(currentPage - 1)}
-                    disabled={!meta.hasPrev || isLoading}
-                    className="disabled:opacity-50 disabled:cursor-not-allowed"
+                <div className="w-40">
+                  <select
+                    value={roleFilter}
+                    onChange={(e) => setRoleFilter(e.target.value)}
+                    className="w-full px-2 py-1.5 text-sm border border-light-border dark:border-dark-border rounded-lg bg-light-bg dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 h-9"
                   >
-                    <ChevronLeft className="h-4 w-4 mr-1" />
-                    Previous
-                  </Button>
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: meta.totalPages }, (_, i) => i + 1).map((page) => {
-                      if (
-                        page === 1 ||
-                        page === meta.totalPages ||
-                        (page >= currentPage - 1 && page <= currentPage + 1)
-                      ) {
-                        return (
-                          <Button
-                            key={page}
-                            variant={currentPage === page ? 'primary' : 'ghost'}
-                            size="sm"
-                            onClick={() => handlePageChange(page)}
-                            disabled={isLoading}
-                            className="min-w-[40px] disabled:opacity-50"
-                          >
-                            {page}
-                          </Button>
-                        );
-                      } else if (page === currentPage - 2 || page === currentPage + 2) {
-                        return (
-                          <span
-                            key={page}
-                            className="px-2 text-light-text-secondary dark:text-dark-text-secondary"
-                          >
-                            ...
-                          </span>
-                        );
-                      }
-                      return null;
-                    })}
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handlePageChange(currentPage + 1)}
-                    disabled={!meta.hasNext || isLoading}
-                    className="disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Next
-                    <ChevronRight className="h-4 w-4 ml-1" />
-                  </Button>
+                    <option value="All">All Roles</option>
+                    {availableRoles.map((role) => (
+                      <option key={role} value={role}>
+                        {role}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              )}
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -275,13 +261,24 @@ export default function StaffPage() {
                           onClick={() => router.push(`/dashboard/school/teachers/${staffMember.id}`)}
                         >
                           <td className="py-4 px-4">
-                            <div>
-                              <p className="font-medium text-light-text-primary dark:text-dark-text-primary">
-                                {staffMember.firstName} {staffMember.lastName}
-                              </p>
-                              <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary mt-1">
-                                {staffMember.email || 'No email'}
-                              </p>
+                            <div className="flex items-center gap-3">
+                              {/* Avatar */}
+                              <div className="flex-shrink-0">
+                                <StaffAvatar
+                                  profileImage={staffMember.profileImage}
+                                  firstName={staffMember.firstName}
+                                  lastName={staffMember.lastName}
+                                />
+                              </div>
+                              {/* Name and Email */}
+                              <div>
+                                <p className="font-medium text-light-text-primary dark:text-dark-text-primary">
+                                  {staffMember.firstName} {staffMember.lastName}
+                                </p>
+                                <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary mt-1">
+                                  {staffMember.email || 'No email'}
+                                </p>
+                              </div>
                             </div>
                           </td>
                           <td className="py-4 px-4">
@@ -321,6 +318,22 @@ export default function StaffPage() {
                                   View
                                 </Button>
                               </Link>
+                              {staffMember.type === 'admin' && staffMember.role?.toLowerCase() !== 'principal' && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    // Handle permission assignment
+                                    setSelectedAdminForPermissions({
+                                      id: staffMember.id,
+                                      name: `${staffMember.firstName} ${staffMember.lastName}`,
+                                      role: staffMember.role || 'Administrator',
+                                    });
+                                  }}
+                                >
+                                  Permissions
+                                </Button>
+                              )}
                             </div>
                           </td>
                         </motion.tr>
@@ -329,17 +342,97 @@ export default function StaffPage() {
                   </table>
                 </div>
 
-                {/* Pagination info at bottom */}
+                {/* Pagination info and controls at bottom */}
                 {meta && (
-                  <div className="mt-6 pt-4 border-t border-light-border dark:border-dark-border text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                    Showing {meta.page === 1 ? 1 : (meta.page - 1) * meta.limit + 1} to{' '}
-                    {Math.min(meta.page * meta.limit, meta.total)} of {meta.total} {terminology.staff.toLowerCase()}
+                  <div className="mt-6 pt-4 border-t border-light-border dark:border-dark-border">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                        Showing {meta.page === 1 ? 1 : (meta.page - 1) * meta.limit + 1} to{' '}
+                        {Math.min(meta.page * meta.limit, meta.total)} of {meta.total} {terminology.staff.toLowerCase()}
+                      </p>
+                      {meta.totalPages > 1 && (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handlePageChange(currentPage - 1)}
+                            disabled={!meta.hasPrev || isLoading}
+                            className="disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <ChevronLeft className="h-4 w-4 mr-1" />
+                            Previous
+                          </Button>
+                          <div className="flex items-center gap-1">
+                            {Array.from({ length: meta.totalPages }, (_, i) => i + 1).map((page) => {
+                              if (
+                                page === 1 ||
+                                page === meta.totalPages ||
+                                (page >= currentPage - 1 && page <= currentPage + 1)
+                              ) {
+                                return (
+                                  <Button
+                                    key={page}
+                                    variant={currentPage === page ? 'primary' : 'ghost'}
+                                    size="sm"
+                                    onClick={() => handlePageChange(page)}
+                                    disabled={isLoading}
+                                    className="min-w-[40px] disabled:opacity-50"
+                                  >
+                                    {page}
+                                  </Button>
+                                );
+                              } else if (page === currentPage - 2 || page === currentPage + 2) {
+                                return (
+                                  <span
+                                    key={page}
+                                    className="px-2 text-light-text-secondary dark:text-dark-text-secondary"
+                                  >
+                                    ...
+                                  </span>
+                                );
+                              }
+                              return null;
+                            })}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handlePageChange(currentPage + 1)}
+                            disabled={!meta.hasNext || isLoading}
+                            className="disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Next
+                            <ChevronRight className="h-4 w-4 ml-1" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </>
             )}
           </CardContent>
         </Card>
+
+        {/* Import Modal */}
+        {schoolId && (
+          <StaffImportModal
+            isOpen={showImportModal}
+            onClose={() => setShowImportModal(false)}
+            schoolId={schoolId}
+          />
+        )}
+
+        {/* Permission Assignment Modal */}
+        {selectedAdminForPermissions && (
+          <PermissionAssignmentModal
+            isOpen={!!selectedAdminForPermissions}
+            onClose={() => setSelectedAdminForPermissions(null)}
+            adminId={selectedAdminForPermissions.id}
+            adminName={selectedAdminForPermissions.name}
+            adminRole={selectedAdminForPermissions.role}
+          />
+        )}
       </div>
     </ProtectedRoute>
   );

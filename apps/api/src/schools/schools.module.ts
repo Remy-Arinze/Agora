@@ -19,10 +19,19 @@ import { SchoolAdminSchoolsService } from './school-admin/school-admin-schools.s
 import { StaffController } from './staff/staff.controller';
 import { AdminService } from './staff/admins/admin.service';
 import { TeacherService } from './staff/teachers/teacher.service';
+import { TeacherController } from './staff/teachers/teacher.controller';
+import { TeacherCurrentSchoolService } from './staff/teachers/teacher-current-school.service';
+import { PermissionService } from './staff/permissions/permission.service';
+import { StaffImportService } from './staff/staff-import.service';
 
 // Classes
 import { ClassController } from './classes/class.controller';
 import { ClassService } from './classes/class.service';
+import { ClassResourceController } from './classes/class-resource.controller';
+import { ClassResourceService } from './classes/class-resource.service';
+
+// Curriculum
+import { CurriculumModule } from './curriculum/curriculum.module';
 
 // Repositories
 import { SchoolRepository } from './domain/repositories/school.repository';
@@ -37,15 +46,18 @@ import { StaffMapper } from './domain/mappers/staff.mapper';
 import { IdGeneratorService } from './shared/id-generator.service';
 import { SchoolValidatorService } from './shared/school-validator.service';
 import { StaffValidatorService } from './shared/staff-validator.service';
+import { CloudinaryModule } from '../storage/cloudinary/cloudinary.module';
 
 @Module({
-  imports: [DatabaseModule, forwardRef(() => AuthModule), EmailModule],
+  imports: [DatabaseModule, forwardRef(() => AuthModule), EmailModule, CurriculumModule, CloudinaryModule],
   controllers: [
     // New architecture controllers
     SuperAdminSchoolsController,
     SchoolAdminSchoolsController,
     StaffController,
+    TeacherController,
     ClassController,
+    ClassResourceController,
     // Legacy controller - DEPRECATED: Commented out, remove after verification
     // SchoolsController,
   ],
@@ -55,7 +67,11 @@ import { StaffValidatorService } from './shared/staff-validator.service';
     SchoolAdminSchoolsService,
     AdminService,
     TeacherService,
+    TeacherCurrentSchoolService,
+    PermissionService,
+    StaffImportService,
     ClassService,
+    ClassResourceService,
     // Repositories
     SchoolRepository,
     StaffRepository,
@@ -76,6 +92,7 @@ import { StaffValidatorService } from './shared/staff-validator.service';
     AdminService,
     TeacherService,
     ClassService,
+    ClassResourceService,
     SchoolRepository,
     StaffRepository,
     SchoolScopedRepository,

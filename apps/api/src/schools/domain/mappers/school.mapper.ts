@@ -32,6 +32,7 @@ export class SchoolMapper {
       country: school.country,
       phone: school.phone,
       email: school.email,
+      logo: school.logo,
       isActive: school.isActive,
       hasPrimary: school.hasPrimary,
       hasSecondary: school.hasSecondary,

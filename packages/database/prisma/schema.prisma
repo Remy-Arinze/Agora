@@ -32,6 +32,7 @@ enum TransferStatus {
   APPROVED
   REJECTED
   CANCELLED
+  COMPLETED
 }
 
 enum DayOfWeek {
@@ -65,6 +66,12 @@ enum TermStatus {
   ARCHIVED
 }
 
+enum GradeType {
+  CA
+  ASSIGNMENT
+  EXAM
+}
+
 model User {
   id            String        @id @default(cuid())
   email         String?       @unique
@@ -84,6 +91,7 @@ model User {
 
   notifications       NotificationLog[]
   passwordResetTokens PasswordResetToken[]
+  googleCalendarSyncs GoogleCalendarSync[]
 
   @@index([email])
   @@index([phone])
@@ -93,23 +101,28 @@ model User {
 model Student {
   id            String   @id @default(cuid())
   uid           String   @unique
+  publicId      String?  @unique // Format: AG-{schoolname}-{short alphanumeric}
   firstName     String
   lastName      String
   middleName    String?
   dateOfBirth   DateTime
+  profileImage  String?  // Cloudinary URL for student profile image
   profileLocked Boolean  @default(false)
+  healthInfo    Json?    // Health information (bloodGroup, allergies, medications, emergencyContact, emergencyContactPhone, medicalNotes)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  enrollments Enrollment[]
-  guardians   StudentGuardian[]
-  transfers   Transfer[]
+  enrollments       Enrollment[]
+  guardians         StudentGuardian[]
+  transfers         Transfer[]
+  personalResources StudentResource[]
 
   @@index([uid])
   @@index([userId])
+  @@index([publicId])
 }
 
 model Parent {
@@ -122,8 +135,8 @@ model Parent {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   students StudentGuardian[]
   otpCodes OtpCode[]
@@ -159,6 +172,7 @@ model Teacher {
   email       String?
   employeeId  String?
   subject     String?
+  profileImage String? // Cloudinary URL for teacher profile image
   isTemporary Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -172,6 +186,8 @@ model Teacher {
   attendances      Attendance[]
   classTeachers    ClassTeacher[]
   timetablePeriods TimetablePeriod[]
+  subjectTeachers  SubjectTeacher[]
+  curricula        Curriculum[]
 
   @@unique([userId, schoolId]) // A user can only be a teacher once per school, but can be teacher in multiple schools
   @@index([userId])
@@ -181,21 +197,24 @@ model Teacher {
 }
 
 model SchoolAdmin {
-  id        String   @id @default(cuid())
-  adminId   String   @unique
-  publicId  String   @unique // Format: AG-{schoolname}-{short alphanumeric}
-  firstName String
-  lastName  String
-  phone     String
-  email     String?
-  role      String   @default("Administrator") // Store role as string to support custom roles
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  adminId      String   @unique
+  publicId     String   @unique // Format: AG-{schoolname}-{short alphanumeric}
+  firstName    String
+  lastName     String
+  phone        String
+  email        String?
+  profileImage String?  // Cloudinary URL for admin profile image
+  role         String   @default("Administrator") // Store role as string to support custom roles
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   userId   String
   user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   schoolId String
   school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  permissions StaffPermission[]
 
   @@unique([userId, schoolId]) // A user can only be an admin once per school, but can be admin in multiple schools
   @@index([userId])
@@ -211,6 +230,7 @@ model School {
   schoolId     String?  @unique // Unique school identifier (nullable for migration)
   subdomain    String   @unique
   domain       String?
+  logo         String?  // Cloudinary URL for school logo
   address      String?
   city         String?
   state        String?
@@ -236,6 +256,7 @@ model School {
   rooms            Room[]
   subjects         Subject[]
   events           Event[]
+  googleCalendarSyncs GoogleCalendarSync[]
 
   @@index([subdomain])
   @@index([schoolId])
@@ -258,8 +279,12 @@ model Class {
   schoolId String
   school   School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
 
-  classTeachers ClassTeacher[]
-  enrollments   Enrollment[]
+  classTeachers    ClassTeacher[]
+  enrollments      Enrollment[]
+  TimetablePeriod  TimetablePeriod[] @relation("TimetableCourse")
+  TimetablePeriods TimetablePeriod[] @relation("TimetableClass")
+  resources        ClassResource[]
+  curricula        Curriculum[]
 
   @@index([schoolId])
   @@index([type])
@@ -322,6 +347,7 @@ model Term {
   enrollments      Enrollment[]
   grades           Grade[]           @relation("GradeTerm")
   timetablePeriods TimetablePeriod[]
+  curricula        Curriculum[]
 
   @@unique([academicSessionId, number])
   @@index([academicSessionId])
@@ -342,6 +368,7 @@ model ClassLevel {
 
   school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   classArms      ClassArm[]
+  subjects       Subject[]
   nextLevel      ClassLevel?  @relation("ClassLevelProgression", fields: [nextLevelId], references: [id])
   nextLevelId    String?
   previousLevels ClassLevel[] @relation("ClassLevelProgression")
@@ -391,20 +418,42 @@ model Room {
 }
 
 model Subject {
-  id        String   @id @default(cuid())
-  name      String // e.g., "Mathematics", "English Language"
-  code      String? // e.g., "MATH", "ENG"
-  schoolId  String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(cuid())
+  name        String // e.g., "Mathematics", "English Language"
+  code        String? // e.g., "MATH", "ENG"
+  schoolId    String
+  schoolType  String? // "PRIMARY", "SECONDARY", "TERTIARY" - null means applies to all types
+  classLevelId String? // For SECONDARY: link to ClassLevel (JSS vs SSS distinction)
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   school           School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  classLevel       ClassLevel?       @relation(fields: [classLevelId], references: [id], onDelete: SetNull)
   timetablePeriods TimetablePeriod[]
+  subjectTeachers  SubjectTeacher[]
 
   @@unique([schoolId, code])
   @@index([schoolId])
+  @@index([schoolType])
+  @@index([classLevelId])
   @@index([isActive])
+}
+
+model SubjectTeacher {
+  id        String   @id @default(cuid())
+  subjectId String
+  teacherId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subject  Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher  Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([subjectId, teacherId])
+  @@index([subjectId])
+  @@index([teacherId])
 }
 
 model TimetablePeriod {
@@ -413,25 +462,33 @@ model TimetablePeriod {
   startTime  String // e.g., "08:00" (HH:mm format)
   endTime    String // e.g., "09:00" (HH:mm format)
   type       PeriodType @default(LESSON)
-  subjectId  String?
+  subjectId  String? // For PRIMARY/SECONDARY schools
+  courseId   String? // For TERTIARY schools (references Class model)
   teacherId  String?
   roomId     String?
-  classArmId String
+  classId    String? // Direct assignment to Class (for PRIMARY/SECONDARY)
+  classArmId String? // Assignment to ClassArm (optional, for sections)
   termId     String
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
 
-  subject  Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
-  teacher  Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
-  room     Room?    @relation(fields: [roomId], references: [id], onDelete: SetNull)
-  classArm ClassArm @relation(fields: [classArmId], references: [id], onDelete: Cascade)
-  term     Term     @relation(fields: [termId], references: [id], onDelete: Cascade)
+  subject  Subject?  @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  course   Class?    @relation("TimetableCourse", fields: [courseId], references: [id], onDelete: SetNull)
+  class    Class?    @relation("TimetableClass", fields: [classId], references: [id], onDelete: Cascade)
+  teacher  Teacher?  @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+  room     Room?     @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  classArm ClassArm? @relation(fields: [classArmId], references: [id], onDelete: Cascade)
+  term     Term      @relation(fields: [termId], references: [id], onDelete: Cascade)
 
+  @@unique([termId, classId, dayOfWeek, startTime])
   @@unique([termId, classArmId, dayOfWeek, startTime])
   @@index([termId])
+  @@index([classId])
   @@index([classArmId])
   @@index([teacherId])
   @@index([roomId])
+  @@index([subjectId])
+  @@index([courseId])
   @@index([dayOfWeek])
 }
 
@@ -472,19 +529,24 @@ model Enrollment {
 }
 
 model Grade {
-  id           String   @id @default(cuid())
-  enrollmentId String
-  teacherId    String
-  termId       String? // Link to Term
-  subject      String // Keep for backward compatibility
-  score        Decimal
-  maxScore     Decimal  @default(100)
-  term         String // Keep for backward compatibility
-  academicYear String // Keep for backward compatibility
-  remarks      String?
-  signedAt     DateTime @default(now())
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String    @id @default(cuid())
+  enrollmentId   String
+  teacherId      String
+  termId         String?   // Link to Term
+  subject        String    // Keep for backward compatibility
+  gradeType      GradeType // NEW: CA, ASSIGNMENT, EXAM
+  assessmentName String?   // NEW: e.g., "CA1", "Assignment 1", "First Term Exam"
+  assessmentDate DateTime? // NEW: Date when assessment was conducted
+  sequence       Int?      // NEW: Order of assessment (1, 2, 3...)
+  score          Decimal
+  maxScore       Decimal   @default(100)
+  term           String    // Keep for backward compatibility
+  academicYear   String    // Keep for backward compatibility
+  remarks        String?
+  isPublished    Boolean   @default(false) // NEW: Whether grade is visible to students/parents
+  signedAt       DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
   teacher      Teacher    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
@@ -494,6 +556,8 @@ model Grade {
   @@index([teacherId])
   @@index([termId])
   @@index([academicYear])
+  @@index([gradeType])
+  @@index([assessmentDate])
 }
 
 model Attendance {
@@ -553,25 +617,36 @@ model Transfer {
   id              String         @id @default(cuid())
   studentId       String
   fromSchoolId    String
-  toSchoolId      String
+  toSchoolId      String?
   status          TransferStatus @default(PENDING)
+  
+  // TAC fields
+  tac             String?        @unique // Transfer Access Code
+  tacGeneratedAt  DateTime?       // When TAC was generated
+  tacExpiresAt    DateTime?       // TAC expiration (30 days from generation)
+  tacUsedAt       DateTime?       // When TAC was used (one-time use)
+  tacUsedBy       String?         // School ID that used the TAC
+  
   reason          String?
   requestedBy     String?
   approvedBy      String?
   approvedAt      DateTime?
   rejectedAt      DateTime?
   rejectionReason String?
+  completedAt     DateTime?       // When transfer was completed
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
   student    Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
   fromSchool School  @relation("TransferFrom", fields: [fromSchoolId], references: [id])
-  toSchool   School  @relation("TransferTo", fields: [toSchoolId], references: [id])
+  toSchool   School? @relation("TransferTo", fields: [toSchoolId], references: [id])
 
   @@index([studentId])
   @@index([fromSchoolId])
   @@index([toSchoolId])
   @@index([status])
+  @@index([tac]) // For fast TAC lookup
+  @@index([tacExpiresAt]) // For cleanup of expired TACs
 }
 
 model OtpCode {
@@ -620,21 +695,106 @@ enum EventType {
   HOLIDAY
 }
 
-model Event {
-  id          String    @id @default(cuid())
-  title       String
+model ClassResource {
+  id          String   @id @default(cuid())
+  name        String // Original filename
+  fileName    String // Stored filename
+  filePath    String // Path to file in storage
+  fileSize    Int // File size in bytes
+  mimeType    String // e.g., "application/pdf", "image/jpeg"
+  fileType    String // "PDF", "DOCX", "IMAGE", etc.
   description String?
-  startDate   DateTime
-  endDate     DateTime
-  type        EventType
-  schoolType  String? // "PRIMARY", "SECONDARY", "TERTIARY" - null means applies to all types
-  location    String?
-  roomId      String?
-  schoolId    String
-  createdBy   String? // User ID who created the event
-  isAllDay    Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  classId     String
+  uploadedBy  String // User ID who uploaded
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  class Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@index([classId])
+  @@index([uploadedBy])
+  @@index([fileType])
+}
+
+model StudentResource {
+  id          String   @id @default(cuid())
+  name        String // Original filename
+  fileName    String // Stored filename
+  filePath    String // Path to file in storage
+  fileSize    Int // File size in bytes
+  mimeType    String // e.g., "application/pdf", "image/jpeg"
+  fileType    String // "PDF", "DOCX", "IMAGE", etc.
+  description String?
+  studentId   String
+  uploadedBy  String // User ID who uploaded (should match student's userId)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@index([uploadedBy])
+  @@index([fileType])
+}
+
+model Curriculum {
+  id           String   @id @default(cuid())
+  classId      String
+  subject      String?  // For secondary schools - specific subject
+  teacherId    String
+  academicYear String
+  termId       String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  class   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  teacher Teacher @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  term    Term?   @relation(fields: [termId], references: [id], onDelete: SetNull)
+  items   CurriculumItem[]
+
+  @@unique([classId, subject, academicYear, termId])
+  @@index([classId])
+  @@index([teacherId])
+  @@index([academicYear])
+}
+
+model CurriculumItem {
+  id           String   @id @default(cuid())
+  curriculumId String
+  week         Int
+  topic        String
+  objectives   String[] // Array of strings
+  resources    String[] // Array of strings
+  order        Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  curriculum Curriculum @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+
+  @@index([curriculumId])
+  @@index([week])
+  @@index([order])
+}
+
+model Event {
+  id            String    @id @default(cuid())
+  title         String
+  description   String?
+  startDate     DateTime
+  endDate       DateTime
+  type          EventType
+  schoolType    String? // "PRIMARY", "SECONDARY", "TERTIARY" - null means applies to all types
+  location      String?
+  roomId        String?
+  schoolId      String
+  createdBy     String? // User ID who created the event
+  isAllDay      Boolean   @default(false)
+  googleEventId String? // Google Calendar event ID (for synced events)
+  syncedAt      DateTime? // When last synced to Google
+  syncStatus    String? // "PENDING" | "SYNCED" | "FAILED"
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   room   Room?  @relation(fields: [roomId], references: [id], onDelete: SetNull)
@@ -644,4 +804,80 @@ model Event {
   @@index([startDate])
   @@index([type])
   @@index([isAllDay])
+  @@index([googleEventId])
+  @@index([syncStatus])
+}
+
+model GoogleCalendarSync {
+  id              String   @id @default(cuid())
+  userId          String   // User who connected Google Calendar
+  schoolId        String   // School context
+  googleCalendarId String  @default("primary") // Google Calendar ID (usually "primary")
+  accessToken     String   // Encrypted OAuth access token
+  refreshToken    String   // Encrypted OAuth refresh token
+  tokenExpiry     DateTime // When access token expires
+  syncEnabled     Boolean  @default(true)
+  lastSyncAt      DateTime?
+  syncDirection   String   @default("ONE_WAY") // "ONE_WAY" | "TWO_WAY"
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  school School @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, schoolId])
+  @@index([userId])
+  @@index([schoolId])
+  @@index([syncEnabled])
+}
+
+enum PermissionResource {
+  OVERVIEW
+  ANALYTICS
+  SUBSCRIPTIONS
+  STUDENTS
+  STAFF
+  CLASSES
+  SUBJECTS
+  TIMETABLES
+  CALENDAR
+  ADMISSIONS
+  SESSIONS
+  EVENTS
+}
+
+enum PermissionType {
+  READ
+  WRITE
+  ADMIN
+}
+
+model Permission {
+  id          String            @id @default(cuid())
+  resource    PermissionResource
+  type        PermissionType
+  description String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  staffPermissions StaffPermission[]
+
+  @@unique([resource, type])
+  @@index([resource])
+  @@index([type])
+}
+
+model StaffPermission {
+  id           String   @id @default(cuid())
+  adminId      String
+  permissionId String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  admin      SchoolAdmin @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  permission Permission  @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([adminId, permissionId])
+  @@index([adminId])
+  @@index([permissionId])
 }

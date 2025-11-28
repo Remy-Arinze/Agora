@@ -12,180 +12,195 @@ import {
   Mail, 
   Phone, 
   MapPin, 
-  Calendar,
   User,
   ArrowLeft,
   Edit,
   FileText,
-  BookOpen,
-  Clock,
   Heart,
-  Activity,
-  ChevronRight,
   Award,
-  TrendingUp,
-  Download
+  Loader2,
+  Calendar,
+  Send
 } from 'lucide-react';
+import { 
+  useGetStudentByIdQuery, 
+  useGetMySchoolQuery,
+  useResendPasswordResetForStudentMutation
+} from '@/lib/store/api/schoolAdminApi';
+import { EditStudentProfileModal } from '@/components/modals/EditStudentProfileModal';
+import toast from 'react-hot-toast';
 
-// Mock data - will be replaced with API calls later
-const getStudentData = (id: string) => {
-  return {
-    id,
-    firstName: 'John',
-    lastName: 'Doe',
-    admissionNumber: 'ADM001',
-    classLevel: 'JSS2',
-    email: 'john.doe@school.com',
-    phone: '+234 801 234 5678',
-    dateOfBirth: '2010-05-15',
-    gender: 'Male',
-    address: '123 Main Street, Lagos',
-    status: 'active' as const,
-    createdAt: '2024-01-15',
-    parent: {
-      name: 'Jane Doe',
-      phone: '+234 802 345 6789',
-      email: 'jane.doe@email.com',
-    },
-    enrollment: {
-      date: '2024-01-15',
-      session: '2023/2024',
-    },
-    health: {
-      bloodGroup: 'O+',
-      allergies: ['Peanuts', 'Dust'],
-      medications: ['Inhaler (as needed)'],
-      emergencyContact: '+234 802 345 6789',
-      medicalNotes: 'Asthma - uses inhaler during physical activities',
-      lastCheckup: '2024-01-10',
-    },
-    classes: [
-      {
-        id: '1',
-        subject: 'Mathematics',
-        code: 'MATH101',
-        teacher: 'Mr. Sarah Williams',
-        schedule: 'Mon, Wed, Fri - 9:00 AM',
-        room: 'Room 101',
-      },
-      {
-        id: '2',
-        subject: 'English Language',
-        code: 'ENG102',
-        teacher: 'Mrs. David Brown',
-        schedule: 'Tue, Thu - 10:30 AM',
-        room: 'Room 205',
-      },
-      {
-        id: '3',
-        subject: 'Physics',
-        code: 'PHY103',
-        teacher: 'Dr. Emily Davis',
-        schedule: 'Mon, Wed - 2:00 PM',
-        room: 'Lab 3',
-      },
-    ],
-    timetable: [
-      {
-        day: 'Monday',
-        periods: [
-          { time: '8:00 - 9:00', subject: 'Mathematics', teacher: 'Mr. Williams', room: 'Room 101' },
-          { time: '9:00 - 10:00', subject: 'English Language', teacher: 'Mrs. Brown', room: 'Room 205' },
-          { time: '10:00 - 10:30', subject: 'Break', teacher: '', room: '' },
-          { time: '10:30 - 11:30', subject: 'Physics', teacher: 'Dr. Davis', room: 'Lab 3' },
-        ],
-      },
-    ],
-    calendar: [
-      {
-        date: '2024-03-15',
-        title: 'Mathematics Test',
-        type: 'exam',
-      },
-      {
-        date: '2024-03-20',
-        title: 'Parent-Teacher Meeting',
-        type: 'event',
-      },
-      {
-        date: '2024-03-25',
-        title: 'Science Fair',
-        type: 'event',
-      },
-    ],
-    grades: [
-      {
-        term: 'First Term 2024',
-        subjects: [
-          { name: 'Mathematics', score: 85, grade: 'A', maxScore: 100 },
-          { name: 'English Language', score: 92, grade: 'A', maxScore: 100 },
-          { name: 'Physics', score: 78, grade: 'B', maxScore: 100 },
-          { name: 'Chemistry', score: 82, grade: 'B', maxScore: 100 },
-          { name: 'Biology', score: 88, grade: 'A', maxScore: 100 },
-          { name: 'History', score: 75, grade: 'B', maxScore: 100 },
-          { name: 'Computer Science', score: 90, grade: 'A', maxScore: 100 },
-          { name: 'Physical Education', score: 95, grade: 'A', maxScore: 100 },
-        ],
-        totalScore: 675,
-        averageScore: 84.4,
-        position: 5,
-        totalStudents: 45,
-      },
-      {
-        term: 'Second Term 2024',
-        subjects: [
-          { name: 'Mathematics', score: 88, grade: 'A', maxScore: 100 },
-          { name: 'English Language', score: 90, grade: 'A', maxScore: 100 },
-          { name: 'Physics', score: 80, grade: 'B', maxScore: 100 },
-          { name: 'Chemistry', score: 85, grade: 'A', maxScore: 100 },
-          { name: 'Biology', score: 87, grade: 'A', maxScore: 100 },
-          { name: 'History', score: 78, grade: 'B', maxScore: 100 },
-          { name: 'Computer Science', score: 92, grade: 'A', maxScore: 100 },
-          { name: 'Physical Education', score: 93, grade: 'A', maxScore: 100 },
-        ],
-        totalScore: 693,
-        averageScore: 86.6,
-        position: 3,
-        totalStudents: 45,
-      },
-    ],
+type TabType = 'profile' | 'health' | 'grades' | 'transcript';
+
+// Circular avatar component for header
+const StudentAvatar = ({
+  profileImage,
+  firstName,
+  lastName,
+  size = 'md',
+}: {
+  profileImage?: string | null;
+  firstName?: string;
+  lastName?: string;
+  size?: 'sm' | 'md' | 'lg';
+}) => {
+  const [imageError, setImageError] = useState(false);
+  
+  const getInitials = (firstName?: string, lastName?: string) => {
+    const first = firstName?.[0]?.toUpperCase() || '';
+    const last = lastName?.[0]?.toUpperCase() || '';
+    return first + last || '?';
   };
-};
 
-const getGradeColor = (grade: string) => {
-  switch (grade) {
-    case 'A':
-      return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
-    case 'B':
-      return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
-    case 'C':
-      return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
-    default:
-      return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400';
+  const sizeClasses = {
+    sm: 'w-10 h-10 text-xs',
+    md: 'w-12 h-12 text-sm',
+    lg: 'w-16 h-16 text-lg',
+  };
+
+  const shouldShowImage = profileImage && !imageError && profileImage.trim() !== '';
+
+  if (shouldShowImage) {
+    return (
+      <div className={`relative ${sizeClasses[size]} flex-shrink-0`}>
+        <img
+          src={profileImage!}
+          alt={`${firstName || ''} ${lastName || ''}`.trim() || 'Student'}
+          className={`${sizeClasses[size]} rounded-full object-cover border-2 border-light-border dark:border-dark-border shadow-sm`}
+          onError={() => setImageError(true)}
+        />
+      </div>
+    );
   }
+
+  return (
+    <div className={`${sizeClasses[size]} rounded-full bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 flex items-center justify-center text-white font-semibold border-2 border-light-border dark:border-dark-border shadow-sm flex-shrink-0`}>
+      {getInitials(firstName, lastName)}
+    </div>
+  );
 };
 
-type TabType = 'profile' | 'calendar' | 'classes' | 'timetable' | 'health' | 'grades' | 'transcript';
+// Passport-style photo component
+const PassportPhoto = ({
+  profileImage,
+  firstName,
+  lastName,
+}: {
+  profileImage?: string | null;
+  firstName?: string;
+  lastName?: string;
+}) => {
+  const [imageError, setImageError] = useState(false);
+  
+  const getInitials = (firstName?: string, lastName?: string) => {
+    const first = firstName?.[0]?.toUpperCase() || '';
+    const last = lastName?.[0]?.toUpperCase() || '';
+    return first + last || '?';
+  };
+
+  // Determine if we should show the image or fallback to initials
+  const shouldShowImage = profileImage && !imageError && profileImage.trim() !== '';
+
+  return (
+    <div className="flex justify-center">
+      <div className="relative w-48 h-60 bg-white dark:bg-gray-800 border-4 border-gray-300 dark:border-gray-600 shadow-lg overflow-hidden">
+        {shouldShowImage ? (
+          <img
+            src={profileImage!}
+            alt={`${firstName || ''} ${lastName || ''}`.trim() || 'Student photo'}
+            className="w-full h-full object-cover"
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 flex items-center justify-center">
+            <span className="text-white font-bold text-4xl">
+              {getInitials(firstName, lastName)}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export default function StudentDetailPage() {
   const params = useParams();
   const router = useRouter();
   const studentId = params.id as string;
   const [activeTab, setActiveTab] = useState<TabType>('profile');
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
 
-  const student = getStudentData(studentId);
+  // Get school ID
+  const { data: schoolResponse } = useGetMySchoolQuery();
+  const schoolId = schoolResponse?.data?.id;
+
+  const { data: studentResponse, isLoading, error } = useGetStudentByIdQuery(
+    { schoolId: schoolId!, id: studentId },
+    { skip: !schoolId || !studentId }
+  );
+  const student = studentResponse?.data;
+  
+  // Resend password reset mutation
+  const [resendPasswordReset, { isLoading: isResendingPasswordReset }] = useResendPasswordResetForStudentMutation();
+  
+  // Check if user hasn't set their password yet
+  const hasNotSetPassword = student?.user?.accountStatus === 'SHADOW';
+  
+  const handleResendPasswordReset = async () => {
+    if (!schoolId || !studentId) return;
+    
+    try {
+      await resendPasswordReset({ schoolId, studentId }).unwrap();
+      toast.success('Password reset email sent successfully');
+    } catch (error: any) {
+      toast.error(error?.data?.message || 'Failed to send password reset email');
+    }
+  };
 
   const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
     { id: 'profile', label: 'Profile', icon: <User className="h-4 w-4" /> },
-    { id: 'calendar', label: 'Calendar', icon: <Calendar className="h-4 w-4" /> },
-    { id: 'classes', label: 'Classes', icon: <BookOpen className="h-4 w-4" /> },
-    { id: 'timetable', label: 'Timetable', icon: <Clock className="h-4 w-4" /> },
     { id: 'health', label: 'Health Status', icon: <Heart className="h-4 w-4" /> },
     { id: 'grades', label: 'Grades', icon: <Award className="h-4 w-4" /> },
     { id: 'transcript', label: 'Transcript', icon: <FileText className="h-4 w-4" /> },
   ];
 
   const [selectedTerm, setSelectedTerm] = useState(0);
+
+  if (isLoading) {
+    return (
+      <ProtectedRoute roles={['SCHOOL_ADMIN']}>
+        <div className="w-full flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4 animate-spin" />
+            <p className="text-light-text-secondary dark:text-dark-text-secondary">
+              Loading student details...
+            </p>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  if (error || !student) {
+    return (
+      <ProtectedRoute roles={['SCHOOL_ADMIN']}>
+        <div className="w-full">
+          <Link href="/dashboard/school/students">
+            <Button variant="ghost" size="sm" className="mb-4">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Students
+            </Button>
+          </Link>
+          <div className="text-center py-12">
+            <GraduationCap className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+            <p className="text-light-text-secondary dark:text-dark-text-secondary">
+              Student not found or error loading student details.
+            </p>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
 
   return (
     <ProtectedRoute roles={['SCHOOL_ADMIN']}>
@@ -203,18 +218,40 @@ export default function StudentDetailPage() {
             </Button>
           </Link>
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
-                {student.firstName} {student.lastName}
-              </h1>
-              <p className="text-light-text-secondary dark:text-dark-text-secondary">
-                {student.admissionNumber} • {student.classLevel}
-              </p>
+            <div className="flex items-center gap-4">
+              {/* Circular Avatar */}
+              <StudentAvatar
+                profileImage={student.profileImage || null}
+                firstName={student.firstName}
+                lastName={student.lastName}
+                size="lg"
+              />
+              <div>
+                <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
+                  {student.firstName} {student.middleName ? `${student.middleName} ` : ''}{student.lastName}
+                </h1>
+                <p className="text-light-text-secondary dark:text-dark-text-secondary">
+                  {student.uid} • {student.enrollment?.classLevel || 'N/A'}
+                </p>
+              </div>
             </div>
-            <Button variant="ghost" size="sm">
-              <Edit className="h-4 w-4 mr-2" />
-              Edit Profile
-            </Button>
+            <div className="flex items-center gap-2">
+              {hasNotSetPassword && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleResendPasswordReset}
+                  disabled={isResendingPasswordReset}
+                >
+                  <Send className="h-4 w-4 mr-2" />
+                  {isResendingPasswordReset ? 'Sending...' : 'Resend Password Setup Email'}
+                </Button>
+              )}
+              <Button variant="ghost" size="sm" onClick={() => setShowEditProfileModal(true)}>
+                <Edit className="h-4 w-4 mr-2" />
+                Edit Profile
+              </Button>
+            </div>
           </div>
         </motion.div>
 
@@ -277,10 +314,10 @@ export default function StudentDetailPage() {
                           </div>
                           <div>
                             <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                              Admission Number
+                              Student ID
                             </p>
                             <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                              {student.admissionNumber}
+                              {student.uid}
                             </p>
                           </div>
                           <div>
@@ -288,7 +325,7 @@ export default function StudentDetailPage() {
                               Class Level
                             </p>
                             <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                              {student.classLevel}
+                              {student.enrollment?.classLevel || 'N/A'}
                             </p>
                           </div>
                           <div>
@@ -299,26 +336,28 @@ export default function StudentDetailPage() {
                               {new Date(student.dateOfBirth).toLocaleDateString()}
                             </p>
                           </div>
-                          <div>
-                            <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                              Gender
-                            </p>
-                            <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                              {student.gender}
-                            </p>
-                          </div>
+                          {student.middleName && (
+                            <div>
+                              <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
+                                Middle Name
+                              </p>
+                              <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
+                                {student.middleName}
+                              </p>
+                            </div>
+                          )}
                           <div>
                             <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
                               Status
                             </p>
                             <span
                               className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                student.status === 'active'
+                                !student.profileLocked
                                   ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                                   : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
                               }`}
                             >
-                              {student.status}
+                              {student.profileLocked ? 'Locked' : 'Active'}
                             </span>
                           </div>
                         </div>
@@ -328,82 +367,61 @@ export default function StudentDetailPage() {
                       <div className="border-t border-light-border dark:border-dark-border"></div>
 
                       {/* Contact Information Section */}
-                      <div>
-                        <h3 className="text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary mb-4 uppercase tracking-wide">
-                          Contact Information
-                        </h3>
-                        <div className="space-y-4">
-                          <div className="flex items-center gap-3">
-                            <Mail className="h-5 w-5 text-light-text-muted dark:text-dark-text-muted" />
+                      {student.enrollment && (
+                        <div>
+                          <h3 className="text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary mb-4 uppercase tracking-wide">
+                            Enrollment Information
+                          </h3>
+                          <div className="space-y-4">
                             <div>
-                              <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary">
-                                Email
+                              <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
+                                Academic Year
                               </p>
                               <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                                {student.email}
+                                {student.enrollment.academicYear}
                               </p>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <Phone className="h-5 w-5 text-light-text-muted dark:text-dark-text-muted" />
                             <div>
-                              <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary">
-                                Phone
+                              <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
+                                School
                               </p>
                               <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                                {student.phone}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <MapPin className="h-5 w-5 text-light-text-muted dark:text-dark-text-muted" />
-                            <div>
-                              <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary">
-                                Address
-                              </p>
-                              <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                                {student.address}
+                                {student.enrollment.school.name}
                               </p>
                             </div>
                           </div>
                         </div>
-                      </div>
+                      )}
 
                       {/* Divider */}
                       <div className="border-t border-light-border dark:border-dark-border"></div>
 
                       {/* Academic Records Section */}
-                      <div>
-                        <h3 className="text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary mb-4 uppercase tracking-wide">
-                          Academic Records
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div>
-                            <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                              Enrollment Date
-                            </p>
-                            <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                              {new Date(student.enrollment.date).toLocaleDateString()}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                              Academic Session
-                            </p>
-                            <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                              {student.enrollment.session}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                              Current Class
-                            </p>
-                            <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                              {student.classLevel}
-                            </p>
+                      {student.enrollment && (
+                        <div>
+                          <h3 className="text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary mb-4 uppercase tracking-wide">
+                            Academic Records
+                          </h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                              <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
+                                Academic Year
+                              </p>
+                              <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
+                                {student.enrollment.academicYear}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
+                                Current Class
+                              </p>
+                              <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
+                                {student.enrollment.classLevel}
+                              </p>
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -411,13 +429,29 @@ export default function StudentDetailPage() {
 
               {/* Sidebar */}
               <div className="space-y-6">
-                {/* Parent/Guardian */}
+                {/* Passport Photo */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
+                      Photo
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <PassportPhoto
+                      profileImage={student.profileImage || null}
+                      firstName={student.firstName}
+                      lastName={student.lastName}
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* Additional Info */}
                 <Card>
                   <CardHeader>
                     <div className="flex items-center gap-3">
-                      <User className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                      <Calendar className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                       <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
-                        Parent/Guardian
+                        Additional Information
                       </CardTitle>
                     </div>
                   </CardHeader>
@@ -425,26 +459,18 @@ export default function StudentDetailPage() {
                     <div className="space-y-3">
                       <div>
                         <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                          Name
+                          Created At
                         </p>
                         <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                          {student.parent.name}
+                          {new Date(student.createdAt).toLocaleDateString()}
                         </p>
                       </div>
                       <div>
                         <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                          Phone
+                          Last Updated
                         </p>
                         <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                          {student.parent.phone}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                          Email
-                        </p>
-                        <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                          {student.parent.email}
+                          {new Date(student.updatedAt).toLocaleDateString()}
                         </p>
                       </div>
                     </div>
@@ -452,182 +478,6 @@ export default function StudentDetailPage() {
                 </Card>
               </div>
             </div>
-          )}
-
-          {activeTab === 'calendar' && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
-                  Student Calendar
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {student.calendar.map((event, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: index * 0.1 }}
-                      className="p-4 bg-gray-50 dark:bg-dark-surface rounded-lg border-l-4 border-l-blue-600 dark:border-l-blue-400"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h4 className="font-semibold text-light-text-primary dark:text-dark-text-primary">
-                            {event.title}
-                          </h4>
-                          <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-1">
-                            {new Date(event.date).toLocaleDateString('en-US', {
-                              weekday: 'long',
-                              year: 'numeric',
-                              month: 'long',
-                              day: 'numeric',
-                            })}
-                          </p>
-                        </div>
-                        <span
-                          className={`px-2 py-1 rounded text-xs font-medium ${
-                            event.type === 'exam'
-                              ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                              : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                          }`}
-                        >
-                          {event.type}
-                        </span>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {activeTab === 'classes' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {student.classes.map((classItem, index) => (
-                <motion.div
-                  key={classItem.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
-                >
-                  <Card className="h-full">
-                    <CardHeader>
-                      <CardTitle className="text-lg font-bold text-light-text-primary dark:text-dark-text-primary">
-                        {classItem.subject}
-                      </CardTitle>
-                      <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-1">
-                        {classItem.code}
-                      </p>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        <div>
-                          <p className="text-xs font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                            Teacher
-                          </p>
-                          <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                            {classItem.teacher}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                            Schedule
-                          </p>
-                          <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                            {classItem.schedule}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-xs font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                            Room
-                          </p>
-                          <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                            {classItem.room}
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === 'timetable' && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary flex items-center gap-2">
-                  <Clock className="h-5 w-5" />
-                  Weekly Timetable
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-6">
-                  {student.timetable.map((day, dayIndex) => (
-                    <div key={dayIndex}>
-                      <h3 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary mb-3">
-                        {day.day}
-                      </h3>
-                      <div className="overflow-x-auto">
-                        <table className="w-full">
-                          <thead>
-                            <tr className="border-b border-light-border dark:border-dark-border">
-                              <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                                Time
-                              </th>
-                              <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                                Subject
-                              </th>
-                              <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                                Teacher
-                              </th>
-                              <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                                Room
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {day.periods.map((period, periodIndex) => (
-                              <tr
-                                key={periodIndex}
-                                className={`border-b border-light-border dark:border-dark-border ${
-                                  period.subject === 'Break' || period.subject === 'Lunch'
-                                    ? 'bg-gray-50 dark:bg-dark-surface/50'
-                                    : 'hover:bg-gray-50 dark:hover:bg-dark-surface/50'
-                                }`}
-                              >
-                                <td className="py-3 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                                  {period.time}
-                                </td>
-                                <td className="py-3 px-4">
-                                  <p
-                                    className={`text-sm font-medium ${
-                                      period.subject === 'Break' || period.subject === 'Lunch'
-                                        ? 'text-light-text-muted dark:text-dark-text-muted italic'
-                                        : 'text-light-text-primary dark:text-dark-text-primary'
-                                    }`}
-                                  >
-                                    {period.subject}
-                                  </p>
-                                </td>
-                                <td className="py-3 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                                  {period.teacher || '-'}
-                                </td>
-                                <td className="py-3 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                                  {period.room || '-'}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
           )}
 
           {activeTab === 'health' && (
@@ -635,242 +485,120 @@ export default function StudentDetailPage() {
               <CardHeader>
                 <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary flex items-center gap-2">
                   <Heart className="h-5 w-5" />
-                  Health Status
+                  Health Information
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                      Blood Group
-                    </p>
-                    <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                      {student.health.bloodGroup}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                      Last Checkup
-                    </p>
-                    <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                      {new Date(student.health.lastCheckup).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="md:col-span-2">
-                    <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
-                      Allergies
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {student.health.allergies.length > 0 ? (
-                        student.health.allergies.map((allergy, index) => (
-                          <span
-                            key={index}
-                            className="px-3 py-1 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400 rounded-full text-xs font-medium"
-                          >
-                            {allergy}
-                          </span>
-                        ))
-                      ) : (
-                        <p className="text-sm text-light-text-muted dark:text-dark-text-muted">None</p>
+                {student?.healthInfo ? (
+                  <div className="space-y-6">
+                    {/* Basic Health Information */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {student.healthInfo.bloodGroup && (
+                        <div>
+                          <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
+                            Blood Group
+                          </p>
+                          <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
+                            {student.healthInfo.bloodGroup}
+                          </p>
+                        </div>
+                      )}
+                      {student.healthInfo.allergies && (
+                        <div>
+                          <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
+                            Allergies
+                          </p>
+                          <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
+                            {student.healthInfo.allergies}
+                          </p>
+                        </div>
+                      )}
+                      {student.healthInfo.medications && (
+                        <div>
+                          <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
+                            Medications
+                          </p>
+                          <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
+                            {student.healthInfo.medications}
+                          </p>
+                        </div>
                       )}
                     </div>
+
+                    {/* Emergency Contact */}
+                    {(student.healthInfo.emergencyContact || student.healthInfo.emergencyContactPhone) && (
+                      <div className="border-t border-light-border dark:border-dark-border pt-6">
+                        <h3 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary mb-4">
+                          Emergency Contact
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {student.healthInfo.emergencyContact && (
+                            <div>
+                              <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
+                                Contact Name
+                              </p>
+                              <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
+                                {student.healthInfo.emergencyContact}
+                              </p>
+                            </div>
+                          )}
+                          {student.healthInfo.emergencyContactPhone && (
+                            <div>
+                              <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
+                                Contact Phone
+                              </p>
+                              <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
+                                {student.healthInfo.emergencyContactPhone}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Medical Notes */}
+                    {student.healthInfo.medicalNotes && (
+                      <div className="border-t border-light-border dark:border-dark-border pt-6">
+                        <h3 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary mb-4">
+                          Medical Notes
+                        </h3>
+                        <div className="bg-light-surface dark:bg-dark-surface rounded-lg p-4">
+                          <p className="text-sm text-light-text-primary dark:text-dark-text-primary whitespace-pre-wrap">
+                            {student.healthInfo.medicalNotes}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div className="md:col-span-2">
-                    <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
-                      Current Medications
-                    </p>
-                    <div className="space-y-2">
-                      {student.health.medications.length > 0 ? (
-                        student.health.medications.map((medication, index) => (
-                          <div
-                            key={index}
-                            className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg"
-                          >
-                            <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                              {medication}
-                            </p>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-sm text-light-text-muted dark:text-dark-text-muted">None</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="md:col-span-2">
-                    <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
-                      Medical Notes
-                    </p>
-                    <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                      {student.health.medicalNotes}
+                ) : (
+                  <div className="text-center py-12">
+                    <Heart className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+                    <p className="text-light-text-secondary dark:text-dark-text-secondary">
+                      No health information available for this student.
                     </p>
                   </div>
-                  <div className="md:col-span-2">
-                    <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                      Emergency Contact
-                    </p>
-                    <p className="text-sm text-light-text-primary dark:text-dark-text-primary">
-                      {student.health.emergencyContact}
-                    </p>
-                  </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           )}
 
           {activeTab === 'grades' && (
-            <div>
-              {/* Term Selector */}
-              <Card className="mb-6">
-                <CardContent className="pt-6">
-                  <div className="flex gap-3">
-                    {student.grades.map((grade, index) => (
-                      <Button
-                        key={index}
-                        variant={selectedTerm === index ? 'primary' : 'ghost'}
-                        size="sm"
-                        onClick={() => setSelectedTerm(index)}
-                      >
-                        {grade.term}
-                      </Button>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Summary Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                          Average Score
-                        </p>
-                        <p className="text-3xl font-bold text-light-text-primary dark:text-dark-text-primary">
-                          {student.grades[selectedTerm].averageScore}%
-                        </p>
-                      </div>
-                      <TrendingUp className="h-8 w-8 text-green-600 dark:text-green-400" />
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                          Class Position
-                        </p>
-                        <p className="text-3xl font-bold text-light-text-primary dark:text-dark-text-primary">
-                          {student.grades[selectedTerm].position}
-                          <span className="text-lg text-light-text-secondary dark:text-dark-text-secondary">
-                            {' '}/ {student.grades[selectedTerm].totalStudents}
-                          </span>
-                        </p>
-                      </div>
-                      <Award className="h-8 w-8 text-orange-600 dark:text-orange-400" />
-                    </div>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                          Total Score
-                        </p>
-                        <p className="text-3xl font-bold text-light-text-primary dark:text-dark-text-primary">
-                          {student.grades[selectedTerm].totalScore}
-                        </p>
-                      </div>
-                      <FileText className="h-8 w-8 text-blue-600 dark:text-blue-400" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Subject Results */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
-                      Subject Breakdown - {student.grades[selectedTerm].term}
-                    </CardTitle>
-                    <Button variant="ghost" size="sm">
-                      <Download className="h-4 w-4 mr-2" />
-                      Download PDF
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-light-border dark:border-dark-border">
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                            Subject
-                          </th>
-                          <th className="text-center py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                            Score
-                          </th>
-                          <th className="text-center py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                            Max Score
-                          </th>
-                          <th className="text-center py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                            Grade
-                          </th>
-                          <th className="text-center py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                            Percentage
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {student.grades[selectedTerm].subjects.map((subject, index) => {
-                          const percentage = (subject.score / subject.maxScore) * 100;
-                          return (
-                            <motion.tr
-                              key={index}
-                              initial={{ opacity: 0, x: -20 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: index * 0.05 }}
-                              className="border-b border-light-border dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-surface/50 transition-colors"
-                            >
-                              <td className="py-4 px-4">
-                                <p className="font-medium text-light-text-primary dark:text-dark-text-primary">
-                                  {subject.name}
-                                </p>
-                              </td>
-                              <td className="py-4 px-4 text-center">
-                                <p className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary">
-                                  {subject.score}
-                                </p>
-                              </td>
-                              <td className="py-4 px-4 text-center text-light-text-secondary dark:text-dark-text-secondary">
-                                {subject.maxScore}
-                              </td>
-                              <td className="py-4 px-4 text-center">
-                                <span
-                                  className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getGradeColor(
-                                    subject.grade
-                                  )}`}
-                                >
-                                  {subject.grade}
-                                </span>
-                              </td>
-                              <td className="py-4 px-4 text-center">
-                                <p className="text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
-                                  {percentage.toFixed(1)}%
-                                </p>
-                              </td>
-                            </motion.tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary flex items-center gap-2">
+                  <Award className="h-5 w-5" />
+                  Grades
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-12">
+                  <Award className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+                  <p className="text-light-text-secondary dark:text-dark-text-secondary">
+                    Grades view will be available here.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {activeTab === 'transcript' && (
@@ -895,6 +623,28 @@ export default function StudentDetailPage() {
             </Card>
           )}
         </motion.div>
+
+        {/* Edit Profile Modal */}
+        {showEditProfileModal && student && (
+          <EditStudentProfileModal
+            isOpen={showEditProfileModal}
+            onClose={() => setShowEditProfileModal(false)}
+            student={{
+              id: student.id,
+              firstName: student.firstName,
+              lastName: student.lastName,
+              middleName: student.middleName,
+              phone: student.user?.phone || undefined,
+              profileImage: student.profileImage || null,
+              healthInfo: student.healthInfo || undefined,
+            }}
+            schoolId={schoolId!}
+            onSuccess={() => {
+              // RTK Query will automatically refetch due to tag invalidation
+              // No need to manually reload the page
+            }}
+          />
+        )}
       </div>
     </ProtectedRoute>
   );

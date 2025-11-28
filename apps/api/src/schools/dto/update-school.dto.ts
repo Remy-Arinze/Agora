@@ -17,6 +17,11 @@ export class UpdateSchoolDto {
   @IsString()
   domain?: string;
 
+  @ApiPropertyOptional({ description: 'School logo URL (Cloudinary)' })
+  @IsOptional()
+  @IsString()
+  logo?: string;
+
   @ApiPropertyOptional({ description: 'School address' })
   @IsOptional()
   @IsString()

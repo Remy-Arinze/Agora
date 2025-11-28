@@ -50,9 +50,9 @@ export class AuthService {
           },
         });
       } else {
-        // Admin, principal, or teacher logging in with public ID
+        // Admin, principal, teacher, or student logging in with public ID
         // Principals are SchoolAdmin records with role PRINCIPAL, so they're included here
-        // Find by public ID in SchoolAdmin (includes principals and all admin roles) or Teacher
+        // Find by public ID in SchoolAdmin (includes principals and all admin roles), Teacher, or Student
         schoolAdmin = await this.prisma.schoolAdmin.findUnique({
           where: { publicId: emailOrPublicId },
           include: { user: true },
@@ -66,17 +66,40 @@ export class AuthService {
         }
 
         if (!schoolAdmin && !teacherProfile) {
+          // Check for student with publicId
+          const studentProfile = await this.prisma.student.findUnique({
+            where: { publicId: emailOrPublicId },
+            include: { user: true },
+          });
+
+          if (studentProfile) {
+            user = studentProfile.user;
+          }
+        }
+
+        if (!schoolAdmin && !teacherProfile && !user) {
           throw new UnauthorizedException('Invalid credentials');
         }
 
-        user = schoolAdmin?.user || teacherProfile?.user;
+        if (!user) {
+          user = schoolAdmin?.user || teacherProfile?.user;
+        }
         
         if (user) {
           // Reload user with all relations
           user = await this.prisma.user.findUnique({
             where: { id: user.id },
             include: {
-              studentProfile: true,
+              studentProfile: {
+                include: {
+                  enrollments: {
+                    where: { isActive: true },
+                    orderBy: { enrollmentDate: 'desc' },
+                    take: 1,
+                    include: { school: true },
+                  },
+                },
+              },
               parentProfile: true,
               teacherProfiles: true,
               schoolAdmins: true,
@@ -217,18 +240,49 @@ export class AuthService {
       data: { usedAt: new Date() },
     });
 
-    // Activate parent account
-    const updatedUser = await this.prisma.user.update({
-      where: { id: parent.userId },
-      data: {
-        accountStatus: 'ACTIVE',
-      },
-      include: {
-        parentProfile: true,
-        schoolAdmins: true,
-        teacherProfiles: true,
-      },
-    });
+    // Get or create parent user account
+    let updatedUser;
+    if (!parent.userId) {
+      // Create User account for parent (they're claiming their account via OTP)
+      const defaultPassword = await bcrypt.hash('Password123!', 10);
+      const newUser = await this.prisma.user.create({
+        data: {
+          email: parent.email || null,
+          phone: parent.phone,
+          passwordHash: defaultPassword,
+          accountStatus: 'ACTIVE',
+          role: 'PARENT',
+        },
+      });
+
+      // Link User to Parent
+      await this.prisma.parent.update({
+        where: { id: parent.id },
+        data: { userId: newUser.id },
+      });
+
+      updatedUser = await this.prisma.user.findUnique({
+        where: { id: newUser.id },
+        include: {
+          parentProfile: true,
+          schoolAdmins: true,
+          teacherProfiles: true,
+        },
+      });
+    } else {
+      // Activate existing parent account
+      updatedUser = await this.prisma.user.update({
+        where: { id: parent.userId },
+        data: {
+          accountStatus: 'ACTIVE',
+        },
+        include: {
+          parentProfile: true,
+          schoolAdmins: true,
+          teacherProfiles: true,
+        },
+      });
+    }
 
     // Lock student profiles linked to this parent
     const students = await this.prisma.studentGuardian.findMany({
@@ -325,7 +379,7 @@ export class AuthService {
     // Generate reset token
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24); // 24 hours expiry
+    expiresAt.setDate(expiresAt.getDate() + 14); // 2 weeks (14 days) expiry
 
     // Create reset token
     await this.prisma.passwordResetToken.create({
@@ -336,21 +390,38 @@ export class AuthService {
       },
     });
 
-    // Get user name and role for email
+    // Get user name, role, and school name for email
     let name = email;
     let role = 'User';
+    let schoolName: string | undefined;
     
     if (user.schoolAdmins && user.schoolAdmins.length > 0) {
       name = `${user.schoolAdmins[0].firstName} ${user.schoolAdmins[0].lastName}`;
       role = user.schoolAdmins[0].role === 'PRINCIPAL' ? 'Principal' : 'Administrator';
+      // Get school name
+      if (user.schoolAdmins[0].schoolId) {
+        const school = await this.prisma.school.findUnique({
+          where: { id: user.schoolAdmins[0].schoolId },
+          select: { name: true },
+        });
+        schoolName = school?.name;
+      }
     } else if (user.teacherProfiles && user.teacherProfiles.length > 0) {
       name = `${user.teacherProfiles[0].firstName} ${user.teacherProfiles[0].lastName}`;
       role = 'Teacher';
+      // Get school name
+      if (user.teacherProfiles[0].schoolId) {
+        const school = await this.prisma.school.findUnique({
+          where: { id: user.teacherProfiles[0].schoolId },
+          select: { name: true },
+        });
+        schoolName = school?.name;
+      }
     }
 
     // Send email
     try {
-      await this.emailService.sendPasswordResetEmail(email, name, token, role);
+      await this.emailService.sendPasswordResetEmail(email, name, token, role, undefined, schoolName);
     } catch (error) {
       // Log error but don't fail the request
       console.error('Failed to send password reset email:', error);
@@ -424,13 +495,32 @@ export class AuthService {
       });
     });
 
+    // Get school name for confirmation email
+    let schoolName: string | undefined;
+    if (userWithProfiles) {
+      if (userWithProfiles.schoolAdmins && userWithProfiles.schoolAdmins.length > 0) {
+        const school = await this.prisma.school.findUnique({
+          where: { id: userWithProfiles.schoolAdmins[0].schoolId },
+          select: { name: true },
+        });
+        schoolName = school?.name;
+      } else if (userWithProfiles.teacherProfiles && userWithProfiles.teacherProfiles.length > 0) {
+        const school = await this.prisma.school.findUnique({
+          where: { id: userWithProfiles.teacherProfiles[0].schoolId },
+          select: { name: true },
+        });
+        schoolName = school?.name;
+      }
+    }
+
     // Send confirmation email (only if user has an email)
     if (user.email) {
       try {
         await this.emailService.sendPasswordResetConfirmationEmail(
           user.email,
           name,
-          publicId || undefined
+          publicId || undefined,
+          schoolName
         );
       } catch (error) {
         // Log error but don't fail the request
@@ -447,12 +537,13 @@ export class AuthService {
     email: string,
     name: string,
     role: string,
-    publicId?: string
+    publicId?: string,
+    schoolName?: string
   ): Promise<void> {
     // Generate reset token
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24); // 24 hours expiry
+    expiresAt.setDate(expiresAt.getDate() + 14); // 2 weeks (14 days) expiry
 
     // Create reset token
     await this.prisma.passwordResetToken.create({
@@ -463,12 +554,127 @@ export class AuthService {
       },
     });
 
-    // Send email with public ID if provided
+    // Send email with public ID and school name if provided
     try {
-      await this.emailService.sendPasswordResetEmail(email, name, token, role, publicId || undefined);
+      await this.emailService.sendPasswordResetEmail(email, name, token, role, publicId || undefined, schoolName);
     } catch (error) {
       // Log error but don't fail the request
       console.error('Failed to send password reset email:', error);
+    }
+  }
+
+  /**
+   * Resend password reset email for a user (admin function)
+   * Invalidates any existing unused tokens and creates a new one
+   */
+  async resendPasswordResetEmail(
+    userId: string,
+    schoolId?: string
+  ): Promise<void> {
+    // Get user with profiles
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        schoolAdmins: {
+          where: schoolId ? { schoolId } : undefined,
+          include: {
+            school: {
+              select: { name: true },
+            },
+          },
+        },
+        teacherProfiles: {
+          where: schoolId ? { schoolId } : undefined,
+          include: {
+            school: {
+              select: { name: true },
+            },
+          },
+        },
+        studentProfile: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (!user.email) {
+      throw new BadRequestException('User does not have an email address');
+    }
+
+    // Invalidate any existing unused tokens for this user
+    await this.prisma.passwordResetToken.updateMany({
+      where: {
+        userId,
+        usedAt: null,
+      },
+      data: {
+        usedAt: new Date(), // Mark as used to invalidate
+      },
+    });
+
+    // Get user name, role, public ID, and school name
+    let name = user.email;
+    let role = 'User';
+    let publicId: string | undefined;
+    let schoolName: string | undefined;
+
+    if (user.schoolAdmins && user.schoolAdmins.length > 0) {
+      const admin = user.schoolAdmins[0];
+      name = `${admin.firstName} ${admin.lastName}`;
+      role = admin.role === 'PRINCIPAL' ? 'Principal' : 'Administrator';
+      publicId = admin.publicId || undefined;
+      schoolName = admin.school?.name;
+    } else if (user.teacherProfiles && user.teacherProfiles.length > 0) {
+      const teacher = user.teacherProfiles[0];
+      name = `${teacher.firstName} ${teacher.lastName}`;
+      role = 'Teacher';
+      publicId = teacher.publicId || undefined;
+      schoolName = teacher.school?.name;
+    } else if (user.studentProfile) {
+      name = `${user.studentProfile.firstName} ${user.studentProfile.lastName}`;
+      role = 'Student';
+      publicId = user.studentProfile.publicId || undefined;
+      // Get school name from student's enrollment
+      const enrollment = await this.prisma.enrollment.findFirst({
+        where: {
+          studentId: user.studentProfile.id,
+          isActive: true,
+        },
+        include: {
+          school: {
+            select: { name: true },
+          },
+        },
+        orderBy: {
+          enrollmentDate: 'desc',
+        },
+      });
+      schoolName = enrollment?.school?.name;
+    }
+
+    // Generate new reset token
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 14); // 2 weeks (14 days) expiry
+
+    // Create new reset token
+    await this.prisma.passwordResetToken.create({
+      data: {
+        token,
+        userId,
+        expiresAt,
+      },
+    });
+
+    // Send email with public ID and school name if provided
+    try {
+      await this.emailService.sendPasswordResetEmail(user.email, name, token, role, publicId, schoolName);
+    } catch (error) {
+      // Log error but don't fail the request
+      console.error('Failed to resend password reset email:', error);
+      throw error; // Re-throw so admin knows it failed
     }
   }
 }

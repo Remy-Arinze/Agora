@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { IsString, IsNotEmpty, IsOptional, IsEnum } from 'class-validator';
 
 export class ClassLevelDto {
   @ApiProperty()
@@ -82,8 +83,27 @@ export class SubjectDto {
   @ApiProperty()
   schoolId: string;
 
+  @ApiProperty({ required: false })
+  schoolType?: string;
+
+  @ApiProperty({ required: false })
+  classLevelId?: string;
+
+  @ApiProperty({ required: false })
+  classLevelName?: string;
+
+  @ApiProperty({ required: false })
+  description?: string;
+
   @ApiProperty()
   isActive: boolean;
+
+  @ApiProperty({ required: false })
+  teachers?: Array<{
+    id: string;
+    firstName: string;
+    lastName: string;
+  }>;
 }
 
 export class CreateClassArmDto {
@@ -113,9 +133,66 @@ export class CreateRoomDto {
 
 export class CreateSubjectDto {
   @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
   name: string;
 
   @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
   code?: string;
+
+  @ApiProperty({ required: false, enum: ['PRIMARY', 'SECONDARY', 'TERTIARY'] })
+  @IsEnum(['PRIMARY', 'SECONDARY', 'TERTIARY'])
+  @IsOptional()
+  schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY';
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  classLevelId?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  description?: string;
+}
+
+export class UpdateSubjectDto {
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  code?: string;
+
+  @ApiProperty({ required: false, enum: ['PRIMARY', 'SECONDARY', 'TERTIARY'] })
+  @IsEnum(['PRIMARY', 'SECONDARY', 'TERTIARY'])
+  @IsOptional()
+  schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY';
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  classLevelId?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  isActive?: boolean;
+}
+
+export class AssignTeacherToSubjectDto {
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  teacherId: string;
 }
 

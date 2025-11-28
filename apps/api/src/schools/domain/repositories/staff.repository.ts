@@ -68,6 +68,13 @@ export class StaffRepository {
     });
   }
 
+  async findTeacherByTeacherId(teacherId: string): Promise<Teacher | null> {
+    return this.prisma.teacher.findUnique({
+      where: { teacherId },
+      include: { user: true, school: true },
+    });
+  }
+
   async findTeachersBySchool(schoolId: string): Promise<Teacher[]> {
     return this.prisma.teacher.findMany({
       where: { schoolId },

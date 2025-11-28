@@ -192,7 +192,8 @@ export class SuperAdminSchoolsService {
             emailData.email,
             emailData.name,
             emailData.role,
-            emailData.publicId
+            emailData.publicId,
+            result.school.name
           );
         } catch (error) {
           console.error(`Failed to send password reset email to ${emailData.email}:`, error);

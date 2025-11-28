@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { EmailService } from '../../email/email.service';
 import { SchoolRepository } from '../domain/repositories/school.repository';
 import { StaffRepository } from '../domain/repositories/staff.repository';
 import { CreateClassDto, ClassType } from '../dto/create-class.dto';
@@ -14,7 +15,8 @@ export class ClassService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly schoolRepository: SchoolRepository,
-    private readonly staffRepository: StaffRepository
+    private readonly staffRepository: StaffRepository,
+    private readonly emailService: EmailService
   ) {}
 
   // Access Prisma models using bracket notation for reserved keywords
@@ -158,6 +160,80 @@ export class ClassService {
   }
 
   /**
+   * Get classes assigned to a teacher
+   */
+  async getTeacherClasses(schoolId: string, teacherId: string): Promise<ClassDto[]> {
+    // Validate school exists
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    // Validate teacher exists in school
+    const teacher = await this.staffRepository.findTeacherById(teacherId);
+    if (!teacher || teacher.schoolId !== school.id) {
+      throw new NotFoundException('Teacher not found in this school');
+    }
+
+    // Get all class assignments for this teacher
+    // Filter by active classes in the same school
+    const assignments = await this.classTeacherModel.findMany({
+      where: {
+        teacherId: teacherId, // This should be Teacher.id (database ID)
+        class: {
+          schoolId: school.id,
+          isActive: true, // Only get active classes
+        },
+      },
+      include: {
+        class: {
+          include: {
+            classTeachers: {
+              include: {
+                teacher: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Get unique classes and map to DTOs
+    const classMap = new Map<string, any>();
+    assignments.forEach((assignment: any) => {
+      const classData = assignment.class;
+      if (!classMap.has(classData.id)) {
+        classMap.set(classData.id, classData);
+      }
+    });
+
+    // Count students for each class
+    const classes = Array.from(classMap.values());
+    const classesWithCounts = await Promise.all(
+      classes.map(async (classData) => {
+        const studentsCount = await this.prisma.enrollment.count({
+          where: {
+            schoolId: school.id,
+            OR: [
+              { classId: classData.id },
+              {
+                AND: [
+                  { classLevel: classData.classLevel },
+                  { academicYear: classData.academicYear },
+                ],
+              },
+            ],
+          },
+        });
+
+        return this.mapToClassDto(classData, studentsCount);
+      })
+    );
+
+    return classesWithCounts;
+  }
+
+  /**
    * Get all classes for a school
    * @param typeFilter - Optional filter to only get classes of a specific type (PRIMARY, SECONDARY, TERTIARY)
    */
@@ -195,18 +271,41 @@ export class ClassService {
             teacher: true,
           },
         },
-        enrollments: {
-          where: {
-            isActive: true,
-          },
-        },
       },
       orderBy: {
         name: 'asc',
       },
     });
 
-    return classes.map((cls: any) => this.mapToClassDto(cls));
+    // Get student counts for all classes
+    const classesWithCounts = await Promise.all(
+      classes.map(async (cls: any) => {
+        // Count enrollments that match by classId OR by classLevel and academicYear
+        const studentsCount = await this.prisma.enrollment.count({
+          where: {
+            schoolId: school.id,
+            isActive: true,
+            academicYear: targetAcademicYear,
+            OR: [
+              { classId: cls.id },
+              {
+                AND: [
+                  { classId: null },
+                  { classLevel: cls.classLevel },
+                ],
+              },
+            ],
+          },
+        });
+
+        return {
+          ...cls,
+          studentsCount,
+        };
+      })
+    );
+
+    return classesWithCounts.map((cls: any) => this.mapToClassDto(cls));
   }
 
   /**
@@ -229,11 +328,6 @@ export class ClassService {
             teacher: true,
           },
         },
-        enrollments: {
-          where: {
-            isActive: true,
-          },
-        },
       },
     });
 
@@ -241,7 +335,28 @@ export class ClassService {
       throw new NotFoundException('Class not found');
     }
 
-    return this.mapToClassDto(classData);
+    // Count enrollments that match by classId OR by classLevel and academicYear
+    const studentsCount = await this.prisma.enrollment.count({
+      where: {
+        schoolId: school.id,
+        isActive: true,
+        academicYear: classData.academicYear,
+        OR: [
+          { classId: classData.id },
+          {
+            AND: [
+              { classId: null },
+              { classLevel: classData.classLevel },
+            ],
+          },
+        ],
+      },
+    });
+
+    return this.mapToClassDto({
+      ...classData,
+      studentsCount,
+    });
   }
 
   /**
@@ -322,6 +437,28 @@ export class ClassService {
       },
     });
 
+    // Send email to teacher if email exists
+    const teacherEmail = (teacher as any).user?.email || teacher.email;
+    if (teacherEmail && school) {
+      try {
+        await this.emailService.sendTeacherClassAssignmentEmail(
+          teacherEmail,
+          `${teacher.firstName} ${teacher.lastName}`,
+          classData.name,
+          classData.classLevel,
+          assignmentData.subject || null,
+          assignmentData.isPrimary || false,
+          school.name,
+          classData.academicYear
+        );
+      } catch (error) {
+        // Log error but don't fail the request
+        console.error('Failed to send teacher class assignment email:', error);
+      }
+    } else if (!teacherEmail) {
+      console.warn(`Teacher ${teacher.id} does not have an email address. Cannot send class assignment notification.`);
+    }
+
     // Return updated class
     return this.getClassById(schoolId, classId);
   }
@@ -365,17 +502,48 @@ export class ClassService {
 
     const assignment = await this.classTeacherModel.findFirst({
       where,
+      include: {
+        teacher: {
+          include: {
+            user: {
+              select: {
+                email: true,
+              },
+            },
+          },
+        },
+      },
     });
 
     if (!assignment) {
       throw new NotFoundException('Teacher assignment not found');
     }
 
+    // Get teacher email before deleting
+    const teacherEmail = assignment.teacher?.user?.email || assignment.teacher?.email;
+
     await this.classTeacherModel.delete({
       where: {
         id: assignment.id,
       },
     });
+
+    // Send email to teacher if email exists
+    if (teacherEmail && school && assignment.teacher) {
+      try {
+        await this.emailService.sendTeacherClassRemovalEmail(
+          teacherEmail,
+          `${assignment.teacher.firstName} ${assignment.teacher.lastName}`,
+          classData.name,
+          classData.classLevel,
+          assignment.subject || null,
+          school.name
+        );
+      } catch (error) {
+        // Log error but don't fail the request
+        console.error('Failed to send teacher class removal email:', error);
+      }
+    }
   }
 
   /**
@@ -486,6 +654,86 @@ export class ClassService {
   }
 
   /**
+   * Get students enrolled in a class
+   */
+  async getClassStudents(schoolId: string, classId: string): Promise<any[]> {
+    // Validate school exists
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    // Validate class exists
+    const classData = await this.classModel.findFirst({
+      where: {
+        id: classId,
+        schoolId: school.id,
+      },
+    });
+
+    if (!classData) {
+      throw new NotFoundException('Class not found');
+    }
+
+    // Get enrollments for this class
+    // Students can be linked via classId OR by classLevel and academicYear
+    const enrollments = await this.prisma.enrollment.findMany({
+      where: {
+        schoolId: school.id,
+        isActive: true,
+        academicYear: classData.academicYear,
+        OR: [
+          { classId: classId },
+          {
+            AND: [
+              { classLevel: classData.classLevel },
+              { classId: null },
+            ],
+          },
+        ],
+      },
+      include: {
+        student: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                phone: true,
+                accountStatus: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        student: {
+          lastName: 'asc',
+        },
+      },
+    });
+
+    return enrollments.map((enrollment) => ({
+      id: enrollment.student.id,
+      uid: enrollment.student.uid,
+      publicId: enrollment.student.publicId,
+      firstName: enrollment.student.firstName,
+      lastName: enrollment.student.lastName,
+      middleName: enrollment.student.middleName,
+      dateOfBirth: enrollment.student.dateOfBirth,
+      email: enrollment.student.user?.email || null,
+      phone: enrollment.student.user?.phone || null,
+      enrollment: {
+        id: enrollment.id,
+        classLevel: enrollment.classLevel,
+        academicYear: enrollment.academicYear,
+        enrollmentDate: enrollment.enrollmentDate,
+      },
+      user: enrollment.student.user,
+    }));
+  }
+
+  /**
    * Validate teacher assignment based on school type
    */
   private async validateTeacherAssignment(
@@ -493,8 +741,31 @@ export class ClassService {
     teacherId: string,
     assignmentData: AssignTeacherToClassDto
   ): Promise<void> {
-    // For primary schools: only one teacher allowed
+    // For primary schools: only one teacher allowed per class, and teacher can only be assigned to one class
     if (classData.type === ClassType.PRIMARY) {
+      // Check if this teacher is already assigned to another PRIMARY class
+      const teacherOtherAssignments = await this.classTeacherModel.findMany({
+        where: {
+          teacherId: teacherId,
+        },
+        include: {
+          class: true,
+        },
+      });
+
+      // Filter to only PRIMARY school classes
+      const primaryClassAssignments = teacherOtherAssignments.filter(
+        (assignment: any) => assignment.class.type === ClassType.PRIMARY && assignment.class.id !== classData.id
+      );
+
+      if (primaryClassAssignments.length > 0) {
+        const otherClass = primaryClassAssignments[0].class;
+        throw new ConflictException(
+          `This teacher is already assigned to ${otherClass.name}. Please remove them from that class before assigning to this class.`
+        );
+      }
+
+      // Check if this class already has a teacher
       const existingTeachers = await this.classTeacherModel.findMany({
         where: {
           classId: classData.id,
@@ -568,7 +839,7 @@ export class ClassService {
         isPrimary: ct.isPrimary,
         createdAt: ct.createdAt,
       })),
-      studentsCount: classData.enrollments?.length || 0,
+      studentsCount: classData.studentsCount ?? 0,
     };
   }
 }

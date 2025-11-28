@@ -39,11 +39,15 @@ export const apiSlice = createApi({
         headers.set('x-tenant-id', tenantId);
       }
 
-      headers.set('Content-Type', 'application/json');
+      // Only set Content-Type for JSON requests (not FormData)
+      const contentType = headers.get('Content-Type');
+      if (!contentType || contentType === 'application/json') {
+        headers.set('Content-Type', 'application/json');
+      }
       return headers;
     },
   }),
-  tagTypes: ['Student', 'School', 'User', 'Timetable', 'Event', 'Session', 'ClassLevel', 'ClassArm', 'Subject', 'Room'],
+  tagTypes: ['Student', 'School', 'User', 'Timetable', 'Event', 'Session', 'ClassLevel', 'ClassArm', 'Subject', 'Room', 'Class', 'ClassResource', 'Permission', 'Curriculum', 'Grade'],
   endpoints: () => ({}),
 });
 

@@ -48,7 +48,8 @@ export class EmailService {
     name: string,
     resetToken: string,
     role: string,
-    publicId?: string
+    publicId?: string,
+    schoolName?: string
   ): Promise<void> {
     const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
     const resetUrl = `${frontendUrl}/auth/reset-password?token=${resetToken}`;
@@ -81,7 +82,7 @@ export class EmailService {
           </div>
           <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
             <h2 style="color: #1f2937; margin-top: 0;">Welcome, ${name}!</h2>
-            <p>Your account has been created on the Agora Education Platform as a <strong>${role}</strong>.</p>
+            <p>Your account has been created${schoolName ? ` at <strong>${schoolName}</strong>` : ''} on the Agora Education Platform as a <strong>${role}</strong>.</p>
             ${publicId ? `
             <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px;">
               <p style="margin: 0; color: #1e40af; font-weight: bold;">Your Public ID: <code style="background-color: white; padding: 4px 8px; border-radius: 4px; font-size: 16px;">${publicId}</code></p>
@@ -127,7 +128,8 @@ export class EmailService {
   async sendPasswordResetConfirmationEmail(
     email: string,
     name: string,
-    publicId?: string
+    publicId?: string,
+    schoolName?: string
   ): Promise<void> {
     const fromEmail = this.configService.get<string>('MAIL_FROM') || 
                       this.configService.get<string>('SMTP_FROM') || 
@@ -161,7 +163,7 @@ export class EmailService {
           <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
             <h2 style="color: #1f2937; margin-top: 0;">Password Successfully Changed</h2>
             <p>Hello ${name},</p>
-            <p>Your password has been successfully changed on <strong>${new Date().toLocaleString()}</strong>.</p>
+            <p>Your password has been successfully changed${schoolName ? ` for your account at <strong>${schoolName}</strong>` : ''} on <strong>${new Date().toLocaleString()}</strong>.</p>
             ${publicId ? `
             <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px;">
               <p style="margin: 0; color: #1e40af; font-weight: bold;">Your Public ID: <code style="background-color: white; padding: 4px 8px; border-radius: 4px; font-size: 16px;">${publicId}</code></p>
@@ -276,6 +278,439 @@ export class EmailService {
       this.logger.log(`Role change email sent successfully to ${email}. MessageId: ${result.messageId}`);
     } catch (error: any) {
       this.logger.error(`Failed to send role change email to ${email}:`, error);
+      this.logger.error(`Error details: ${error.message}`);
+      if (error.response) {
+        this.logger.error(`SMTP Response: ${error.response}`);
+      }
+      if (error.code) {
+        this.logger.error(`Error code: ${error.code}`);
+      }
+      throw error;
+    }
+  }
+
+  async sendTransferInitiationEmail(
+    email: string,
+    studentName: string,
+    tac: string,
+    studentId: string,
+    schoolName: string,
+    expiresAt: Date
+  ): Promise<void> {
+    const fromEmail = this.configService.get<string>('MAIL_FROM') || 
+                      this.configService.get<string>('SMTP_FROM') || 
+                      this.configService.get<string>('MAIL_USER') || 
+                      this.configService.get<string>('SMTP_USER');
+    
+    if (!fromEmail) {
+      this.logger.error('No FROM email address configured. Check MAIL_FROM or SMTP_FROM environment variable.');
+      throw new Error('Email configuration error: No FROM address');
+    }
+
+    const mailOptions = {
+      from: fromEmail,
+      to: email,
+      subject: `Transfer Access Code (TAC) Generated - ${schoolName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Transfer Access Code Generated</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #3b82f6; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+            <h1 style="color: white; margin: 0;">Agora Education Platform</h1>
+          </div>
+          <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
+            <h2 style="color: #1f2937; margin-top: 0;">Transfer Access Code Generated</h2>
+            <p>Hello ${studentName},</p>
+            <p>A Transfer Access Code (TAC) has been generated for your transfer from <strong>${schoolName}</strong>.</p>
+            <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px;">
+              <p style="margin: 0; color: #1e40af; font-weight: bold; font-size: 14px;">Transfer Access Code (TAC):</p>
+              <p style="margin: 10px 0 0 0; color: #1e40af;">
+                <code style="background-color: white; padding: 8px 12px; border-radius: 4px; font-size: 18px; font-weight: bold; letter-spacing: 1px;">${tac}</code>
+              </p>
+            </div>
+            <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 4px;">
+              <p style="margin: 0; color: #92400e; font-weight: bold; font-size: 14px;">Student ID:</p>
+              <p style="margin: 10px 0 0 0; color: #92400e;">
+                <code style="background-color: white; padding: 8px 12px; border-radius: 4px; font-size: 16px;">${studentId}</code>
+              </p>
+            </div>
+            <p style="color: #1f2937; margin-top: 20px;">
+              <strong>Important Information:</strong>
+            </p>
+            <ul style="color: #4b5563; padding-left: 20px;">
+              <li>Share this TAC and your Student ID with the receiving school</li>
+              <li>This TAC will expire on <strong>${expiresAt.toLocaleString()}</strong></li>
+              <li>The TAC can only be used once</li>
+              <li>Do not share this code with anyone other than the receiving school</li>
+            </ul>
+            <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+              <strong>Next Steps:</strong> The receiving school will use this TAC along with your Student ID to initiate the transfer process. Once the transfer is completed, you will be enrolled in your new school.
+            </p>
+            <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
+              <strong>Note:</strong> If you did not request this transfer, please contact <strong>${schoolName}</strong> immediately.
+            </p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+            <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
+              © ${new Date().getFullYear()} Agora Education Platform. All rights reserved.
+            </p>
+          </div>
+        </body>
+        </html>
+      `,
+    };
+
+    try {
+      this.logger.log(`Attempting to send transfer initiation email to ${email} from ${fromEmail}`);
+      const result = await this.transporter.sendMail(mailOptions);
+      this.logger.log(`Transfer initiation email sent successfully to ${email}. MessageId: ${result.messageId}`);
+    } catch (error: any) {
+      this.logger.error(`Failed to send transfer initiation email to ${email}:`, error);
+      this.logger.error(`Error details: ${error.message}`);
+      if (error.response) {
+        this.logger.error(`SMTP Response: ${error.response}`);
+      }
+      if (error.code) {
+        this.logger.error(`Error code: ${error.code}`);
+      }
+      throw error;
+    }
+  }
+
+  async sendTransferRevocationEmail(
+    email: string,
+    studentName: string,
+    schoolName: string
+  ): Promise<void> {
+    const fromEmail = this.configService.get<string>('MAIL_FROM') || 
+                      this.configService.get<string>('SMTP_FROM') || 
+                      this.configService.get<string>('MAIL_USER') || 
+                      this.configService.get<string>('SMTP_USER');
+    
+    if (!fromEmail) {
+      this.logger.error('No FROM email address configured. Check MAIL_FROM or SMTP_FROM environment variable.');
+      throw new Error('Email configuration error: No FROM address');
+    }
+
+    const mailOptions = {
+      from: fromEmail,
+      to: email,
+      subject: `Transfer Access Code Revoked - ${schoolName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Transfer Access Code Revoked</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #ef4444; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+            <h1 style="color: white; margin: 0;">Agora Education Platform</h1>
+          </div>
+          <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
+            <h2 style="color: #1f2937; margin-top: 0;">Transfer Access Code Revoked</h2>
+            <p>Hello ${studentName},</p>
+            <p>The Transfer Access Code (TAC) that was previously generated for your transfer from <strong>${schoolName}</strong> has been revoked.</p>
+            <div style="background-color: #fee2e2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0; border-radius: 4px;">
+              <p style="margin: 0; color: #991b1b; font-weight: bold;">What this means:</p>
+              <ul style="margin: 10px 0 0 20px; color: #991b1b; padding-left: 0;">
+                <li>The previously issued TAC is no longer valid</li>
+                <li>You will need to request a new TAC if you still wish to transfer</li>
+                <li>The receiving school cannot use the old TAC to initiate your transfer</li>
+              </ul>
+            </div>
+            <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+              <strong>Next Steps:</strong> If you still need to transfer, please contact <strong>${schoolName}</strong> to request a new Transfer Access Code.
+            </p>
+            <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
+              <strong>Note:</strong> If you did not expect this revocation, please contact <strong>${schoolName}</strong> for more information.
+            </p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+            <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
+              © ${new Date().getFullYear()} Agora Education Platform. All rights reserved.
+            </p>
+          </div>
+        </body>
+        </html>
+      `,
+    };
+
+    try {
+      this.logger.log(`Attempting to send transfer revocation email to ${email} from ${fromEmail}`);
+      const result = await this.transporter.sendMail(mailOptions);
+      this.logger.log(`Transfer revocation email sent successfully to ${email}. MessageId: ${result.messageId}`);
+    } catch (error: any) {
+      this.logger.error(`Failed to send transfer revocation email to ${email}:`, error);
+      this.logger.error(`Error details: ${error.message}`);
+      if (error.response) {
+        this.logger.error(`SMTP Response: ${error.response}`);
+      }
+      if (error.code) {
+        this.logger.error(`Error code: ${error.code}`);
+      }
+      throw error;
+    }
+  }
+
+  async sendTeacherClassAssignmentEmail(
+    email: string,
+    teacherName: string,
+    className: string,
+    classLevel: string | null,
+    subject: string | null,
+    isPrimary: boolean,
+    schoolName: string,
+    academicYear: string
+  ): Promise<void> {
+    const fromEmail = this.configService.get<string>('MAIL_FROM') || 
+                      this.configService.get<string>('SMTP_FROM') || 
+                      this.configService.get<string>('MAIL_USER') || 
+                      this.configService.get<string>('SMTP_USER');
+    
+    if (!fromEmail) {
+      this.logger.error('No FROM email address configured. Check MAIL_FROM or SMTP_FROM environment variable.');
+      throw new Error('Email configuration error: No FROM address');
+    }
+
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const loginUrl = `${frontendUrl}/auth/login`;
+
+    const mailOptions = {
+      from: fromEmail,
+      to: email,
+      subject: `Class Assignment - ${schoolName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Class Assignment</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #3b82f6; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+            <h1 style="color: white; margin: 0;">Agora Education Platform</h1>
+          </div>
+          <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
+            <h2 style="color: #1f2937; margin-top: 0;">Class Assignment Notification</h2>
+            <p>Hello ${teacherName},</p>
+            <p>You have been assigned to a class at <strong>${schoolName}</strong>.</p>
+            <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px;">
+              <p style="margin: 0; color: #1e40af; font-weight: bold; font-size: 14px;">Class Details:</p>
+              <p style="margin: 10px 0 0 0; color: #1e40af;">
+                <strong>Class Name:</strong> ${className}<br>
+                ${classLevel ? `<strong>Class Level:</strong> ${classLevel}<br>` : ''}
+                ${subject ? `<strong>Subject:</strong> ${subject}<br>` : ''}
+                <strong>Academic Year:</strong> ${academicYear}<br>
+                ${isPrimary ? '<strong>Role:</strong> Primary Class Teacher' : ''}
+              </p>
+            </div>
+            <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+              You can now access your class dashboard to manage students, grades, and class activities.
+            </p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${loginUrl}" style="background-color: #3b82f6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">Access Dashboard</a>
+            </div>
+            <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
+              <strong>Note:</strong> If you have any questions about this assignment, please contact your school administrator.
+            </p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+            <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
+              © ${new Date().getFullYear()} Agora Education Platform. All rights reserved.
+            </p>
+          </div>
+        </body>
+        </html>
+      `,
+    };
+
+    try {
+      this.logger.log(`Attempting to send teacher class assignment email to ${email} from ${fromEmail}`);
+      const result = await this.transporter.sendMail(mailOptions);
+      this.logger.log(`Teacher class assignment email sent successfully to ${email}. MessageId: ${result.messageId}`);
+    } catch (error: any) {
+      this.logger.error(`Failed to send teacher class assignment email to ${email}:`, error);
+      this.logger.error(`Error details: ${error.message}`);
+      if (error.response) {
+        this.logger.error(`SMTP Response: ${error.response}`);
+      }
+      if (error.code) {
+        this.logger.error(`Error code: ${error.code}`);
+      }
+      throw error;
+    }
+  }
+
+  async sendTeacherClassRemovalEmail(
+    email: string,
+    teacherName: string,
+    className: string,
+    classLevel: string | null,
+    subject: string | null,
+    schoolName: string
+  ): Promise<void> {
+    const fromEmail = this.configService.get<string>('MAIL_FROM') || 
+                      this.configService.get<string>('SMTP_FROM') || 
+                      this.configService.get<string>('MAIL_USER') || 
+                      this.configService.get<string>('SMTP_USER');
+    
+    if (!fromEmail) {
+      this.logger.error('No FROM email address configured. Check MAIL_FROM or SMTP_FROM environment variable.');
+      throw new Error('Email configuration error: No FROM address');
+    }
+
+    const mailOptions = {
+      from: fromEmail,
+      to: email,
+      subject: `Class Assignment Removed - ${schoolName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Class Assignment Removed</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #ef4444; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+            <h1 style="color: white; margin: 0;">Agora Education Platform</h1>
+          </div>
+          <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
+            <h2 style="color: #1f2937; margin-top: 0;">Class Assignment Removed</h2>
+            <p>Hello ${teacherName},</p>
+            <p>Your assignment to a class at <strong>${schoolName}</strong> has been removed.</p>
+            <div style="background-color: #fee2e2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0; border-radius: 4px;">
+              <p style="margin: 0; color: #991b1b; font-weight: bold; font-size: 14px;">Removed Assignment:</p>
+              <p style="margin: 10px 0 0 0; color: #991b1b;">
+                <strong>Class Name:</strong> ${className}<br>
+                ${classLevel ? `<strong>Class Level:</strong> ${classLevel}<br>` : ''}
+                ${subject ? `<strong>Subject:</strong> ${subject}` : ''}
+              </p>
+            </div>
+            <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+              You will no longer have access to manage this class. If you believe this is an error, please contact your school administrator.
+            </p>
+            <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
+              <strong>Note:</strong> If you have any questions about this change, please contact <strong>${schoolName}</strong>.
+            </p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+            <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
+              © ${new Date().getFullYear()} Agora Education Platform. All rights reserved.
+            </p>
+          </div>
+        </body>
+        </html>
+      `,
+    };
+
+    try {
+      this.logger.log(`Attempting to send teacher class removal email to ${email} from ${fromEmail}`);
+      const result = await this.transporter.sendMail(mailOptions);
+      this.logger.log(`Teacher class removal email sent successfully to ${email}. MessageId: ${result.messageId}`);
+    } catch (error: any) {
+      this.logger.error(`Failed to send teacher class removal email to ${email}:`, error);
+      this.logger.error(`Error details: ${error.message}`);
+      if (error.response) {
+        this.logger.error(`SMTP Response: ${error.response}`);
+      }
+      if (error.code) {
+        this.logger.error(`Error code: ${error.code}`);
+      }
+      throw error;
+    }
+  }
+
+  async sendPermissionAssignmentEmail(
+    email: string,
+    adminName: string,
+    permissions: Array<{ resource: string; type: string; description?: string }>,
+    schoolName: string
+  ): Promise<void> {
+    const fromEmail = this.configService.get<string>('MAIL_FROM') || 
+                      this.configService.get<string>('SMTP_FROM') || 
+                      this.configService.get<string>('MAIL_USER') || 
+                      this.configService.get<string>('SMTP_USER');
+    
+    if (!fromEmail) {
+      this.logger.error('No FROM email address configured. Check MAIL_FROM or SMTP_FROM environment variable.');
+      throw new Error('Email configuration error: No FROM address');
+    }
+
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const loginUrl = `${frontendUrl}/auth/login`;
+
+    // Group permissions by resource
+    const permissionsByResource: Record<string, Array<{ type: string; description?: string }>> = {};
+    permissions.forEach((perm) => {
+      if (!permissionsByResource[perm.resource]) {
+        permissionsByResource[perm.resource] = [];
+      }
+      permissionsByResource[perm.resource].push({ type: perm.type, description: perm.description });
+    });
+
+    const permissionsList = Object.entries(permissionsByResource)
+      .map(([resource, perms]) => {
+        const types = perms.map((p) => p.type).join(', ');
+        return `<li><strong>${resource}:</strong> ${types}</li>`;
+      })
+      .join('');
+
+    const mailOptions = {
+      from: fromEmail,
+      to: email,
+      subject: `Permissions Updated - ${schoolName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Permissions Updated</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #8b5cf6; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+            <h1 style="color: white; margin: 0;">Agora Education Platform</h1>
+          </div>
+          <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
+            <h2 style="color: #1f2937; margin-top: 0;">Permissions Updated</h2>
+            <p>Hello ${adminName},</p>
+            <p>Your permissions have been updated at <strong>${schoolName}</strong>.</p>
+            <div style="background-color: #f3e8ff; border-left: 4px solid #8b5cf6; padding: 15px; margin: 20px 0; border-radius: 4px;">
+              <p style="margin: 0; color: #6b21a8; font-weight: bold; font-size: 14px;">Your Updated Permissions:</p>
+              <ul style="margin: 10px 0 0 20px; color: #6b21a8; padding-left: 0;">
+                ${permissionsList}
+              </ul>
+            </div>
+            <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+              You can now access the corresponding sections in your dashboard based on your assigned permissions.
+            </p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${loginUrl}" style="background-color: #3b82f6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">Access Dashboard</a>
+            </div>
+            <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
+              <strong>Note:</strong> If you have any questions about your permissions, please contact your school administrator.
+            </p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+            <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
+              © ${new Date().getFullYear()} Agora Education Platform. All rights reserved.
+            </p>
+          </div>
+        </body>
+        </html>
+      `,
+    };
+
+    try {
+      this.logger.log(`Attempting to send permission assignment email to ${email} from ${fromEmail}`);
+      const result = await this.transporter.sendMail(mailOptions);
+      this.logger.log(`Permission assignment email sent successfully to ${email}. MessageId: ${result.messageId}`);
+    } catch (error: any) {
+      this.logger.error(`Failed to send permission assignment email to ${email}:`, error);
       this.logger.error(`Error details: ${error.message}`);
       if (error.response) {
         this.logger.error(`SMTP Response: ${error.response}`);

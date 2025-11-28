@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
@@ -16,35 +16,12 @@ import {
   Clock,
   Award,
   ArrowLeft,
-  GraduationCap
+  GraduationCap,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
-
-// Mock data - will be replaced with API calls later
-const getStudentData = (id: string) => {
-  return {
-    id,
-    firstName: 'John',
-    lastName: 'Doe',
-    admissionNumber: 'ADM001',
-    classLevel: 'JSS2',
-    email: 'john.doe@school.com',
-    phone: '+234 801 234 5678',
-    dateOfBirth: '2010-05-15',
-    gender: 'Male',
-    attendance: 95,
-    averageScore: 85,
-    classes: [
-      { id: '1', subject: 'Mathematics', code: 'MATH101', score: 88 },
-      { id: '2', subject: 'English', code: 'ENG101', score: 82 },
-      { id: '3', subject: 'Science', code: 'SCI101', score: 90 },
-    ],
-    recentGrades: [
-      { test: 'Mid-Term Assessment', subject: 'Mathematics', score: 85, total: 100, date: '2024-02-15' },
-      { test: 'Weekly Quiz', subject: 'English', score: 80, total: 20, date: '2024-02-20' },
-      { test: 'Assignment', subject: 'Science', score: 92, total: 100, date: '2024-02-18' },
-    ],
-  };
-};
+import { useGetMyTeacherSchoolQuery, useGetMyTeacherProfileQuery } from '@/lib/store/api/schoolAdminApi';
+import { useGetStudentByIdQuery, useGetStudentGradesQuery } from '@/lib/store/api/schoolAdminApi';
 
 type TabType = 'profile' | 'grades' | 'attendance';
 
@@ -54,13 +31,72 @@ export default function TeacherStudentDetailPage() {
   const studentId = params.id as string;
   const [activeTab, setActiveTab] = useState<TabType>('profile');
 
-  const student = getStudentData(studentId);
+  // Get teacher's school and profile
+  const { data: schoolResponse } = useGetMyTeacherSchoolQuery();
+  const { data: teacherResponse } = useGetMyTeacherProfileQuery();
+  const schoolId = schoolResponse?.data?.id;
+  const teacher = teacherResponse?.data;
+
+  // Get student data
+  const { data: studentResponse, isLoading, error } = useGetStudentByIdQuery(
+    { schoolId: schoolId!, id: studentId },
+    { skip: !schoolId || !studentId }
+  );
+
+  const student = studentResponse?.data;
+
+  // Get student grades
+  const { data: gradesResponse, isLoading: isLoadingGrades } = useGetStudentGradesQuery(
+    { schoolId: schoolId!, studentId },
+    { skip: !schoolId || !studentId || activeTab !== 'grades' }
+  );
+
+  const grades = gradesResponse?.data || [];
 
   const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
     { id: 'profile', label: 'Profile', icon: <User className="h-4 w-4" /> },
     { id: 'grades', label: 'Grades', icon: <Award className="h-4 w-4" /> },
     { id: 'attendance', label: 'Attendance', icon: <Calendar className="h-4 w-4" /> },
   ];
+
+  if (isLoading || (activeTab === 'grades' && isLoadingGrades)) {
+    return (
+      <ProtectedRoute roles={['TEACHER']}>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4 animate-spin" />
+            <p className="text-light-text-secondary dark:text-dark-text-secondary">
+              Loading student details...
+            </p>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  if (error || !student) {
+    return (
+      <ProtectedRoute roles={['TEACHER']}>
+        <div className="w-full">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mb-4"
+            onClick={() => router.back()}
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+          <div className="text-center py-12">
+            <AlertCircle className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+            <p className="text-light-text-secondary dark:text-dark-text-secondary">
+              Student not found or error loading details.
+            </p>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
 
   return (
     <ProtectedRoute roles={['TEACHER']}>
@@ -86,7 +122,7 @@ export default function TeacherStudentDetailPage() {
                 {student.firstName} {student.lastName}
               </h1>
               <p className="text-light-text-secondary dark:text-dark-text-secondary">
-                {student.admissionNumber} • {student.classLevel}
+                {student.uid || student.publicId} • {student.enrollment?.classLevel || 'N/A'}
               </p>
             </div>
           </div>
@@ -144,7 +180,7 @@ export default function TeacherStudentDetailPage() {
                           Admission Number
                         </p>
                         <p className="font-medium text-light-text-primary dark:text-dark-text-primary">
-                          {student.admissionNumber}
+                          {student.uid || student.publicId}
                         </p>
                       </div>
                       <div>
@@ -152,7 +188,7 @@ export default function TeacherStudentDetailPage() {
                           Class Level
                         </p>
                         <p className="font-medium text-light-text-primary dark:text-dark-text-primary">
-                          {student.classLevel}
+                          {student.enrollment?.classLevel || 'N/A'}
                         </p>
                       </div>
                       <div>
@@ -160,7 +196,7 @@ export default function TeacherStudentDetailPage() {
                           Date of Birth
                         </p>
                         <p className="font-medium text-light-text-primary dark:text-dark-text-primary">
-                          {new Date(student.dateOfBirth).toLocaleDateString()}
+                          {student.dateOfBirth ? new Date(student.dateOfBirth).toLocaleDateString() : 'N/A'}
                         </p>
                       </div>
                       <div>
@@ -294,53 +330,96 @@ export default function TeacherStudentDetailPage() {
               <Card>
                 <CardHeader>
                   <CardTitle className="text-light-text-primary dark:text-dark-text-primary">
-                    Recent Grades
+                    Grades
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
-                    {student.recentGrades.map((grade, index) => (
-                      <Card
-                        key={index}
-                        className="border border-light-border dark:border-dark-border"
-                      >
-                        <CardContent className="pt-4">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                <Award className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                                <div>
-                                  <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary">
-                                    {grade.test}
-                                  </h3>
-                                  <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                                    {grade.subject}
+                  {isLoadingGrades ? (
+                    <div className="text-center py-8">
+                      <Loader2 className="h-8 w-8 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4 animate-spin" />
+                      <p className="text-light-text-secondary dark:text-dark-text-secondary">
+                        Loading grades...
+                      </p>
+                    </div>
+                  ) : grades.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Award className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+                      <p className="text-light-text-secondary dark:text-dark-text-secondary">
+                        No grades found for this student
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {grades.map((grade: any) => (
+                        <Card
+                          key={grade.id}
+                          className="border border-light-border dark:border-dark-border"
+                        >
+                          <CardContent className="pt-4">
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-2">
+                                  <Award className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                                  <div>
+                                    <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary">
+                                      {grade.assessmentName || grade.subject || 'Assessment'}
+                                    </h3>
+                                    <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                                      {grade.subject || 'N/A'} • {grade.gradeType || 'N/A'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-4 text-sm text-light-text-secondary dark:text-dark-text-secondary ml-8">
+                                  {grade.assessmentDate && (
+                                    <div className="flex items-center gap-1">
+                                      <Calendar className="h-4 w-4" />
+                                      {new Date(grade.assessmentDate).toLocaleDateString()}
+                                    </div>
+                                  )}
+                                  {grade.term && (
+                                    <div className="flex items-center gap-1">
+                                      <BookOpen className="h-4 w-4" />
+                                      {grade.term}
+                                    </div>
+                                  )}
+                                  {grade.academicYear && (
+                                    <div className="text-light-text-secondary dark:text-dark-text-secondary">
+                                      {grade.academicYear}
+                                    </div>
+                                  )}
+                                </div>
+                                {grade.remarks && (
+                                  <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-2 ml-8">
+                                    {grade.remarks}
                                   </p>
-                                </div>
+                                )}
                               </div>
-                              <div className="flex items-center gap-4 text-sm text-light-text-secondary dark:text-dark-text-secondary ml-8">
-                                <div className="flex items-center gap-1">
-                                  <Calendar className="h-4 w-4" />
-                                  {new Date(grade.date).toLocaleDateString()}
-                                </div>
+                              <div className="text-right">
+                                <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                                  {grade.score}
+                                </p>
+                                <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                                  / {grade.maxScore}
+                                </p>
+                                <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary mt-1">
+                                  {grade.percentage?.toFixed(1) || ((grade.score / grade.maxScore) * 100).toFixed(1)}%
+                                </p>
+                                {grade.isPublished ? (
+                                  <span className="inline-block mt-2 px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400 text-xs font-medium rounded">
+                                    Published
+                                  </span>
+                                ) : (
+                                  <span className="inline-block mt-2 px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400 text-xs font-medium rounded">
+                                    Draft
+                                  </span>
+                                )}
                               </div>
                             </div>
-                            <div className="text-right">
-                              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                                {grade.score}
-                              </p>
-                              <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                                / {grade.total}
-                              </p>
-                              <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary mt-1">
-                                {Math.round((grade.score / grade.total) * 100)}%
-                              </p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>

@@ -19,11 +19,13 @@ import {
   LogOut,
   Puzzle,
   BookOpen,
+  BookMarked,
   Calendar,
   Clock,
   UserPlus,
   FileText,
   School,
+  Award,
 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -79,7 +81,7 @@ const getNavItems = (terminology: ReturnType<typeof getTerminology>): NavItem[] 
     roles: ['SCHOOL_ADMIN'],
   },
   {
-    label: () => terminology.staff,
+    label: 'Staff',
     href: '/dashboard/school/teachers',
     icon: <Users className="h-5 w-5 flex-shrink-0" />,
     roles: ['SCHOOL_ADMIN'],
@@ -88,6 +90,12 @@ const getNavItems = (terminology: ReturnType<typeof getTerminology>): NavItem[] 
     label: () => terminology.courses,
     href: '/dashboard/school/courses',
     icon: <BookOpen className="h-5 w-5 flex-shrink-0" />,
+    roles: ['SCHOOL_ADMIN'],
+  },
+  {
+    label: 'Subjects',
+    href: '/dashboard/school/subjects',
+    icon: <BookMarked className="h-5 w-5 flex-shrink-0" />,
     roles: ['SCHOOL_ADMIN'],
   },
   {
@@ -122,6 +130,12 @@ const getNavItems = (terminology: ReturnType<typeof getTerminology>): NavItem[] 
   },
   // Student sections
   {
+    label: 'Overview',
+    href: '/dashboard/student/overview',
+    icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0" />,
+    roles: ['STUDENT'],
+  },
+  {
     label: 'Classes',
     href: '/dashboard/student/classes',
     icon: <BookOpen className="h-5 w-5 flex-shrink-0" />,
@@ -135,27 +149,45 @@ const getNavItems = (terminology: ReturnType<typeof getTerminology>): NavItem[] 
   },
   {
     label: 'Results',
-    href: '/dashboard/student/results',
+    href: '/dashboard/student/grades',
     icon: <FileText className="h-5 w-5 flex-shrink-0" />,
     roles: ['STUDENT'],
   },
   {
-    label: 'Transcript',
-    href: '/dashboard/student/transcript',
+    label: 'Calendar',
+    href: '/dashboard/student/calendar',
+    icon: <Calendar className="h-5 w-5 flex-shrink-0" />,
+    roles: ['STUDENT'],
+  },
+  {
+    label: 'Resources',
+    href: '/dashboard/student/resources',
+    icon: <FileText className="h-5 w-5 flex-shrink-0" />,
+    roles: ['STUDENT'],
+  },
+  {
+    label: 'History',
+    href: '/dashboard/student/history',
     icon: <GraduationCap className="h-5 w-5 flex-shrink-0" />,
+    roles: ['STUDENT'],
+  },
+  {
+    label: 'Transfers',
+    href: '/dashboard/student/transfers',
+    icon: <ArrowRightLeft className="h-5 w-5 flex-shrink-0" />,
     roles: ['STUDENT'],
   },
   // Teacher sections
   {
-    label: 'Classes',
-    href: '/dashboard/teacher/classes',
-    icon: <BookOpen className="h-5 w-5 flex-shrink-0" />,
-    roles: ['TEACHER'],
-  },
-  {
     label: 'Timetables',
     href: '/dashboard/teacher/timetables',
     icon: <Clock className="h-5 w-5 flex-shrink-0" />,
+    roles: ['TEACHER'],
+  },
+  {
+    label: 'Classes',
+    href: '/dashboard/teacher/classes',
+    icon: <BookOpen className="h-5 w-5 flex-shrink-0" />,
     roles: ['TEACHER'],
   },
   {
@@ -339,9 +371,9 @@ export function SidebarNew() {
                 pathname === '/dashboard/super-admin') ||
               (link.href === '/dashboard/school/overview' &&
                 (pathname === '/dashboard/school' || pathname === '/dashboard')) ||
-              (link.href === '/dashboard/student/classes' &&
+              (link.href === '/dashboard/student/overview' &&
                 (pathname === '/dashboard/student' || pathname === '/dashboard')) ||
-              (link.href === '/dashboard/teacher/classes' &&
+              (link.href === '/dashboard/teacher/timetables' &&
                 (pathname === '/dashboard/teacher' || pathname === '/dashboard'));
             return (
               <SidebarLink

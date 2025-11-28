@@ -1,71 +1,122 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Modal, ConfirmModal } from '@/components/ui/Modal';
+import { Modal } from '@/components/ui/Modal';
 import { motion } from 'framer-motion';
-import { UserPlus, Search, CheckCircle2, XCircle, Clock, Eye, Calendar, User, Phone, Mail, MapPin, Heart, AlertCircle, GraduationCap } from 'lucide-react';
+import { UserPlus, Search, CheckCircle2, XCircle, Clock, Eye, Calendar, User, Phone, Mail, MapPin, Heart, AlertCircle, GraduationCap, Loader2 } from 'lucide-react';
+import { useGetMySchoolQuery, useAdmitStudentMutation, useGetClassesQuery, useGetStudentsQuery, useUploadStudentImageMutation, type AddStudentDto, type Class, type StudentWithEnrollment } from '@/lib/store/api/schoolAdminApi';
+import { studentAdmissionFormSchema } from '@/lib/validations/school-forms';
+import { useSchoolType } from '@/hooks/useSchoolType';
+import { z } from 'zod';
+import toast from 'react-hot-toast';
+import { ImageUpload } from '@/components/ui/ImageUpload';
 
-// Mock data - will be replaced with API calls later
-const mockAdmissions = [
-  {
-    id: '1',
-    firstName: 'James',
-    lastName: 'Wilson',
-    email: 'james.w@example.com',
-    phone: '+234 801 234 5678',
-    classLevel: 'JSS1',
-    applicationDate: '2024-03-01',
-    status: 'pending' as const,
-  },
-  {
-    id: '2',
-    firstName: 'Sarah',
-    lastName: 'Martinez',
-    email: 'sarah.m@example.com',
-    phone: '+234 802 345 6789',
-    classLevel: 'SS1',
-    applicationDate: '2024-03-05',
-    status: 'approved' as const,
-  },
-  {
-    id: '3',
-    firstName: 'Robert',
-    lastName: 'Taylor',
-    email: 'robert.t@example.com',
-    phone: '+234 803 456 7890',
-    classLevel: 'JSS2',
-    applicationDate: '2024-03-10',
-    status: 'pending' as const,
-  },
-  {
-    id: '4',
-    firstName: 'Lisa',
-    lastName: 'Anderson',
-    email: 'lisa.a@example.com',
-    phone: '+234 804 567 8901',
-    classLevel: 'SS2',
-    applicationDate: '2024-03-12',
-    status: 'rejected' as const,
-  },
-];
+// Student Avatar component for cards
+const StudentAvatar = ({ 
+  profileImage, 
+  firstName, 
+  lastName 
+}: { 
+  profileImage?: string | null; 
+  firstName?: string; 
+  lastName?: string; 
+}) => {
+  const [imageError, setImageError] = useState(false);
+  
+  const getInitials = (firstName?: string, lastName?: string) => {
+    const first = firstName?.[0]?.toUpperCase() || '';
+    const last = lastName?.[0]?.toUpperCase() || '';
+    return first + last || '?';
+  };
+  
+  if (profileImage && !imageError) {
+    return (
+      <div className="relative w-10 h-10 flex-shrink-0">
+        <img
+          src={profileImage}
+          alt={`${firstName} ${lastName}`}
+          className="w-10 h-10 rounded-full object-cover border-2 border-light-border dark:border-dark-border shadow-sm"
+          onError={() => setImageError(true)}
+        />
+      </div>
+    );
+  }
+  
+  return (
+    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 flex items-center justify-center text-white font-semibold text-sm border-2 border-light-border dark:border-dark-border shadow-sm flex-shrink-0">
+      {getInitials(firstName, lastName)}
+    </div>
+  );
+};
 
 function AdmissionsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedAdmission, setSelectedAdmission] = useState<string | null>(null);
-  const [showApproveModal, setShowApproveModal] = useState(false);
-  const [showRejectModal, setShowRejectModal] = useState(false);
-  const [admissionToProcess, setAdmissionToProcess] = useState<string | null>(null);
+  const [classFilter, setClassFilter] = useState<string>('All');
+  const [timeframeFilter, setTimeframeFilter] = useState<string>('All');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [showNewApplicationForm, setShowNewApplicationForm] = useState(false);
   const [showTransferInfo, setShowTransferInfo] = useState(false);
   const [transferId, setTransferId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [page, setPage] = useState(1);
+  const limit = 20;
+
+  // Get school data
+  const { data: schoolResponse } = useGetMySchoolQuery();
+  const schoolId = schoolResponse?.data?.id;
+  const { currentType } = useSchoolType();
+
+  // Get classes for the current school type
+  const { data: classesResponse } = useGetClassesQuery(
+    { schoolId: schoolId!, type: currentType || undefined },
+    { skip: !schoolId }
+  );
+  const classes = classesResponse?.data || [];
+
+  // Get admitted students
+  const { data: studentsResponse, isLoading: isLoadingStudents } = useGetStudentsQuery(
+    { schoolId: schoolId!, page, limit, schoolType: currentType || undefined },
+    { skip: !schoolId }
+  );
+  const students = studentsResponse?.data?.items || [];
+  const pagination = studentsResponse?.data;
+
+  // Student admission mutation
+  const [admitStudent, { isLoading: isAdmitting }] = useAdmitStudentMutation();
+  const [uploadStudentImage] = useUploadStudentImageMutation();
+  
+  // Image upload state
+  const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+
+  // Helper function to capitalize first letter of each word (preserves spaces while typing)
+  const capitalizeWords = (str: string): string => {
+    if (!str) return str;
+    // Use a regex to match word boundaries and capitalize first letter of each word
+    // This preserves all spaces and characters
+    return str.replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+
+  // Format name input on change (preserves spaces)
+  const handleNameChange = (field: 'firstName' | 'lastName' | 'middleName' | 'parentName', value: string) => {
+    // Only capitalize, don't trim - preserve spaces while typing
+    const capitalized = capitalizeWords(value);
+    setFormData({ ...formData, [field]: capitalized });
+    // Clear error for this field when user starts typing
+    if (errors[field]) {
+      setErrors({ ...errors, [field]: undefined });
+    }
+  };
   const [formData, setFormData] = useState({
     firstName: '',
     middleName: '',
@@ -119,6 +170,9 @@ function AdmissionsPageContent() {
 
   const handleDateOfBirthChange = (value: string) => {
     setFormData({ ...formData, dateOfBirth: value, age: calculateAge(value) });
+    if (errors.dateOfBirth) {
+      setErrors({ ...errors, dateOfBirth: undefined });
+    }
   };
 
   const handleProceedFromTransfer = () => {
@@ -126,89 +180,315 @@ function AdmissionsPageContent() {
     setShowNewApplicationForm(true);
   };
 
+  const validateForm = (): boolean => {
+    setErrors({});
+    setSubmitError(null);
+
+    try {
+      studentAdmissionFormSchema.parse({
+        ...formData,
+        email: formData.email || undefined,
+        parentEmail: formData.parentEmail || undefined,
+        middleName: formData.middleName || undefined,
+        address: formData.address || undefined,
+        bloodGroup: formData.bloodGroup || undefined,
+        allergies: formData.allergies || undefined,
+        medications: formData.medications || undefined,
+        emergencyContact: formData.emergencyContact || undefined,
+        emergencyContactPhone: formData.emergencyContactPhone || undefined,
+        medicalNotes: formData.medicalNotes || undefined,
+      });
+      return true;
+    } catch (error) {
+      if (error instanceof z.ZodError && error.errors && Array.isArray(error.errors)) {
+        const fieldErrors: Record<string, string> = {};
+        const errorMessages: string[] = [];
+        
+        error.errors.forEach((err) => {
+          if (err.path && err.path.length > 0 && err.path[0]) {
+            const fieldName = err.path[0] as string;
+            fieldErrors[fieldName] = err.message;
+            errorMessages.push(err.message);
+          }
+        });
+        
+        setErrors(fieldErrors);
+        
+        // Show toast with first error or summary
+        if (errorMessages.length === 1) {
+          toast.error(errorMessages[0]);
+        } else if (errorMessages.length > 1) {
+          toast.error(`Please fix ${errorMessages.length} errors in the form`, {
+            duration: 4000,
+          });
+          setSubmitError(errorMessages[0]);
+        } else {
+          toast.error('Please check the form for errors');
+        }
+      } else {
+        // Handle non-Zod errors
+        const errorMessage = error instanceof Error ? error.message : 'Validation failed. Please check your input.';
+        setSubmitError(errorMessage);
+        toast.error(errorMessage);
+      }
+      return false;
+    }
+  };
+
+  // Check if all required fields are filled (for button disable state)
+  const isFormValid = (): boolean => {
+    return !!(
+      formData.firstName?.trim() &&
+      formData.lastName?.trim() &&
+      formData.dateOfBirth &&
+      formData.gender &&
+      formData.phone?.trim() &&
+      formData.classLevel &&
+      formData.parentName?.trim() &&
+      formData.parentPhone?.trim() &&
+      formData.parentRelationship?.trim()
+    );
+  };
+
   const handleSubmitApplication = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError(null);
+    setErrors({});
+
+    if (!validateForm()) {
+      return;
+    }
+
+    if (!schoolId) {
+      setSubmitError('Unable to determine school. Please try refreshing the page.');
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
-    // TODO: API call to submit application
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    setIsLoading(false);
-    setShowNewApplicationForm(false);
-    setTransferId(null);
-    setFormData({
-      firstName: '',
-      middleName: '',
-      lastName: '',
-      dateOfBirth: '',
-      age: '',
-      gender: '',
-      email: '',
-      phone: '',
-      address: '',
-      classLevel: '',
-      parentName: '',
-      parentPhone: '',
-      parentEmail: '',
-      parentRelationship: '',
-      bloodGroup: '',
-      allergies: '',
-      medications: '',
-      emergencyContact: '',
-      emergencyContactPhone: '',
-      medicalNotes: '',
+
+    try {
+      const studentData: AddStudentDto = {
+        firstName: formData.firstName.trim(),
+        middleName: formData.middleName?.trim() || undefined,
+        lastName: formData.lastName.trim(),
+        dateOfBirth: formData.dateOfBirth,
+        email: formData.email?.trim() || undefined,
+        phone: formData.phone.trim(),
+        address: formData.address?.trim() || undefined,
+        classLevel: formData.classLevel,
+        academicYear: undefined, // Will be auto-determined by backend
+        parentName: formData.parentName.trim(),
+        parentPhone: formData.parentPhone.trim(),
+        parentEmail: formData.parentEmail?.trim() || undefined,
+        parentRelationship: formData.parentRelationship.trim(),
+        bloodGroup: formData.bloodGroup?.trim() || undefined,
+        allergies: formData.allergies?.trim() || undefined,
+        medications: formData.medications?.trim() || undefined,
+        emergencyContact: formData.emergencyContact?.trim() || undefined,
+        emergencyContactPhone: formData.emergencyContactPhone?.trim() || undefined,
+        medicalNotes: formData.medicalNotes?.trim() || undefined,
+      };
+
+      const result = await admitStudent({
+        schoolId,
+        student: {
+          ...studentData,
+          profileImage: profileImage || undefined,
+        },
+      }).unwrap();
+
+      // Upload image if a new file was selected
+      if (selectedImageFile && result.id) {
+        try {
+          await uploadStudentImage({
+            schoolId,
+            studentId: result.id,
+            file: selectedImageFile,
+          }).unwrap();
+          toast.success('Profile image uploaded successfully!');
+        } catch (uploadError: any) {
+          console.error('Failed to upload profile image:', uploadError);
+          toast.error(uploadError?.data?.message || 'Failed to upload profile image.');
+        }
+      }
+
+      toast.success(result.message || 'Student admitted successfully!');
+      
+      setShowNewApplicationForm(false);
+      setTransferId(null);
+      setSubmitError(null);
+      setErrors({});
+      setProfileImage(null);
+      setSelectedImageFile(null);
+      setFormData({
+        firstName: '',
+        middleName: '',
+        lastName: '',
+        dateOfBirth: '',
+        age: '',
+        gender: '',
+        email: '',
+        phone: '',
+        address: '',
+        classLevel: '',
+        parentName: '',
+        parentPhone: '',
+        parentEmail: '',
+        parentRelationship: '',
+        bloodGroup: '',
+        allergies: '',
+        medications: '',
+        emergencyContact: '',
+        emergencyContactPhone: '',
+        medicalNotes: '',
+      });
+      setProfileImage(null);
+      setSelectedImageFile(null);
+      router.push('/dashboard/school/admissions');
+    } catch (error: any) {
+      setIsLoading(false);
+      
+      // Handle validation errors from backend (array format)
+      if (error?.data && Array.isArray(error.data)) {
+        const fieldErrors: Record<string, string> = {};
+        const errorMessages: string[] = [];
+        
+        // Field name mapping for user-friendly messages
+        const fieldLabels: Record<string, string> = {
+          parentPhone: 'Parent/Guardian Phone',
+          parentEmail: 'Parent/Guardian Email',
+          phone: 'Phone Number',
+          email: 'Email Address',
+          firstName: 'First Name',
+          lastName: 'Last Name',
+          dateOfBirth: 'Date of Birth',
+          classLevel: 'Class Level',
+          parentName: 'Parent/Guardian Name',
+          parentRelationship: 'Relationship',
+          emergencyContact: 'Emergency Contact',
+          emergencyContactPhone: 'Emergency Contact Phone',
+        };
+        
+        error.data.forEach((err: any) => {
+          const fieldName = err.path?.[0] || 'unknown';
+          const fieldLabel = fieldLabels[fieldName] || fieldName;
+          let userMessage = err.message || 'Invalid value';
+          
+          // Convert technical messages to user-friendly ones
+          if (err.code === 'too_small') {
+            if (err.minimum) {
+              userMessage = `${fieldLabel} must be at least ${err.minimum} characters`;
+            } else {
+              userMessage = `${fieldLabel} is too short`;
+            }
+          } else if (err.code === 'invalid_format' || err.code === 'invalid_string') {
+            if (fieldName.includes('email')) {
+              userMessage = `${fieldLabel} must be a valid email address`;
+            } else if (fieldName.includes('phone')) {
+              userMessage = `${fieldLabel} must be a valid phone number`;
+            } else {
+              userMessage = `${fieldLabel} format is invalid`;
+            }
+          } else if (err.code === 'too_big') {
+            userMessage = `${fieldLabel} is too long`;
+          } else if (err.code === 'invalid_type') {
+            userMessage = `${fieldLabel} has an invalid value`;
+          }
+          
+          fieldErrors[fieldName] = userMessage;
+          errorMessages.push(userMessage);
+        });
+        
+        setErrors(fieldErrors);
+        
+        // Show toast with first error or summary
+        if (errorMessages.length === 1) {
+          toast.error(errorMessages[0]);
+        } else if (errorMessages.length > 1) {
+          toast.error(`Please fix ${errorMessages.length} errors in the form`, {
+            duration: 4000,
+          });
+          // Show first error as main error
+          setSubmitError(errorMessages[0]);
+        } else {
+          toast.error('Please check the form for errors');
+        }
+        return;
+      }
+      
+      // Handle other error formats
+      const errorMessage = error?.data?.message || error?.message || 'Failed to admit student. Please try again.';
+      setSubmitError(errorMessage);
+      
+      // Check if it's a conflict error (student already exists)
+      if (error?.status === 409 || errorMessage.includes('already exists') || errorMessage.includes('transfer')) {
+        toast.error(errorMessage, { duration: 6000 });
+      } else {
+        toast.error(errorMessage);
+      }
+    }
+  };
+
+  // Filter students based on search, class, and timeframe
+  const filteredAdmissions = useMemo(() => {
+    let filtered = students.filter((student) => {
+      // Search filter
+      const matchesSearch = !searchQuery || 
+        student.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        student.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        student.uid.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (student.enrollment?.classLevel?.toLowerCase().includes(searchQuery.toLowerCase()));
+
+      // Class filter
+      const matchesClass = classFilter === 'All' || 
+        student.enrollment?.classLevel === classFilter;
+
+      // Timeframe filter
+      let matchesTimeframe = true;
+      if (timeframeFilter !== 'All' && student.enrollment?.enrollmentDate) {
+        const enrollmentDate = new Date(student.enrollment.enrollmentDate);
+        const now = new Date();
+        
+        switch (timeframeFilter) {
+          case 'Today':
+            matchesTimeframe = enrollmentDate.toDateString() === now.toDateString();
+            break;
+          case 'This Week':
+            const weekAgo = new Date(now);
+            weekAgo.setDate(weekAgo.getDate() - 7);
+            matchesTimeframe = enrollmentDate >= weekAgo;
+            break;
+          case 'This Month':
+            const monthAgo = new Date(now);
+            monthAgo.setMonth(monthAgo.getMonth() - 1);
+            matchesTimeframe = enrollmentDate >= monthAgo;
+            break;
+          case 'This Year':
+            const yearStart = new Date(now.getFullYear(), 0, 1);
+            matchesTimeframe = enrollmentDate >= yearStart;
+            break;
+          case 'Custom':
+            if (startDate && endDate) {
+              const start = new Date(startDate);
+              const end = new Date(endDate);
+              end.setHours(23, 59, 59, 999); // Include entire end date
+              matchesTimeframe = enrollmentDate >= start && enrollmentDate <= end;
+            }
+            break;
+        }
+      }
+
+      return matchesSearch && matchesClass && matchesTimeframe;
     });
-    router.push('/dashboard/school/admissions');
-  };
 
-  const filteredAdmissions = mockAdmissions.filter(
-    (admission) =>
-      admission.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      admission.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      admission.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const handleApprove = (id: string) => {
-    setAdmissionToProcess(id);
-    setShowApproveModal(true);
-  };
-
-  const handleReject = (id: string) => {
-    setAdmissionToProcess(id);
-    setShowRejectModal(true);
-  };
-
-  const confirmApprove = () => {
-    // TODO: API call to approve admission
-    setShowApproveModal(false);
-    setAdmissionToProcess(null);
-  };
-
-  const confirmReject = () => {
-    // TODO: API call to reject admission
-    setShowRejectModal(false);
-    setAdmissionToProcess(null);
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'approved':
-        return <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />;
-      case 'rejected':
-        return <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />;
-      default:
-        return <Clock className="h-5 w-5 text-orange-600 dark:text-orange-400" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'approved':
-        return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
-      case 'rejected':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
-      default:
-        return 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400';
-    }
-  };
+    // Sort by enrollment date (most recent first)
+    return filtered.sort((a, b) => {
+      const dateA = a.enrollment?.enrollmentDate ? new Date(a.enrollment.enrollmentDate).getTime() : 0;
+      const dateB = b.enrollment?.enrollmentDate ? new Date(b.enrollment.enrollmentDate).getTime() : 0;
+      return dateB - dateA;
+    });
+  }, [students, searchQuery, classFilter, timeframeFilter, startDate, endDate]);
 
   return (
     <ProtectedRoute roles={['SCHOOL_ADMIN']}>
@@ -225,7 +505,7 @@ function AdmissionsPageContent() {
                 Admissions
               </h1>
               <p className="text-light-text-secondary dark:text-dark-text-secondary">
-                Review and process student admission applications
+                View and manage admitted students
               </p>
             </div>
             <Button
@@ -238,83 +518,91 @@ function AdmissionsPageContent() {
           </div>
         </motion.div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                    Pending
-                  </p>
-                  <p className="text-2xl font-bold text-light-text-primary dark:text-dark-text-primary mt-1">
-                    {mockAdmissions.filter(a => a.status === 'pending').length}
-                  </p>
-                </div>
-                <Clock className="h-8 w-8 text-orange-600 dark:text-orange-400" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                    Approved
-                  </p>
-                  <p className="text-2xl font-bold text-light-text-primary dark:text-dark-text-primary mt-1">
-                    {mockAdmissions.filter(a => a.status === 'approved').length}
-                  </p>
-                </div>
-                <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                    Rejected
-                  </p>
-                  <p className="text-2xl font-bold text-light-text-primary dark:text-dark-text-primary mt-1">
-                    {mockAdmissions.filter(a => a.status === 'rejected').length}
-                  </p>
-                </div>
-                <XCircle className="h-8 w-8 text-red-600 dark:text-red-400" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Search */}
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-light-text-muted dark:text-dark-text-muted" />
-              <Input
-                placeholder="Search by name or email..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Admissions Table */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
-              Applications ({filteredAdmissions.length})
-            </CardTitle>
+            <div className="flex items-center justify-between gap-4">
+              <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
+                Admitted Students ({filteredAdmissions.length})
+              </CardTitle>
+              <div className="flex items-center gap-3 flex-1 justify-end">
+                <div className="relative w-64">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-light-text-muted dark:text-dark-text-muted" />
+                  <Input
+                    placeholder="Search by name, ID, or class..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 h-9 text-sm"
+                  />
+                </div>
+                {/* Filters */}
+                <div className="w-36">
+                  <select
+                    value={classFilter}
+                    onChange={(e) => setClassFilter(e.target.value)}
+                    className="w-full px-2 py-2 text-sm border border-light-border dark:border-dark-border rounded-lg bg-light-bg dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 h-9"
+                  >
+                    <option value="All">All Classes</option>
+                    {classes.map((cls) => (
+                      <option key={cls.id} value={cls.name}>
+                        {cls.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="w-36">
+                  <select
+                    value={timeframeFilter}
+                    onChange={(e) => {
+                      setTimeframeFilter(e.target.value);
+                      if (e.target.value !== 'Custom') {
+                        setStartDate('');
+                        setEndDate('');
+                      }
+                    }}
+                    className="w-full px-2 py-2 text-sm border border-light-border dark:border-dark-border rounded-lg bg-light-bg dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 h-9"
+                  >
+                    <option value="All">All Time</option>
+                    <option value="Today">Today</option>
+                    <option value="This Week">This Week</option>
+                    <option value="This Month">This Month</option>
+                    <option value="This Year">This Year</option>
+                    <option value="Custom">Custom Range</option>
+                  </select>
+                </div>
+                {timeframeFilter === 'Custom' && (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="w-40 text-sm h-9"
+                      placeholder="Start Date"
+                    />
+                    <span className="text-light-text-muted dark:text-dark-text-muted text-sm">to</span>
+                    <Input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="w-40 text-sm h-9"
+                      placeholder="End Date"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
-            {filteredAdmissions.length === 0 ? (
+            {isLoadingStudents ? (
               <div className="text-center py-12">
-                <UserPlus className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+                <Loader2 className="h-8 w-8 animate-spin text-light-text-muted dark:text-dark-text-muted mx-auto mb-2" />
+                <p className="text-light-text-secondary dark:text-dark-text-secondary">Loading students...</p>
+              </div>
+            ) : filteredAdmissions.length === 0 ? (
+              <div className="text-center py-12">
+                <GraduationCap className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
                 <p className="text-light-text-secondary dark:text-dark-text-secondary">
-                  No admission applications found.
+                  No admitted students found.
                 </p>
               </div>
             ) : (
@@ -326,13 +614,13 @@ function AdmissionsPageContent() {
                         Applicant
                       </th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                        Contact
+                        School
                       </th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
                         Class Level
                       </th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                        Application Date
+                        Admission Date
                       </th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
                         Status
@@ -343,110 +631,91 @@ function AdmissionsPageContent() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredAdmissions.map((admission, index) => (
-                      <motion.tr
-                        key={admission.id}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className="border-b border-light-border dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-surface/50 transition-colors"
-                      >
-                        <td className="py-4 px-4">
-                          <div className="flex items-center gap-3">
-                            {getStatusIcon(admission.status)}
-                            <div>
-                              <p className="font-medium text-light-text-primary dark:text-dark-text-primary">
-                                {admission.firstName} {admission.lastName}
-                              </p>
+                    {isLoadingStudents ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center">
+                          <Loader2 className="h-8 w-8 animate-spin text-light-text-muted dark:text-dark-text-muted mx-auto mb-2" />
+                          <p className="text-light-text-secondary dark:text-dark-text-secondary">Loading students...</p>
+                        </td>
+                      </tr>
+                    ) : filteredAdmissions.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center">
+                          <GraduationCap className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+                          <p className="text-light-text-secondary dark:text-dark-text-secondary">
+                            No admitted students found.
+                          </p>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredAdmissions.map((student, index) => (
+                        <motion.tr
+                          key={student.id}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          className="border-b border-light-border dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-surface/50 transition-colors cursor-pointer"
+                          onClick={() => router.push(`/dashboard/school/students/${student.id}`)}
+                        >
+                          <td className="py-4 px-4">
+                            <div className="flex items-center gap-3">
+                              <StudentAvatar
+                                profileImage={student.profileImage || null}
+                                firstName={student.firstName}
+                                lastName={student.lastName}
+                              />
+                              <div>
+                                <p className="font-medium text-light-text-primary dark:text-dark-text-primary">
+                                  {student.firstName} {student.middleName ? `${student.middleName} ` : ''}{student.lastName}
+                                </p>
+                                <p className="text-xs text-light-text-muted dark:text-dark-text-muted">
+                                  {student.uid}
+                                </p>
+                              </div>
                             </div>
-                          </div>
-                        </td>
-                        <td className="py-4 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                          <p>{admission.email}</p>
-                          <p className="text-xs">{admission.phone}</p>
-                        </td>
-                        <td className="py-4 px-4 text-sm text-light-text-primary dark:text-dark-text-primary font-medium">
-                          {admission.classLevel}
-                        </td>
-                        <td className="py-4 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                          {new Date(admission.applicationDate).toLocaleDateString()}
-                        </td>
-                        <td className="py-4 px-4">
-                          <span
-                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(admission.status)}`}
-                          >
-                            {admission.status}
-                          </span>
-                        </td>
-                        <td className="py-4 px-4">
-                          <div className="flex items-center gap-2">
+                          </td>
+                          <td className="py-4 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                            {student.enrollment?.school?.name || 'N/A'}
+                          </td>
+                          <td className="py-4 px-4 text-sm text-light-text-primary dark:text-dark-text-primary font-medium">
+                            {student.enrollment?.classLevel || 'N/A'}
+                          </td>
+                          <td className="py-4 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                            {student.enrollment?.enrollmentDate 
+                              ? new Date(student.enrollment.enrollmentDate).toLocaleDateString('en-US', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric'
+                                })
+                              : 'N/A'}
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                              Admitted
+                            </span>
+                          </td>
+                          <td className="py-4 px-4">
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => setSelectedAdmission(admission.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/dashboard/school/students/${student.id}`);
+                              }}
                             >
                               <Eye className="h-4 w-4 mr-1" />
                               View
                             </Button>
-                            {admission.status === 'pending' && (
-                              <>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleApprove(admission.id)}
-                                  className="text-green-600 dark:text-green-400"
-                                >
-                                  <CheckCircle2 className="h-4 w-4 mr-1" />
-                                  Approve
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleReject(admission.id)}
-                                  className="text-red-600 dark:text-red-400"
-                                >
-                                  <XCircle className="h-4 w-4 mr-1" />
-                                  Reject
-                                </Button>
-                              </>
-                            )}
-                          </div>
-                        </td>
-                      </motion.tr>
-                    ))}
+                          </td>
+                        </motion.tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
             )}
           </CardContent>
         </Card>
-
-        {/* Modals */}
-        <ConfirmModal
-          isOpen={showApproveModal}
-          onClose={() => {
-            setShowApproveModal(false);
-            setAdmissionToProcess(null);
-          }}
-          onConfirm={confirmApprove}
-          title="Approve Admission"
-          message={`Are you sure you want to approve this admission application? The student will be enrolled in the school.`}
-          confirmText="Approve"
-          variant="warning"
-        />
-
-        <ConfirmModal
-          isOpen={showRejectModal}
-          onClose={() => {
-            setShowRejectModal(false);
-            setAdmissionToProcess(null);
-          }}
-          onConfirm={confirmReject}
-          title="Reject Admission"
-          message={`Are you sure you want to reject this admission application? This action cannot be undone.`}
-          confirmText="Reject"
-          variant="danger"
-        />
 
         {/* Transfer Info Modal */}
         {showTransferInfo && (
@@ -503,6 +772,10 @@ function AdmissionsPageContent() {
             onClose={() => {
               setShowNewApplicationForm(false);
               setTransferId(null);
+              setSubmitError(null);
+              setErrors({});
+              setProfileImage(null);
+              setSelectedImageFile(null);
               setFormData({
                 firstName: '',
                 middleName: '',
@@ -530,6 +803,36 @@ function AdmissionsPageContent() {
             title={transferId ? 'Complete Transfer Application' : 'New Admission Application'}
             size="xl"
           >
+            {submitError && (
+              <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-red-900 dark:text-red-300 mb-1">
+                      Error
+                    </p>
+                    <p className="text-sm text-red-800 dark:text-red-400">
+                      {submitError}
+                    </p>
+                    {submitError.includes('transfer') && (
+                      <div className="mt-3">
+                        <Button
+                          type="button"
+                          variant="primary"
+                          size="sm"
+                          onClick={() => {
+                            router.push('/dashboard/school/transfers?new=true');
+                            setShowNewApplicationForm(false);
+                          }}
+                        >
+                          Go to Transfers
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
             <form onSubmit={handleSubmitApplication} className="space-y-6">
               {/* Personal Information */}
               <div>
@@ -537,23 +840,43 @@ function AdmissionsPageContent() {
                   <User className="h-5 w-5" />
                   Personal Information
                 </h3>
+                {/* Profile Image Upload */}
+                <div className="mb-6">
+                  <ImageUpload
+                    label="Profile Image (Optional)"
+                    value={profileImage}
+                    onChange={setProfileImage}
+                    onUpload={async (file) => {
+                      setSelectedImageFile(file);
+                      return URL.createObjectURL(file);
+                    }}
+                    helperText="Upload a passport-sized image (JPG, PNG, GIF, WEBP up to 5MB). Cropping will be applied."
+                    disabled={isLoading || isAdmitting}
+                    enableCrop={true}
+                    aspectRatio={1}
+                    cropShape="rect"
+                  />
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Input
                     label="First Name *"
                     value={formData.firstName}
-                    onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                    onChange={(e) => handleNameChange('firstName', e.target.value)}
                     required
+                    error={errors.firstName}
                   />
                   <Input
                     label="Middle Name"
                     value={formData.middleName}
-                    onChange={(e) => setFormData({ ...formData, middleName: e.target.value })}
+                    onChange={(e) => handleNameChange('middleName', e.target.value)}
+                    error={errors.middleName}
                   />
                   <Input
                     label="Last Name *"
                     value={formData.lastName}
-                    onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                    onChange={(e) => handleNameChange('lastName', e.target.value)}
                     required
+                    error={errors.lastName}
                   />
                   <Input
                     label="Date of Birth *"
@@ -561,6 +884,7 @@ function AdmissionsPageContent() {
                     value={formData.dateOfBirth}
                     onChange={(e) => handleDateOfBirthChange(e.target.value)}
                     required
+                    error={errors.dateOfBirth}
                   />
                   <Input
                     label="Age"
@@ -574,27 +898,51 @@ function AdmissionsPageContent() {
                     </label>
                     <select
                       value={formData.gender}
-                      onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                      className="w-full px-3 py-2 border border-light-border dark:border-dark-border rounded-md bg-light-card dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={(e) => {
+                        setFormData({ ...formData, gender: e.target.value });
+                        if (errors.gender) {
+                          setErrors({ ...errors, gender: undefined });
+                        }
+                      }}
+                      className={`w-full px-3 py-2 border rounded-md bg-light-card dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        errors.gender
+                          ? 'border-red-500 dark:border-red-500'
+                          : 'border-light-border dark:border-dark-border'
+                      }`}
                       required
                     >
                       <option value="">Select gender</option>
                       <option value="male">Male</option>
                       <option value="female">Female</option>
                     </select>
+                    {errors.gender && (
+                      <p className="text-xs text-red-600 dark:text-red-400 mt-1">{errors.gender}</p>
+                    )}
                   </div>
                   <Input
                     label="Email"
                     type="email"
                     value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, email: e.target.value });
+                      if (errors.email) {
+                        setErrors({ ...errors, email: undefined });
+                      }
+                    }}
+                    error={errors.email}
                   />
                   <Input
                     label="Phone *"
                     type="tel"
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, phone: e.target.value });
+                      if (errors.phone) {
+                        setErrors({ ...errors, phone: undefined });
+                      }
+                    }}
                     required
+                    error={errors.phone}
                   />
                   <Input
                     label="Address"
@@ -618,18 +966,30 @@ function AdmissionsPageContent() {
                     </label>
                     <select
                       value={formData.classLevel}
-                      onChange={(e) => setFormData({ ...formData, classLevel: e.target.value })}
-                      className="w-full px-3 py-2 border border-light-border dark:border-dark-border rounded-md bg-light-card dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onChange={(e) => {
+                        setFormData({ ...formData, classLevel: e.target.value });
+                        if (errors.classLevel) {
+                          setErrors({ ...errors, classLevel: undefined });
+                        }
+                      }}
+                      className={`w-full px-3 py-2 border rounded-md bg-light-card dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        errors.classLevel
+                          ? 'border-red-500 dark:border-red-500'
+                          : 'border-light-border dark:border-dark-border'
+                      }`}
                       required
+                      disabled={classes.length === 0}
                     >
-                      <option value="">Select class level</option>
-                      <option value="JSS1">JSS1</option>
-                      <option value="JSS2">JSS2</option>
-                      <option value="JSS3">JSS3</option>
-                      <option value="SS1">SS1</option>
-                      <option value="SS2">SS2</option>
-                      <option value="SS3">SS3</option>
+                      <option value="">{classes.length === 0 ? 'Loading classes...' : 'Select class'}</option>
+                      {classes.map((cls: Class) => (
+                        <option key={cls.id} value={cls.name}>
+                          {cls.name}
+                        </option>
+                      ))}
                     </select>
+                    {errors.classLevel && (
+                      <p className="text-xs text-red-600 dark:text-red-400 mt-1">{errors.classLevel}</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -644,28 +1004,47 @@ function AdmissionsPageContent() {
                   <Input
                     label="Parent/Guardian Name *"
                     value={formData.parentName}
-                    onChange={(e) => setFormData({ ...formData, parentName: e.target.value })}
+                    onChange={(e) => handleNameChange('parentName', e.target.value)}
                     required
+                    error={errors.parentName}
                   />
                   <Input
                     label="Relationship *"
                     value={formData.parentRelationship}
-                    onChange={(e) => setFormData({ ...formData, parentRelationship: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, parentRelationship: e.target.value });
+                      if (errors.parentRelationship) {
+                        setErrors({ ...errors, parentRelationship: undefined });
+                      }
+                    }}
                     placeholder="e.g., Father, Mother, Guardian"
                     required
+                    error={errors.parentRelationship}
                   />
                   <Input
                     label="Parent Phone *"
                     type="tel"
                     value={formData.parentPhone}
-                    onChange={(e) => setFormData({ ...formData, parentPhone: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, parentPhone: e.target.value });
+                      if (errors.parentPhone) {
+                        setErrors({ ...errors, parentPhone: undefined });
+                      }
+                    }}
                     required
+                    error={errors.parentPhone}
                   />
                   <Input
                     label="Parent Email"
                     type="email"
                     value={formData.parentEmail}
-                    onChange={(e) => setFormData({ ...formData, parentEmail: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, parentEmail: e.target.value });
+                      if (errors.parentEmail) {
+                        setErrors({ ...errors, parentEmail: undefined });
+                      }
+                    }}
+                    error={errors.parentEmail}
                   />
                 </div>
               </div>
@@ -714,14 +1093,26 @@ function AdmissionsPageContent() {
                   <Input
                     label="Emergency Contact Name"
                     value={formData.emergencyContact}
-                    onChange={(e) => setFormData({ ...formData, emergencyContact: e.target.value })}
+                    onChange={(e) => {
+                      const capitalized = capitalizeWords(e.target.value);
+                      setFormData({ ...formData, emergencyContact: capitalized });
+                      if (errors.emergencyContact) {
+                        setErrors({ ...errors, emergencyContact: undefined });
+                      }
+                    }}
+                    error={errors.emergencyContact}
                   />
                   <Input
-                    label="Emergency Contact Phone *"
+                    label="Emergency Contact Phone"
                     type="tel"
                     value={formData.emergencyContactPhone}
-                    onChange={(e) => setFormData({ ...formData, emergencyContactPhone: e.target.value })}
-                    required
+                    onChange={(e) => {
+                      setFormData({ ...formData, emergencyContactPhone: e.target.value });
+                      if (errors.emergencyContactPhone) {
+                        setErrors({ ...errors, emergencyContactPhone: undefined });
+                      }
+                    }}
+                    error={errors.emergencyContactPhone}
                   />
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
@@ -746,6 +1137,10 @@ function AdmissionsPageContent() {
                   onClick={() => {
                     setShowNewApplicationForm(false);
                     setTransferId(null);
+                    setSubmitError(null);
+                    setErrors({});
+                    setProfileImage(null);
+                    setSelectedImageFile(null);
                     setFormData({
                       firstName: '',
                       middleName: '',
@@ -776,10 +1171,19 @@ function AdmissionsPageContent() {
                 <Button
                   type="submit"
                   variant="primary"
-                  isLoading={isLoading}
+                  disabled={isLoading || isAdmitting || !isFormValid()}
                 >
-                  <UserPlus className="h-4 w-4 mr-2" />
-                  Submit Application
+                  {isLoading || isAdmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Submit Application
+                    </>
+                  )}
                 </Button>
               </div>
             </form>

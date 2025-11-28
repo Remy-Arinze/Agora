@@ -1,175 +1,207 @@
 'use client';
 
+import { useState, useMemo } from 'react';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { motion } from 'framer-motion';
-import { Clock, Calendar } from 'lucide-react';
-
-// Mock data - will be replaced with API calls later
-const timetableData = [
-  {
-    day: 'Monday',
-    periods: [
-      { time: '8:00 - 9:00', subject: 'Mathematics', teacher: 'Mr. Williams', room: 'Room 101' },
-      { time: '9:00 - 10:00', subject: 'English Language', teacher: 'Mrs. Brown', room: 'Room 205' },
-      { time: '10:00 - 10:30', subject: 'Break', teacher: '', room: '' },
-      { time: '10:30 - 11:30', subject: 'Physics', teacher: 'Dr. Davis', room: 'Lab 3' },
-      { time: '11:30 - 12:30', subject: 'Chemistry', teacher: 'Mr. Johnson', room: 'Lab 2' },
-      { time: '12:30 - 1:30', subject: 'Lunch', teacher: '', room: '' },
-      { time: '1:30 - 2:30', subject: 'Biology', teacher: 'Ms. Wilson', room: 'Lab 1' },
-      { time: '2:30 - 3:30', subject: 'History', teacher: 'Dr. Martinez', room: 'Room 302' },
-    ],
-  },
-  {
-    day: 'Tuesday',
-    periods: [
-      { time: '8:00 - 9:00', subject: 'English Language', teacher: 'Mrs. Brown', room: 'Room 205' },
-      { time: '9:00 - 10:00', subject: 'Mathematics', teacher: 'Mr. Williams', room: 'Room 101' },
-      { time: '10:00 - 10:30', subject: 'Break', teacher: '', room: '' },
-      { time: '10:30 - 11:30', subject: 'Chemistry', teacher: 'Mr. Johnson', room: 'Lab 2' },
-      { time: '11:30 - 12:30', subject: 'Physics', teacher: 'Dr. Davis', room: 'Lab 3' },
-      { time: '12:30 - 1:30', subject: 'Lunch', teacher: '', room: '' },
-      { time: '1:30 - 2:30', subject: 'Physical Education', teacher: 'Mr. Smith', room: 'Field' },
-      { time: '2:30 - 3:30', subject: 'Computer Science', teacher: 'Ms. Lee', room: 'Lab 4' },
-    ],
-  },
-  {
-    day: 'Wednesday',
-    periods: [
-      { time: '8:00 - 9:00', subject: 'Mathematics', teacher: 'Mr. Williams', room: 'Room 101' },
-      { time: '9:00 - 10:00', subject: 'Physics', teacher: 'Dr. Davis', room: 'Lab 3' },
-      { time: '10:00 - 10:30', subject: 'Break', teacher: '', room: '' },
-      { time: '10:30 - 11:30', subject: 'English Language', teacher: 'Mrs. Brown', room: 'Room 205' },
-      { time: '11:30 - 12:30', subject: 'Biology', teacher: 'Ms. Wilson', room: 'Lab 1' },
-      { time: '12:30 - 1:30', subject: 'Lunch', teacher: '', room: '' },
-      { time: '1:30 - 2:30', subject: 'History', teacher: 'Dr. Martinez', room: 'Room 302' },
-      { time: '2:30 - 3:30', subject: 'Chemistry', teacher: 'Mr. Johnson', room: 'Lab 2' },
-    ],
-  },
-  {
-    day: 'Thursday',
-    periods: [
-      { time: '8:00 - 9:00', subject: 'Chemistry', teacher: 'Mr. Johnson', room: 'Lab 2' },
-      { time: '9:00 - 10:00', subject: 'English Language', teacher: 'Mrs. Brown', room: 'Room 205' },
-      { time: '10:00 - 10:30', subject: 'Break', teacher: '', room: '' },
-      { time: '10:30 - 11:30', subject: 'Mathematics', teacher: 'Mr. Williams', room: 'Room 101' },
-      { time: '11:30 - 12:30', subject: 'Physics', teacher: 'Dr. Davis', room: 'Lab 3' },
-      { time: '12:30 - 1:30', subject: 'Lunch', teacher: '', room: '' },
-      { time: '1:30 - 2:30', subject: 'Computer Science', teacher: 'Ms. Lee', room: 'Lab 4' },
-      { time: '2:30 - 3:30', subject: 'Physical Education', teacher: 'Mr. Smith', room: 'Field' },
-    ],
-  },
-  {
-    day: 'Friday',
-    periods: [
-      { time: '8:00 - 9:00', subject: 'Biology', teacher: 'Ms. Wilson', room: 'Lab 1' },
-      { time: '9:00 - 10:00', subject: 'Mathematics', teacher: 'Mr. Williams', room: 'Room 101' },
-      { time: '10:00 - 10:30', subject: 'Break', teacher: '', room: '' },
-      { time: '10:30 - 11:30', subject: 'English Language', teacher: 'Mrs. Brown', room: 'Room 205' },
-      { time: '11:30 - 12:30', subject: 'History', teacher: 'Dr. Martinez', room: 'Room 302' },
-      { time: '12:30 - 1:30', subject: 'Lunch', teacher: '', room: '' },
-      { time: '1:30 - 2:30', subject: 'Assembly', teacher: '', room: 'Hall' },
-      { time: '2:30 - 3:30', subject: 'Free Period', teacher: '', room: '' },
-    ],
-  },
-];
+import { Clock, Loader2, AlertCircle } from 'lucide-react';
+import {
+  useGetMyStudentClassesQuery,
+  useGetTimetableForClassQuery,
+  useGetTimetableForClassArmQuery,
+  useGetActiveSessionQuery,
+  useGetSessionsQuery,
+} from '@/lib/store/api/schoolAdminApi';
+import { TeacherTimetableGrid } from '@/components/timetable/TeacherTimetableGrid';
+import { useSchoolType } from '@/hooks/useSchoolType';
+import { getTerminology } from '@/lib/utils/terminology';
 
 export default function StudentTimetablesPage() {
+  const [selectedTermId, setSelectedTermId] = useState<string>('');
+
+  // Get student's classes to find the class ID
+  const { data: classesResponse, isLoading: isLoadingClasses } = useGetMyStudentClassesQuery();
+  const classes = classesResponse?.data || [];
+  const classData = useMemo(() => {
+    return classes[0] || null; // Get the active/primary class
+  }, [classes]);
+  
+  // Get school ID from class data
+  const schoolId = classData?.enrollment?.school?.id;
+
+  const { currentType } = useSchoolType();
+  const terminology = getTerminology(currentType) || {
+    courses: 'Classes',
+    courseSingular: 'Class',
+    staff: 'Teachers',
+    staffSingular: 'Teacher',
+    periods: 'Terms',
+    periodSingular: 'Term',
+    subjects: 'Subjects',
+    subjectSingular: 'Subject',
+  };
+
+  // Get active session
+  const { data: activeSessionResponse } = useGetActiveSessionQuery(
+    { schoolId: schoolId! },
+    { skip: !schoolId }
+  );
+  const activeSession = activeSessionResponse?.data;
+
+  // Get all sessions to populate term selector
+  const { data: sessionsResponse } = useGetSessionsQuery(
+    { schoolId: schoolId! },
+    { skip: !schoolId }
+  );
+
+  // Determine which term to use (selected or active)
+  const currentTermId = selectedTermId || activeSession?.term?.id || '';
+
+  // Get timetable for the class (the timetable assigned to this class)
+  const { data: classTimetableResponse, isLoading: isLoadingClassTimetable, error: classTimetableError } = useGetTimetableForClassQuery(
+    {
+      schoolId: schoolId!,
+      classId: classData?.id!,
+      termId: currentTermId,
+    },
+    { skip: !schoolId || !classData?.id || !currentTermId }
+  );
+
+  // Also get timetable for classArm if student is in a classArm
+  const classArmId = classData?.classArmId || classData?.enrollment?.classArmId;
+  const { data: classArmTimetableResponse, isLoading: isLoadingClassArmTimetable } = useGetTimetableForClassArmQuery(
+    {
+      schoolId: schoolId!,
+      classArmId: classArmId!,
+      termId: currentTermId,
+    },
+    { skip: !schoolId || !classArmId || !currentTermId }
+  );
+
+  // Combine both timetables (class and classArm)
+  const timetable = useMemo(() => {
+    const classPeriods = classTimetableResponse?.data || [];
+    const classArmPeriods = classArmTimetableResponse?.data || [];
+    
+    // Combine and deduplicate by period id
+    const allPeriods = [...classPeriods, ...classArmPeriods];
+    const uniquePeriods = Array.from(
+      new Map(allPeriods.map((p: any) => [p.id, p])).values()
+    );
+    
+    return uniquePeriods;
+  }, [classTimetableResponse, classArmTimetableResponse]);
+
+  const isLoading = isLoadingClasses || isLoadingClassTimetable || isLoadingClassArmTimetable;
+  const error = classTimetableError;
+
+  // Extract all terms from sessions for selector
+  const allTerms = useMemo(() => {
+    if (!sessionsResponse?.data) return [];
+    
+    const terms: Array<{ id: string; name: string; sessionName: string }> = [];
+    sessionsResponse.data.forEach((session: any) => {
+      if (session.terms) {
+        session.terms.forEach((term: any) => {
+          terms.push({
+            id: term.id,
+            name: term.name,
+            sessionName: session.name,
+          });
+        });
+      }
+    });
+    
+    // Sort by session name and term name
+    return terms.sort((a, b) => {
+      if (a.sessionName !== b.sessionName) {
+        return b.sessionName.localeCompare(a.sessionName);
+      }
+      return b.name.localeCompare(a.name);
+    });
+  }, [sessionsResponse]);
+
+  if (isLoading) {
+    return (
+      <ProtectedRoute roles={['STUDENT']}>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4 animate-spin" />
+            <p className="text-light-text-secondary dark:text-dark-text-secondary">
+              Loading timetable...
+            </p>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  if (error) {
+    return (
+      <ProtectedRoute roles={['STUDENT']}>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-4" />
+            <p className="text-light-text-secondary dark:text-dark-text-secondary">
+              Unable to load timetable
+            </p>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
   return (
     <ProtectedRoute roles={['STUDENT']}>
       <div className="w-full">
-        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
+          className="mb-6"
         >
-          <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
-            Class Timetable
+          <h1 className="text-3xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
+            My Timetable
           </h1>
           <p className="text-light-text-secondary dark:text-dark-text-secondary">
-            View your weekly class schedule for the current term
+            View your weekly class schedule
           </p>
         </motion.div>
 
-        {/* Timetable */}
-        <div className="space-y-6">
-          {timetableData.map((day, dayIndex) => (
-            <motion.div
-              key={day.day}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: dayIndex * 0.1 }}
-            >
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary flex items-center gap-2">
-                    <Calendar className="h-5 w-5" />
-                    {day.day}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-light-border dark:border-dark-border">
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                            Time
-                          </th>
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                            Subject
-                          </th>
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                            Teacher
-                          </th>
-                          <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary">
-                            Room
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {day.periods.map((period, periodIndex) => (
-                          <tr
-                            key={periodIndex}
-                            className={`border-b border-light-border dark:border-dark-border ${
-                              period.subject === 'Break' || period.subject === 'Lunch' || period.subject === 'Assembly' || period.subject === 'Free Period'
-                                ? 'bg-gray-50 dark:bg-dark-surface/50'
-                                : 'hover:bg-gray-50 dark:hover:bg-dark-surface/50'
-                            }`}
-                          >
-                            <td className="py-3 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                              <div className="flex items-center gap-2">
-                                <Clock className="h-4 w-4" />
-                                {period.time}
-                              </div>
-                            </td>
-                            <td className="py-3 px-4">
-                              <p className={`text-sm font-medium ${
-                                period.subject === 'Break' || period.subject === 'Lunch' || period.subject === 'Assembly' || period.subject === 'Free Period'
-                                  ? 'text-light-text-muted dark:text-dark-text-muted italic'
-                                  : 'text-light-text-primary dark:text-dark-text-primary'
-                              }`}>
-                                {period.subject}
-                              </p>
-                            </td>
-                            <td className="py-3 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                              {period.teacher || '-'}
-                            </td>
-                            <td className="py-3 px-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                              {period.room || '-'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5" />
+              Weekly Schedule
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {timetable.length > 0 ? (
+              <TeacherTimetableGrid
+                timetable={timetable}
+                schoolType={currentType}
+                isLoading={isLoading}
+                allTerms={allTerms}
+                selectedTermId={currentTermId}
+                onTermChange={setSelectedTermId}
+                activeTermId={activeSession?.term?.id}
+                terminology={terminology}
+              />
+            ) : (
+              <div className="text-center py-12">
+                <Clock className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+                <p className="text-light-text-secondary dark:text-dark-text-secondary">
+                  No timetable available for the selected {terminology.periodSingular.toLowerCase()}
+                </p>
+                {!currentTermId && (
+                  <p className="text-sm text-light-text-muted dark:text-dark-text-muted mt-2">
+                    Please select a {terminology.periodSingular.toLowerCase()} from the dropdown above to view your timetable.
+                  </p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </ProtectedRoute>
   );
 }
-

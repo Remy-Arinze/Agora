@@ -61,6 +61,9 @@ export class SchoolDto {
   @ApiProperty()
   email: string | null;
 
+  @ApiProperty({ nullable: true })
+  logo: string | null;
+
   @ApiProperty()
   isActive: boolean;
 

@@ -16,6 +16,8 @@ import { EventDto } from './dto/event.dto';
 import { ResponseDto } from '../common/dto/response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SchoolDataAccessGuard } from '../common/guards/school-data-access.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { UserWithContext } from '../auth/types/user-with-context.type';
 
 @ApiTags('events')
 @Controller('schools/:schoolId/events')
@@ -33,9 +35,10 @@ export class EventController {
   })
   async createEvent(
     @Param('schoolId') schoolId: string,
-    @Body() dto: CreateEventDto
+    @Body() dto: CreateEventDto,
+    @CurrentUser() user: UserWithContext
   ): Promise<ResponseDto<EventDto>> {
-    const data = await this.eventService.createEvent(schoolId, dto);
+    const data = await this.eventService.createEvent(schoolId, dto, user.id);
     return ResponseDto.ok(data, 'Event created successfully');
   }
 

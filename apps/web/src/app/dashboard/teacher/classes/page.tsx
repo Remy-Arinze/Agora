@@ -1,58 +1,134 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { motion } from 'framer-motion';
-import { BookOpen, Search, Users, Clock, MapPin, User, GraduationCap } from 'lucide-react';
-
-// Mock data - will be replaced with API calls later
-const mockClasses = [
-  {
-    id: '1',
-    subject: 'Mathematics',
-    code: 'MATH101',
-    classLevel: 'JSS2',
-    schedule: 'Mon, Wed, Fri - 9:00 AM',
-    room: 'Room 101',
-    students: 35,
-    description: 'Introduction to algebra, geometry, and basic calculus',
-  },
-  {
-    id: '2',
-    subject: 'Advanced Mathematics',
-    code: 'MATH201',
-    classLevel: 'SS1',
-    schedule: 'Tue, Thu - 10:30 AM',
-    room: 'Room 205',
-    students: 28,
-    description: 'Advanced algebra, trigonometry, and calculus',
-  },
-  {
-    id: '3',
-    subject: 'Mathematics',
-    code: 'MATH301',
-    classLevel: 'SS2',
-    schedule: 'Mon, Wed - 2:00 PM',
-    room: 'Room 302',
-    students: 32,
-    description: 'Further mathematics and statistics',
-  },
-];
+import { BookOpen, Search, Users, Clock, MapPin, Loader2, AlertCircle } from 'lucide-react';
+import { useGetMyClassesQuery, useGetMyTeacherSchoolQuery, useGetMyTeacherProfileQuery } from '@/lib/store/api/schoolAdminApi';
+import { useSchoolType } from '@/hooks/useSchoolType';
+import { getTerminology } from '@/lib/utils/terminology';
 
 export default function TeacherClassesPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
+  const { currentType } = useSchoolType();
+  const terminology = getTerminology(currentType) || {
+    courses: 'Classes',
+    courseSingular: 'Class',
+    staff: 'Teachers',
+    staffSingular: 'Teacher',
+    periods: 'Terms',
+    periodSingular: 'Term',
+    subjects: 'Subjects',
+    subjectSingular: 'Subject',
+  };
 
-  const filteredClasses = mockClasses.filter(
-    (classItem) =>
-      classItem.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      classItem.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      classItem.classLevel.toLowerCase().includes(searchQuery.toLowerCase())
+  // Get teacher's school and profile
+  const { data: schoolResponse, isLoading: isLoadingSchool } = useGetMyTeacherSchoolQuery();
+  const { data: teacherResponse, isLoading: isLoadingTeacher } = useGetMyTeacherProfileQuery();
+  const school = schoolResponse?.data;
+  const teacher = teacherResponse?.data;
+
+  // Get teacher's classes
+  const { data: classesResponse, isLoading: isLoadingClasses, error } = useGetMyClassesQuery(
+    {
+      schoolId: school?.id || '',
+      teacherId: teacher?.id || '',
+    },
+    { 
+      skip: !school?.id || !teacher?.id,
+      // Refetch when school or teacher data changes
+      refetchOnMountOrArgChange: true,
+    }
   );
+
+  const isLoading = isLoadingSchool || isLoadingTeacher || isLoadingClasses;
+
+  // Debug logging (remove in production)
+  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+    if (school?.id && teacher?.id) {
+      console.log('Teacher Classes Query:', {
+        schoolId: school.id,
+        teacherId: teacher.id,
+        classesCount: classesResponse?.data?.length || 0,
+        error: error,
+      });
+    }
+  }
+
+  const classes = classesResponse?.data || [];
+
+  // Debug: Log teacher and school info
+  if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+    if (teacher && school) {
+      console.log('[Teacher Classes] Teacher Profile:', {
+        id: teacher.id,
+        teacherId: teacher.teacherId,
+        publicId: teacher.publicId,
+        schoolId: school.id,
+        classesFound: classes.length,
+      });
+    }
+  }
+
+  const filteredClasses = useMemo(() => {
+    if (!searchQuery) return classes;
+    
+    const query = searchQuery.toLowerCase();
+    return classes.filter(
+      (classItem) =>
+        classItem.name?.toLowerCase().includes(query) ||
+        classItem.code?.toLowerCase().includes(query) ||
+        classItem.classLevel?.toLowerCase().includes(query) ||
+        classItem.teachers?.some((t: any) => 
+          t.subject?.toLowerCase().includes(query)
+        )
+    );
+  }, [classes, searchQuery]);
+
+  if (isLoading) {
+    return (
+      <ProtectedRoute roles={['TEACHER']}>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4 animate-spin" />
+            <p className="text-light-text-secondary dark:text-dark-text-secondary">
+              Loading {terminology.courses.toLowerCase()}...
+            </p>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
+
+  if (error) {
+    return (
+      <ProtectedRoute roles={['TEACHER']}>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <p className="text-light-text-secondary dark:text-dark-text-secondary mb-2">
+              Failed to load {terminology.courses.toLowerCase()}. Please try again.
+            </p>
+            {process.env.NODE_ENV === 'development' && (
+              <p className="text-xs text-light-text-muted dark:text-dark-text-muted mt-2">
+                Error: {error?.toString() || 'Unknown error'}
+                {school?.id && teacher?.id && (
+                  <span className="block mt-1">
+                    School ID: {school.id}, Teacher ID: {teacher.id}
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
+  }
 
   return (
     <ProtectedRoute roles={['TEACHER']}>
@@ -64,10 +140,10 @@ export default function TeacherClassesPage() {
           className="mb-8"
         >
           <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
-            My Classes
+            My {terminology.courses}
           </h1>
           <p className="text-light-text-secondary dark:text-dark-text-secondary">
-            Manage your classes and view student information
+            Manage your {terminology.courses.toLowerCase()} and view student information
           </p>
         </motion.div>
 
@@ -108,15 +184,19 @@ export default function TeacherClassesPage() {
                     <div className="flex items-start justify-between mb-2">
                       <div>
                         <CardTitle className="text-lg font-bold text-light-text-primary dark:text-dark-text-primary">
-                          {classItem.subject}
+                          {classItem.name}
                         </CardTitle>
-                        <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-1">
-                          {classItem.code}
-                        </p>
+                        {classItem.code && (
+                          <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-1">
+                            {classItem.code}
+                          </p>
+                        )}
                       </div>
-                      <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 text-xs font-medium rounded">
-                        {classItem.classLevel}
-                      </span>
+                      {classItem.classLevel && (
+                        <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 text-xs font-medium rounded">
+                          {classItem.classLevel}
+                        </span>
+                      )}
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -125,27 +205,44 @@ export default function TeacherClassesPage() {
                         <Users className="h-4 w-4 text-light-text-muted dark:text-dark-text-muted mt-0.5 flex-shrink-0" />
                         <div>
                           <p className="text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
-                            {classItem.students} Students
+                            {classItem.studentsCount || 0} Students
                           </p>
                         </div>
                       </div>
+                      {classItem.teachers && classItem.teachers.length > 0 && (
+                        <div className="flex items-start gap-2">
+                          <BookOpen className="h-4 w-4 text-light-text-muted dark:text-dark-text-muted mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            {classItem.teachers
+                              .filter((t: any) => t.teacherId === classItem.teachers?.[0]?.teacherId)
+                              .map((teacher: any, idx: number) => (
+                                <div key={idx} className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                                  {teacher.subject && (
+                                    <span className="font-medium">{teacher.subject}</span>
+                                  )}
+                                  {teacher.isPrimary && (
+                                    <span className="ml-2 px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-400 text-xs rounded">
+                                      Primary Teacher
+                                    </span>
+                                  )}
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      )}
                       <div className="flex items-start gap-2">
                         <Clock className="h-4 w-4 text-light-text-muted dark:text-dark-text-muted mt-0.5 flex-shrink-0" />
                         <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                          {classItem.schedule}
+                          Academic Year: {classItem.academicYear}
                         </p>
                       </div>
-                      <div className="flex items-start gap-2">
-                        <MapPin className="h-4 w-4 text-light-text-muted dark:text-dark-text-muted mt-0.5 flex-shrink-0" />
-                        <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                          {classItem.room}
-                        </p>
-                      </div>
-                      <div className="pt-2 border-t border-light-border dark:border-dark-border">
-                        <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">
-                          {classItem.description}
-                        </p>
-                      </div>
+                      {classItem.description && (
+                        <div className="pt-2 border-t border-light-border dark:border-dark-border">
+                          <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">
+                            {classItem.description}
+                          </p>
+                        </div>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
@@ -155,7 +252,7 @@ export default function TeacherClassesPage() {
                           router.push(`/dashboard/teacher/classes/${classItem.id}`);
                         }}
                       >
-                        View Class Details →
+                        View {terminology.courseSingular} Details →
                       </Button>
                     </div>
                   </CardContent>
