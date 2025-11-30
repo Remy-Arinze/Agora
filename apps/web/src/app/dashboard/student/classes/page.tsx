@@ -18,9 +18,11 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { 
+  useGetMyStudentProfileQuery,
   useGetMyStudentClassesQuery,
   useGetTimetableForClassQuery,
   useGetTimetableForClassArmQuery,
+  useGetTimetableForStudentQuery,
   useGetActiveSessionQuery,
   useGetSessionsQuery,
   useGetCurriculumForClassQuery,

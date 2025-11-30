@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
-import { Clock, MapPin, Users, BookOpen, ChevronDown } from 'lucide-react';
+import { Clock, MapPin, Users, BookOpen, ChevronDown, AlertTriangle } from 'lucide-react';
 import type { TimetablePeriod } from '@/lib/store/api/schoolAdminApi';
 import { getTerminology } from '@/lib/utils/terminology';
 
@@ -274,14 +274,36 @@ export function TeacherTimetableGrid({
                                 {periods.map((period) => {
                                   const display = getPeriodDisplay(period);
                                   const colors = PERIOD_TYPE_COLORS[period.type] || PERIOD_TYPE_COLORS.LESSON;
+                                  const hasConflict = period.hasConflict || false;
+                                  const isFromCourseRegistration = period.isFromCourseRegistration || false;
+                                  
                                   return (
                                     <div
                                       key={period.id}
-                                      className={`p-3 rounded-lg border ${colors.bg} ${colors.border} ${colors.text}`}
+                                      className={`p-3 rounded-lg border ${
+                                        hasConflict
+                                          ? 'bg-red-50 dark:bg-red-900/20 border-red-300 dark:border-red-800 text-red-700 dark:text-red-300'
+                                          : `${colors.bg} ${colors.border} ${colors.text}`
+                                      }`}
                                     >
-                                      <div className="font-semibold text-sm mb-1">{display.title}</div>
+                                      <div className="flex items-start justify-between gap-2 mb-1">
+                                        <div className="font-semibold text-sm flex-1">{display.title}</div>
+                                        {hasConflict && (
+                                          <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0" />
+                                        )}
+                                        {isFromCourseRegistration && (
+                                          <span className="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded flex-shrink-0">
+                                            CO
+                                          </span>
+                                        )}
+                                      </div>
                                       {display.subtitle && (
                                         <div className="text-xs opacity-80 mb-1">{display.subtitle}</div>
+                                      )}
+                                      {hasConflict && period.conflictMessage && (
+                                        <div className="text-xs text-red-600 dark:text-red-400 mt-1 mb-1 font-medium">
+                                          {period.conflictMessage}
+                                        </div>
                                       )}
                                       {display.classInfo && (
                                         <div className="flex items-center gap-1 text-xs opacity-70 mt-2">

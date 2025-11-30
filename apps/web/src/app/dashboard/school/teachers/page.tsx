@@ -53,6 +53,7 @@ export default function StaffPage() {
     limit: itemsPerPage,
     search: debouncedSearch || undefined,
     role: roleFilter !== 'All' ? roleFilter : undefined,
+    schoolType: currentType || undefined,
   });
 
   const staffList = staffResponse?.data;

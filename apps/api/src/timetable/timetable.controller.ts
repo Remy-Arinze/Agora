@@ -117,6 +117,22 @@ export class TimetableController {
     return ResponseDto.ok(data, 'Timetable retrieved successfully');
   }
 
+  @Get('student/:studentId')
+  @ApiOperation({ summary: 'Get timetable for a student (Hybrid approach for TERTIARY)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Timetable retrieved successfully',
+    type: [TimetablePeriodDto],
+  })
+  async getTimetableForStudent(
+    @Param('schoolId') schoolId: string,
+    @Param('studentId') studentId: string,
+    @Query('termId') termId: string
+  ): Promise<ResponseDto<TimetablePeriodDto[]>> {
+    const data = await this.timetableService.getTimetableForStudent(schoolId, studentId, termId);
+    return ResponseDto.ok(data, 'Timetable retrieved successfully');
+  }
+
   @Get('timetables')
   @ApiOperation({ summary: 'Get all timetables for a school type (grouped by class)' })
   @ApiResponse({

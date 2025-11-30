@@ -32,13 +32,17 @@ export class SchoolAdminSchoolsController {
 
   @Get('dashboard')
   @ApiOperation({ summary: 'Get school dashboard data' })
+  @ApiQuery({ name: 'schoolType', required: false, type: String, description: 'Filter by school type (PRIMARY, SECONDARY, TERTIARY)' })
   @ApiResponse({
     status: 200,
     description: 'Dashboard data retrieved successfully',
     type: ResponseDto<SchoolDashboardDto>,
   })
-  async getDashboard(@Request() req: any): Promise<ResponseDto<SchoolDashboardDto>> {
-    const data = await this.schoolAdminSchoolsService.getDashboard(req.user);
+  async getDashboard(
+    @Request() req: any,
+    @Query('schoolType') schoolType?: string,
+  ): Promise<ResponseDto<SchoolDashboardDto>> {
+    const data = await this.schoolAdminSchoolsService.getDashboard(req.user, schoolType);
     return ResponseDto.ok(data, 'Dashboard data retrieved successfully');
   }
 
@@ -48,6 +52,7 @@ export class SchoolAdminSchoolsController {
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 10, max: 100)' })
   @ApiQuery({ name: 'search', required: false, type: String, description: 'Search query (name, email, subject)' })
   @ApiQuery({ name: 'role', required: false, type: String, description: 'Filter by role' })
+  @ApiQuery({ name: 'schoolType', required: false, type: String, description: 'Filter by school type (PRIMARY, SECONDARY, TERTIARY)' })
   @ApiResponse({
     status: 200,
     description: 'Staff list retrieved successfully',
@@ -59,12 +64,14 @@ export class SchoolAdminSchoolsController {
     @Query('limit') limit?: string,
     @Query('search') search?: string,
     @Query('role') role?: string,
+    @Query('schoolType') schoolType?: string,
   ): Promise<ResponseDto<StaffListResponseDto>> {
     const query = {
       page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
       search,
       role,
+      schoolType,
     };
     const data = await this.schoolAdminSchoolsService.getStaffList(req.user, query);
     return ResponseDto.ok(data, 'Staff list retrieved successfully');

@@ -14,8 +14,8 @@
     
     /* Dark Mode Colors - using hex for better compatibility */
     --dark-bg: #020408; /* Very dark, almost black */
-    --dark-surface: #1e2742; /* Deep greyish blue for cards */
-    --dark-border: #1e293b; /* Border color */
+    --dark-surface: #0b0e17; /* Deep greyish blue for cards */
+    --dark-border: #0b0e17; /* Border color */
     --dark-text-primary: #f1f5f9; /* Lighter text for better contrast */
     --dark-text-secondary: #cbd5e1; /* Secondary text */
     --dark-text-muted: #94a3b8; /* Muted text */

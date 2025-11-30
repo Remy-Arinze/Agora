@@ -219,9 +219,17 @@ export class TransfersService {
     }
 
     // Validate TAC
+    // Check if TAC has already been used (completed transfer)
     if (transfer.tacUsedAt) {
       throw new ConflictException(
         `This TAC has already been used by ${transfer.tacUsedBy ? 'another school' : 'a school'} on ${transfer.tacUsedAt.toISOString()}.`
+      );
+    }
+
+    // Check if TAC has already been initiated by another school
+    if (transfer.toSchoolId && transfer.toSchoolId !== schoolId) {
+      throw new ConflictException(
+        `This TAC has already been initiated by another school. Please request a new TAC from the source school.`
       );
     }
 
@@ -242,15 +250,15 @@ export class TransfersService {
     // Get student data from source school
     const studentData = await this.getStudentDataByTac(transfer.tac, transfer.studentId);
 
-    // Update transfer record
+    // Update transfer record - Set toSchoolId and status, but DON'T mark TAC as used yet
+    // TAC will only be marked as used when transfer is successfully completed
     const updatedTransfer = await this.prisma.transfer.update({
       where: { id: transfer.id },
       data: {
         toSchoolId: schoolId,
         status: TransferStatus.APPROVED, // Auto-approve
-        tacUsedAt: new Date(),
-        tacUsedBy: schoolId,
         approvedAt: new Date(),
+        // Note: tacUsedAt and tacUsedBy are NOT set here - only set after successful completion
       },
     });
 
@@ -287,24 +295,23 @@ export class TransfersService {
       throw new BadRequestException('Student ID does not match TAC');
     }
 
-    // Get student with enrollment from source school
+    // Get student with ALL enrollments from source school (not just active)
     const student = await this.prisma.student.findUnique({
       where: { id: studentId },
       include: {
         enrollments: {
           where: {
             schoolId: transfer.fromSchoolId,
-            isActive: true,
           },
           orderBy: {
             enrollmentDate: 'desc',
           },
-          take: 1,
           include: {
             grades: {
               orderBy: [
                 { academicYear: 'desc' },
                 { term: 'desc' },
+                { createdAt: 'desc' },
               ],
             },
           },
@@ -316,10 +323,37 @@ export class TransfersService {
       throw new NotFoundException('Student not found');
     }
 
-    const enrollment = student.enrollments[0];
-    if (!enrollment) {
-      throw new NotFoundException('Student has no active enrollment in source school');
+    if (student.enrollments.length === 0) {
+      throw new NotFoundException('Student has no enrollment in source school');
     }
+
+    // Get active enrollment for backward compatibility
+    const activeEnrollment = student.enrollments.find(e => e.isActive) || student.enrollments[0];
+
+    // Map all enrollments with their grades grouped by class level
+    const enrollments = student.enrollments.map((enrollment) => ({
+      id: enrollment.id,
+      classLevel: enrollment.classLevel,
+      academicYear: enrollment.academicYear,
+      enrollmentDate: enrollment.enrollmentDate.toISOString(),
+      isActive: enrollment.isActive,
+      grades: enrollment.grades.map((grade) => ({
+        id: grade.id,
+        subject: grade.subject || 'N/A', // Ensure subject is never null
+        gradeType: grade.gradeType,
+        assessmentName: grade.assessmentName,
+        sequence: grade.sequence,
+        assessmentDate: grade.assessmentDate?.toISOString(),
+        score: grade.score.toNumber(),
+        maxScore: grade.maxScore.toNumber(),
+        grade: grade.grade,
+        term: grade.term,
+        academicYear: grade.academicYear,
+        remarks: grade.remarks,
+        signedAt: grade.signedAt?.toISOString(),
+        createdAt: grade.createdAt.toISOString(),
+      })),
+    }));
 
     return {
       student: {
@@ -341,15 +375,22 @@ export class TransfersService {
         medicalNotes: student.medicalNotes,
       },
       enrollment: {
-        id: enrollment.id,
-        classLevel: enrollment.classLevel,
-        academicYear: enrollment.academicYear,
-        enrollmentDate: enrollment.enrollmentDate.toISOString(),
-        isActive: enrollment.isActive,
+        id: activeEnrollment.id,
+        classLevel: activeEnrollment.classLevel,
+        academicYear: activeEnrollment.academicYear,
+        enrollmentDate: activeEnrollment.enrollmentDate.toISOString(),
+        isActive: activeEnrollment.isActive,
       },
-      grades: enrollment.grades.map((grade) => ({
+      // Include all enrollments grouped by class level
+      enrollments,
+      // Keep backward compatibility - include grades from active enrollment
+      grades: activeEnrollment.grades.map((grade) => ({
         id: grade.id,
-        subject: grade.subject,
+        subject: grade.subject || 'N/A', // Ensure subject is never null
+        gradeType: grade.gradeType,
+        assessmentName: grade.assessmentName,
+        sequence: grade.sequence,
+        assessmentDate: grade.assessmentDate?.toISOString(),
         score: grade.score.toNumber(),
         maxScore: grade.maxScore.toNumber(),
         grade: grade.grade,
@@ -416,13 +457,31 @@ export class TransfersService {
       },
     });
 
+    // Validate classArmId if provided
+    let validClassArmId: string | null = null;
+    if (dto.classArmId) {
+      const classArm = await this.prisma.classArm.findFirst({
+        where: {
+          id: dto.classArmId,
+          classId: dto.classId || targetClass?.id,
+          schoolId,
+        },
+      });
+      if (classArm) {
+        validClassArmId = classArm.id;
+      } else {
+        // If classArmId is provided but doesn't exist, log warning but continue
+        console.warn(`ClassArm ${dto.classArmId} not found in destination school, proceeding without it`);
+      }
+    }
+
     // Create new enrollment in destination school
     const newEnrollment = await this.prisma.enrollment.create({
       data: {
         studentId: student.id,
         schoolId,
         classId: dto.classId || targetClass?.id,
-        classArmId: dto.classArmId,
+        classArmId: validClassArmId, // Only set if valid, otherwise null
         classLevel: dto.targetClassLevel,
         academicYear: dto.academicYear,
         enrollmentDate: new Date(),
@@ -431,11 +490,27 @@ export class TransfersService {
     });
 
     // Copy all historical grades to new enrollment
+    // Note: We need a teacherId for grades. For transfers, we'll use the first available teacher
+    // or the school admin. In practice, you might want to map teachers or use a system teacher.
+    const defaultTeacher = await this.prisma.teacher.findFirst({
+      where: { schoolId },
+      select: { id: true },
+    });
+
+    if (!defaultTeacher) {
+      throw new BadRequestException('No teacher found in destination school. Cannot transfer grades.');
+    }
+
     for (const grade of studentData.grades) {
       await this.prisma.grade.create({
         data: {
           enrollmentId: newEnrollment.id,
+          teacherId: defaultTeacher.id, // Use default teacher for transferred grades
           subject: grade.subject,
+          gradeType: grade.gradeType || 'CA', // Default to CA if not specified
+          assessmentName: grade.assessmentName,
+          sequence: grade.sequence,
+          assessmentDate: grade.assessmentDate ? new Date(grade.assessmentDate) : null,
           score: grade.score,
           maxScore: grade.maxScore,
           grade: grade.grade,
@@ -469,12 +544,14 @@ export class TransfersService {
       data: { isActive: false },
     });
 
-    // Update transfer status
+    // Update transfer status and mark TAC as used (only after successful completion)
     await this.prisma.transfer.update({
       where: { id: transferId },
       data: {
         status: TransferStatus.COMPLETED,
         completedAt: new Date(),
+        tacUsedAt: new Date(), // Mark TAC as used only after successful transfer
+        tacUsedBy: schoolId, // Record which school used the TAC
       },
     });
 
@@ -520,10 +597,128 @@ export class TransfersService {
   }
 
   /**
+   * Get historical grades for a completed transfer
+   * This allows the source school to view grades from when the student was enrolled
+   */
+  async getTransferHistoricalGrades(schoolId: string, transferId: string) {
+    // Get transfer record
+    const transfer = await this.prisma.transfer.findUnique({
+      where: { id: transferId },
+      include: {
+        student: true,
+        fromSchool: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!transfer) {
+      throw new NotFoundException('Transfer not found');
+    }
+
+    // Verify this is an outgoing transfer from this school
+    if (transfer.fromSchoolId !== schoolId) {
+      throw new ForbiddenException('You can only view historical grades for transfers from your school');
+    }
+
+    // Only allow viewing grades for completed transfers
+    if (transfer.status !== TransferStatus.COMPLETED) {
+      throw new BadRequestException('Historical grades are only available for completed transfers');
+    }
+
+    // Get all enrollments the student had in this school (including inactive ones)
+    const enrollments = await this.prisma.enrollment.findMany({
+      where: {
+        studentId: transfer.studentId,
+        schoolId: schoolId,
+      },
+      include: {
+        grades: {
+          orderBy: [
+            { academicYear: 'desc' },
+            { term: 'desc' },
+            { createdAt: 'desc' },
+          ],
+        },
+      },
+      orderBy: {
+        enrollmentDate: 'desc',
+      },
+    });
+
+    // Map enrollments with grades
+    const enrollmentsData = enrollments.map((enrollment) => ({
+      id: enrollment.id,
+      classLevel: enrollment.classLevel,
+      academicYear: enrollment.academicYear,
+      enrollmentDate: enrollment.enrollmentDate.toISOString(),
+      isActive: enrollment.isActive,
+      grades: enrollment.grades.map((grade) => ({
+        id: grade.id,
+        subject: grade.subject || 'N/A',
+        gradeType: grade.gradeType,
+        assessmentName: grade.assessmentName,
+        sequence: grade.sequence,
+        assessmentDate: grade.assessmentDate?.toISOString(),
+        score: grade.score.toNumber(),
+        maxScore: grade.maxScore.toNumber(),
+        grade: grade.grade,
+        term: grade.term,
+        academicYear: grade.academicYear,
+        remarks: grade.remarks,
+        signedAt: grade.signedAt?.toISOString(),
+        createdAt: grade.createdAt.toISOString(),
+      })),
+    }));
+
+    return {
+      student: {
+        id: transfer.student.id,
+        uid: transfer.student.uid,
+        firstName: transfer.student.firstName,
+        middleName: transfer.student.middleName,
+        lastName: transfer.student.lastName,
+      },
+      enrollments: enrollmentsData,
+      fromSchool: {
+        id: transfer.fromSchool.id,
+        name: transfer.fromSchool.name,
+      },
+      transfer: {
+        id: transfer.id,
+        status: transfer.status,
+        completedAt: transfer.completedAt?.toISOString(),
+      },
+    };
+  }
+
+  /**
    * List outgoing transfers
    */
-  async getOutgoingTransfers(schoolId: string, status?: TransferStatus, page = 1, limit = 20) {
+  async getOutgoingTransfers(schoolId: string, status?: TransferStatus, page = 1, limit = 20, schoolType?: string) {
     const skip = (page - 1) * limit;
+
+    // If schoolType is provided, get classes of that type to filter enrollments
+    let classIds: string[] | undefined;
+    let classLevels: string[] | undefined;
+    if (schoolType) {
+      const classes = await this.prisma.class.findMany({
+        where: {
+          schoolId,
+          type: schoolType as any,
+          isActive: true,
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      });
+      classIds = classes.map((c) => c.id);
+      classLevels = classes.map((c) => c.name);
+    }
 
     const where: any = {
       fromSchoolId: schoolId,
@@ -546,6 +741,20 @@ export class TransfersService {
               uid: true,
               firstName: true,
               lastName: true,
+              enrollments: {
+                where: {
+                  schoolId,
+                  isActive: true,
+                  ...(schoolType && classIds && classLevels && (classIds.length > 0 || classLevels.length > 0)
+                    ? {
+                        OR: [
+                          ...(classIds.length > 0 ? [{ classId: { in: classIds } }] : []),
+                          ...(classLevels.length > 0 ? [{ classLevel: { in: classLevels } }] : []),
+                        ],
+                      }
+                    : {}),
+                },
+              },
             },
           },
           toSchool: {
@@ -558,6 +767,14 @@ export class TransfersService {
       }),
       this.prisma.transfer.count({ where }),
     ]);
+
+    // Filter transfers by schoolType if provided (only include transfers where student has enrollment in that schoolType)
+    let filteredTransfers = transfers;
+    if (schoolType && (classIds || classLevels)) {
+      filteredTransfers = transfers.filter((transfer) => {
+        return transfer.student.enrollments && transfer.student.enrollments.length > 0;
+      });
+    }
 
     return {
       transfers,
@@ -575,8 +792,27 @@ export class TransfersService {
   /**
    * List incoming transfers
    */
-  async getIncomingTransfers(schoolId: string, status?: TransferStatus, page = 1, limit = 20) {
+  async getIncomingTransfers(schoolId: string, status?: TransferStatus, page = 1, limit = 20, schoolType?: string) {
     const skip = (page - 1) * limit;
+
+    // If schoolType is provided, get classes of that type to filter enrollments
+    let classIds: string[] | undefined;
+    let classLevels: string[] | undefined;
+    if (schoolType) {
+      const classes = await this.prisma.class.findMany({
+        where: {
+          schoolId,
+          type: schoolType as any,
+          isActive: true,
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      });
+      classIds = classes.map((c) => c.id);
+      classLevels = classes.map((c) => c.name);
+    }
 
     const where: any = {
       toSchoolId: schoolId,
@@ -590,7 +826,7 @@ export class TransfersService {
       this.prisma.transfer.findMany({
         where,
         skip,
-        take: limit,
+        take: limit * 2, // Get more to account for filtering
         orderBy: { createdAt: 'desc' },
         include: {
           student: {
@@ -599,6 +835,20 @@ export class TransfersService {
               uid: true,
               firstName: true,
               lastName: true,
+              enrollments: {
+                where: {
+                  schoolId,
+                  isActive: true,
+                  ...(schoolType && classIds && classLevels && (classIds.length > 0 || classLevels.length > 0)
+                    ? {
+                        OR: [
+                          ...(classIds.length > 0 ? [{ classId: { in: classIds } }] : []),
+                          ...(classLevels.length > 0 ? [{ classLevel: { in: classLevels } }] : []),
+                        ],
+                      }
+                    : {}),
+                },
+              },
             },
           },
           fromSchool: {
@@ -612,14 +862,25 @@ export class TransfersService {
       this.prisma.transfer.count({ where }),
     ]);
 
+    // Filter transfers by schoolType if provided (only include transfers where student has enrollment in that schoolType)
+    let filteredTransfers = transfers;
+    if (schoolType && (classIds || classLevels)) {
+      filteredTransfers = transfers.filter((transfer) => {
+        return transfer.student.enrollments && transfer.student.enrollments.length > 0;
+      });
+    }
+
+    // Apply pagination to filtered results
+    const paginatedTransfers = filteredTransfers.slice(skip, skip + limit);
+
     return {
-      transfers,
+      transfers: paginatedTransfers,
       meta: {
-        total,
+        total: filteredTransfers.length,
         page,
         limit,
-        totalPages: Math.ceil(total / limit),
-        hasNextPage: page * limit < total,
+        totalPages: Math.ceil(filteredTransfers.length / limit),
+        hasNextPage: page * limit < filteredTransfers.length,
         hasPrevPage: page > 1,
       },
     };

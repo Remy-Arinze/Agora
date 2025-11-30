@@ -122,6 +122,7 @@ export interface GetStaffListParams {
   limit?: number;
   search?: string;
   role?: string;
+  schoolType?: string;
 }
 
 export interface ResponseDto<T> {
@@ -500,10 +501,18 @@ export interface TimetablePeriod {
   teacherName?: string;
   roomId?: string;
   roomName?: string;
-  classArmId: string;
-  classArmName: string;
+  classArmId?: string;
+  classArmName?: string;
+  classId?: string;
+  className?: string;
   termId: string;
   createdAt: string;
+  // Conflict detection fields (for TERTIARY merged timetables)
+  hasConflict?: boolean;
+  conflictMessage?: string;
+  conflictingPeriodIds?: string[];
+  // Course registration indicator (for TERTIARY carry-overs)
+  isFromCourseRegistration?: boolean;
 }
 
 export interface CreateTimetablePeriodDto {
@@ -690,8 +699,13 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
       invalidatesTags: ['School'],
     }),
     // Get school admin dashboard
-    getSchoolAdminDashboard: builder.query<ResponseDto<SchoolDashboard>, void>({
-      query: () => '/school-admin/dashboard',
+    getSchoolAdminDashboard: builder.query<ResponseDto<SchoolDashboard>, string | undefined>({
+      query: (schoolType) => {
+        const queryParams = new URLSearchParams();
+        if (schoolType) queryParams.append('schoolType', schoolType);
+        const queryString = queryParams.toString();
+        return `/school-admin/dashboard${queryString ? `?${queryString}` : ''}`;
+      },
       providesTags: ['School'],
     }),
     // Get staff list with pagination, search, and filtering
@@ -702,6 +716,7 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
         if (params.limit) queryParams.append('limit', params.limit.toString());
         if (params.search) queryParams.append('search', params.search);
         if (params.role) queryParams.append('role', params.role);
+        if (params.schoolType) queryParams.append('schoolType', params.schoolType);
         const queryString = queryParams.toString();
         return `/school-admin/staff${queryString ? `?${queryString}` : ''}`;
       },
@@ -860,6 +875,17 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
       providesTags: (result, error, { classId, termId }) => [
         { type: 'Timetable', id: classId },
         { type: 'Timetable', id: `${classId}-${termId}` },
+      ],
+    }),
+    getTimetableForStudent: builder.query<ResponseDto<TimetablePeriod[]>, { schoolId: string; studentId: string; termId: string }>({
+      query: ({ schoolId, studentId, termId }) => {
+        const queryParams = new URLSearchParams();
+        queryParams.append('termId', termId);
+        return `/schools/${schoolId}/timetable/student/${studentId}?${queryParams.toString()}`;
+      },
+      providesTags: (result, error, { studentId, termId }) => [
+        { type: 'Timetable', id: `student-${studentId}` },
+        { type: 'Timetable', id: `student-${studentId}-${termId}` },
       ],
     }),
     getTimetablesForSchoolType: builder.query<ResponseDto<Record<string, TimetablePeriod[]>>, { schoolId: string; schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY'; termId?: string }>({
@@ -1658,12 +1684,20 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
           hasPrevPage: boolean;
         };
       }>,
-      { schoolId: string; status?: string; page?: number; limit?: number }
+      { schoolId: string; status?: string; page?: number; limit?: number; schoolType?: string }
     >({
-      query: ({ schoolId, status, page = 1, limit = 20 }) => ({
-        url: `/schools/${schoolId}/transfers/outgoing`,
-        params: { status, page, limit },
-      }),
+      query: ({ schoolId, status, page = 1, limit = 20, schoolType }) => {
+        const queryParams = new URLSearchParams();
+        if (status) queryParams.append('status', status);
+        if (page) queryParams.append('page', page.toString());
+        if (limit) queryParams.append('limit', limit.toString());
+        if (schoolType) queryParams.append('schoolType', schoolType);
+        const queryString = queryParams.toString();
+        return {
+          url: `/schools/${schoolId}/transfers/outgoing${queryString ? `?${queryString}` : ''}`,
+          method: 'GET',
+        };
+      },
       providesTags: ['School'],
     }),
 
@@ -1676,6 +1710,25 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
         method: 'DELETE',
       }),
       invalidatesTags: ['School'],
+    }),
+
+    getTransferHistoricalGrades: builder.query<
+      ResponseDto<{
+        student: any;
+        enrollments: any[];
+        fromSchool: any;
+        transfer: any;
+      }>,
+      { schoolId: string; transferId: string }
+    >({
+      query: ({ schoolId, transferId }) => ({
+        url: `/schools/${schoolId}/transfers/outgoing/${transferId}/historical-grades`,
+        method: 'GET',
+      }),
+      providesTags: (result, error, { transferId }) => [
+        { type: 'Transfer', id: transferId },
+        { type: 'Transfer', id: `${transferId}-grades` },
+      ],
     }),
 
     initiateTransfer: builder.mutation<
@@ -1711,12 +1764,20 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
           hasPrevPage: boolean;
         };
       }>,
-      { schoolId: string; status?: string; page?: number; limit?: number }
+      { schoolId: string; status?: string; page?: number; limit?: number; schoolType?: string }
     >({
-      query: ({ schoolId, status, page = 1, limit = 20 }) => ({
-        url: `/schools/${schoolId}/transfers/incoming`,
-        params: { status, page, limit },
-      }),
+      query: ({ schoolId, status, page = 1, limit = 20, schoolType }) => {
+        const queryParams = new URLSearchParams();
+        if (status) queryParams.append('status', status);
+        if (page) queryParams.append('page', page.toString());
+        if (limit) queryParams.append('limit', limit.toString());
+        if (schoolType) queryParams.append('schoolType', schoolType);
+        const queryString = queryParams.toString();
+        return {
+          url: `/schools/${schoolId}/transfers/incoming${queryString ? `?${queryString}` : ''}`,
+          method: 'GET',
+        };
+      },
       providesTags: ['School'],
     }),
 
@@ -1867,6 +1928,7 @@ export const {
   // Transfer hooks
   useGenerateTacMutation,
   useGetOutgoingTransfersQuery,
+  useGetTransferHistoricalGradesQuery,
   useRevokeTacMutation,
   useInitiateTransferMutation,
   useGetIncomingTransfersQuery,

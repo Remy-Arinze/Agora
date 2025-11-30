@@ -62,11 +62,30 @@ export class SchoolAdminSchoolsService {
   /**
    * Get dashboard data for school admin
    */
-  async getDashboard(user: UserWithContext): Promise<SchoolDashboardDto> {
+  async getDashboard(user: UserWithContext, schoolType?: string): Promise<SchoolDashboardDto> {
     const schoolId = user.currentSchoolId;
 
     if (!schoolId) {
       throw new BadRequestException('You are not associated with any school');
+    }
+
+    // If schoolType is provided, get classes of that type to filter enrollments
+    let classIds: string[] | undefined;
+    let classLevels: string[] | undefined;
+    if (schoolType) {
+      const classes = await this.prisma.class.findMany({
+        where: {
+          schoolId,
+          type: schoolType as any,
+          isActive: true,
+        },
+        select: {
+          id: true,
+          name: true,
+        },
+      });
+      classIds = classes.map((c) => c.id);
+      classLevels = classes.map((c) => c.name);
     }
 
     // Get current date and calculate date ranges
@@ -94,9 +113,20 @@ export class SchoolAdminSchoolsService {
       weeklyAdmissions,
       weeklyTransfers,
     ] = await Promise.all([
-      // Current counts
+      // Current counts - filter by schoolType if provided
       this.prisma.enrollment.count({
-        where: { schoolId, isActive: true },
+        where: {
+          schoolId,
+          isActive: true,
+          ...(schoolType && classIds && classLevels && (classIds.length > 0 || classLevels.length > 0)
+            ? {
+                OR: [
+                  ...(classIds.length > 0 ? [{ classId: { in: classIds } }] : []),
+                  ...(classLevels.length > 0 ? [{ classLevel: { in: classLevels } }] : []),
+                ],
+              }
+            : {}),
+        },
       }),
       // Previous month counts for comparison
       this.prisma.enrollment.count({
@@ -104,46 +134,113 @@ export class SchoolAdminSchoolsService {
           schoolId,
           isActive: true,
           createdAt: { lte: lastMonth },
+          ...(schoolType && classIds && classLevels && (classIds.length > 0 || classLevels.length > 0)
+            ? {
+                OR: [
+                  ...(classIds.length > 0 ? [{ classId: { in: classIds } }] : []),
+                  ...(classLevels.length > 0 ? [{ classLevel: { in: classLevels } }] : []),
+                ],
+              }
+            : {}),
         },
       }),
-      // Teachers
-      this.prisma.teacher.count({
-        where: { schoolId },
-      }),
-      this.prisma.teacher.count({
-        where: {
-          schoolId,
-          createdAt: { lte: lastMonth },
-        },
-      }),
+      // Teachers - filter by classes of schoolType if provided
+      schoolType && classIds && classIds.length > 0
+        ? this.prisma.teacher.count({
+            where: {
+              schoolId,
+              classTeachers: {
+                some: {
+                  classId: { in: classIds },
+                },
+              },
+            },
+          })
+        : this.prisma.teacher.count({
+            where: { schoolId },
+          }),
+      schoolType && classIds && classIds.length > 0
+        ? this.prisma.teacher.count({
+            where: {
+              schoolId,
+              createdAt: { lte: lastMonth },
+              classTeachers: {
+                some: {
+                  classId: { in: classIds },
+                },
+              },
+            },
+          })
+        : this.prisma.teacher.count({
+            where: {
+              schoolId,
+              createdAt: { lte: lastMonth },
+            },
+          }),
       // Courses (placeholder - will be 0 if Course model doesn't exist)
       this.getCourseCount(schoolId).catch(() => 0),
       this.getCourseCount(schoolId, lastMonth).catch(() => 0),
       // Pending admissions (placeholder - will be 0 if Admission model doesn't exist)
       this.getPendingAdmissionsCount(schoolId).catch(() => 0),
       this.getPendingAdmissionsCount(schoolId, lastMonth).catch(() => 0),
-      // All enrollments for growth trends
+      // All enrollments for growth trends - filter by schoolType if provided
       this.prisma.enrollment.findMany({
         where: {
           schoolId,
           createdAt: { gte: sixMonthsAgo },
+          ...(schoolType && classIds && classLevels && (classIds.length > 0 || classLevels.length > 0)
+            ? {
+                OR: [
+                  ...(classIds.length > 0 ? [{ classId: { in: classIds } }] : []),
+                  ...(classLevels.length > 0 ? [{ classLevel: { in: classLevels } }] : []),
+                ],
+              }
+            : {}),
         },
         select: { createdAt: true },
       }),
-      // Recent students (last 5)
+      // Recent students (last 5) - filter by schoolType if provided
       this.prisma.enrollment.findMany({
-        where: { schoolId, isActive: true },
+        where: {
+          schoolId,
+          isActive: true,
+          ...(schoolType && classIds && classLevels && (classIds.length > 0 || classLevels.length > 0)
+            ? {
+                OR: [
+                  ...(classIds.length > 0 ? [{ classId: { in: classIds } }] : []),
+                  ...(classLevels.length > 0 ? [{ classLevel: { in: classLevels } }] : []),
+                ],
+              }
+            : {}),
+        },
         include: {
-          student: true,
+          student: {
+            select: {
+              id: true,
+              firstName: true,
+              middleName: true,
+              lastName: true,
+              uid: true,
+              publicId: true,
+            },
+          },
         },
         orderBy: { createdAt: 'desc' },
         take: 5,
       }),
-      // Weekly admissions
+      // Weekly admissions - filter by schoolType if provided
       this.prisma.enrollment.findMany({
         where: {
           schoolId,
           createdAt: { gte: lastWeek },
+          ...(schoolType && classIds && classLevels && (classIds.length > 0 || classLevels.length > 0)
+            ? {
+                OR: [
+                  ...(classIds.length > 0 ? [{ classId: { in: classIds } }] : []),
+                  ...(classLevels.length > 0 ? [{ classLevel: { in: classLevels } }] : []),
+                ],
+              }
+            : {}),
         },
         select: { createdAt: true },
       }),
@@ -296,6 +393,23 @@ export class SchoolAdminSchoolsService {
     const skip = (page - 1) * limit;
     const search = query.search?.trim() || '';
     const roleFilter = query.role?.trim() || '';
+    const schoolType = query.schoolType?.trim();
+
+    // If schoolType is provided, get classes of that type to filter teachers
+    let classIds: string[] | undefined;
+    if (schoolType) {
+      const classes = await this.prisma.class.findMany({
+        where: {
+          schoolId,
+          type: schoolType as any,
+          isActive: true,
+        },
+        select: {
+          id: true,
+        },
+      });
+      classIds = classes.map((c) => c.id);
+    }
 
     // Build search conditions for both admins and teachers
     const searchCondition = search
@@ -312,9 +426,29 @@ export class SchoolAdminSchoolsService {
     const isTeacherFilter = roleFilter === 'Teacher';
     const isSpecificRoleFilter = roleFilter && roleFilter !== 'All' && roleFilter !== 'Teacher';
 
+    // Build teacher filter condition - include schoolType filtering if provided
+    const teacherWhereCondition: any = {
+      schoolId,
+      ...searchCondition,
+      ...(isSpecificRoleFilter ? { id: { in: [] } } : {}), // Exclude teachers if filtering by admin role
+    };
+
+    // If schoolType is provided, filter teachers by classes of that type
+    if (schoolType && classIds && classIds.length > 0) {
+      teacherWhereCondition.classTeachers = {
+        some: {
+          classId: { in: classIds },
+        },
+      };
+    } else if (schoolType && (!classIds || classIds.length === 0)) {
+      // If schoolType is provided but no classes found, return empty teachers list
+      teacherWhereCondition.id = { in: [] };
+    }
+
     // Get all staff (admins and teachers) with filters
     const [allAdmins, allTeachers] = await Promise.all([
       // Get all admins (filtered by search and role if needed)
+      // Note: Admins are not filtered by schoolType as they can manage all types
       this.prisma.schoolAdmin.findMany({
         where: {
           schoolId,
@@ -324,13 +458,9 @@ export class SchoolAdminSchoolsService {
         include: { user: true },
         orderBy: { createdAt: 'desc' },
       }),
-      // Get all teachers (filtered by search, exclude if filtering by specific admin role)
+      // Get all teachers (filtered by search, exclude if filtering by specific admin role, and by schoolType if provided)
       this.prisma.teacher.findMany({
-        where: {
-          schoolId,
-          ...searchCondition,
-          ...(isSpecificRoleFilter ? { id: { in: [] } } : {}), // Exclude teachers if filtering by admin role
-        },
+        where: teacherWhereCondition,
         include: { user: true },
         orderBy: { createdAt: 'desc' },
       }),

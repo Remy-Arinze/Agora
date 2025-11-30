@@ -119,6 +119,7 @@ model Student {
   guardians         StudentGuardian[]
   transfers         Transfer[]
   personalResources StudentResource[]
+  courseRegistrations CourseRegistration[] // For TERTIARY: Course registrations (carry-overs, etc.)
 
   @@index([uid])
   @@index([userId])
@@ -348,6 +349,7 @@ model Term {
   grades           Grade[]           @relation("GradeTerm")
   timetablePeriods TimetablePeriod[]
   curricula        Curriculum[]
+  courseRegistrations CourseRegistration[] // For TERTIARY: Course registrations for this term
 
   @@unique([academicSessionId, number])
   @@index([academicSessionId])
@@ -433,6 +435,7 @@ model Subject {
   classLevel       ClassLevel?       @relation(fields: [classLevelId], references: [id], onDelete: SetNull)
   timetablePeriods TimetablePeriod[]
   subjectTeachers  SubjectTeacher[]
+  courseRegistrations CourseRegistration[] // For TERTIARY: Students registered for this subject
 
   @@unique([schoolId, code])
   @@index([schoolId])
@@ -880,4 +883,31 @@ model StaffPermission {
   @@unique([adminId, permissionId])
   @@index([adminId])
   @@index([permissionId])
+}
+
+// Course Registration - For TERTIARY institutions only
+// Allows students to register for specific subjects/courses independent of their class level
+// Enables "carry-over" scenarios where a 400L student can retake a 100L course
+model CourseRegistration {
+  id          String   @id @default(cuid())
+  studentId   String
+  subjectId   String   // Link to Subject (for TERTIARY, subjects are courses)
+  semester    String?  // e.g., "First Semester", "Second Semester"
+  academicYear String  // e.g., "2024/2025"
+  termId      String?  // Link to Term (optional, for tracking which term registration is for)
+  isCarryOver Boolean  @default(false) // True if this is a carry-over/repeat course
+  isActive    Boolean  @default(true)  // Can be deactivated if student drops the course
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  term    Term?   @relation(fields: [termId], references: [id], onDelete: SetNull)
+
+  @@unique([studentId, subjectId, termId]) // One registration per student per subject per term
+  @@index([studentId])
+  @@index([subjectId])
+  @@index([termId])
+  @@index([isActive])
+  @@index([academicYear])
 }

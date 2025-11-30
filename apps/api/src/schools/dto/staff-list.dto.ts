@@ -84,5 +84,8 @@ export class GetStaffListQueryDto {
 
   @ApiProperty({ description: 'Filter by role', required: false })
   role?: string;
+
+  @ApiProperty({ description: 'Filter by school type (PRIMARY, SECONDARY, TERTIARY)', required: false })
+  schoolType?: string;
 }
 

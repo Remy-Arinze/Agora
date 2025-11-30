@@ -58,6 +58,18 @@ export class TimetablePeriodDto {
 
   @ApiProperty()
   createdAt: Date;
+
+  @ApiProperty({ required: false })
+  hasConflict?: boolean; // True if this period conflicts with another period
+
+  @ApiProperty({ required: false })
+  conflictMessage?: string; // Description of the conflict
+
+  @ApiProperty({ required: false })
+  conflictingPeriodIds?: string[]; // IDs of periods that conflict with this one
+
+  @ApiProperty({ required: false })
+  isFromCourseRegistration?: boolean; // True if this period comes from course registration (carry-over)
 }
 
 export class ConflictInfo {

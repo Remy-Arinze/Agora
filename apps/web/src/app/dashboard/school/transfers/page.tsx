@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
@@ -24,12 +24,14 @@ import {
   GraduationCap,
   Trash2,
   X,
+  Award,
 } from 'lucide-react';
 import {
   useGetMySchoolQuery,
   useGetStudentsQuery,
   useGenerateTacMutation,
   useGetOutgoingTransfersQuery,
+  useGetTransferHistoricalGradesQuery,
   useRevokeTacMutation,
   useInitiateTransferMutation,
   useGetIncomingTransfersQuery,
@@ -37,7 +39,386 @@ import {
   useRejectTransferMutation,
   useGetClassesQuery,
 } from '@/lib/store/api/schoolAdminApi';
+import { useSchoolType } from '@/hooks/useSchoolType';
 import toast from 'react-hot-toast';
+
+// Component to display historical grades modal
+function HistoricalGradesModal({
+  schoolId,
+  transferId,
+  onClose,
+}: {
+  schoolId: string;
+  transferId: string;
+  onClose: () => void;
+}) {
+  const { data: gradesResponse, isLoading, error, isError } = useGetTransferHistoricalGradesQuery(
+    { schoolId, transferId },
+    { 
+      skip: !schoolId || !transferId,
+      // Refetch when modal opens
+      refetchOnMountOrArgChange: true,
+    }
+  );
+
+  const historicalData = gradesResponse?.data;
+
+  // Debug logging
+  useEffect(() => {
+    console.log('HistoricalGradesModal - schoolId:', schoolId, 'transferId:', transferId);
+    console.log('HistoricalGradesModal - isLoading:', isLoading, 'isError:', isError);
+    if (error) {
+      console.error('Error loading historical grades:', error);
+      if ('data' in error) {
+        console.error('Error data:', (error as any).data);
+      }
+      if ('status' in error) {
+        console.error('Error status:', (error as any).status);
+      }
+    }
+    if (gradesResponse) {
+      console.log('Historical grades response:', gradesResponse);
+      console.log('Historical data:', historicalData);
+    }
+  }, [error, gradesResponse, isLoading, isError, schoolId, transferId, historicalData]);
+
+  return (
+    <Modal isOpen={true} onClose={onClose} title="Historical Academic Records" size="xl">
+      <div className="space-y-6">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
+            <span className="ml-3 text-light-text-secondary dark:text-dark-text-secondary">
+              Loading historical records...
+            </span>
+          </div>
+        ) : historicalData ? (
+          <>
+            <Alert variant="info">
+              <div className="flex items-start gap-2">
+                <Award className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium mb-1">Historical Academic Records</p>
+                  <p className="text-sm">
+                    These are the academic records from when this student was enrolled in your school. The student has since been transferred.
+                  </p>
+                </div>
+              </div>
+            </Alert>
+
+            {/* Student Information Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <GraduationCap className="h-5 w-5" />
+                  Student Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mb-1">Full Name</p>
+                    <p className="font-medium text-base">
+                      {historicalData.student?.firstName}{' '}
+                      {historicalData.student?.middleName}{' '}
+                      {historicalData.student?.lastName}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mb-1">Student ID (UID)</p>
+                    <p className="font-medium text-base">{historicalData.student?.uid}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mb-1">Transfer Completed</p>
+                    <p className="font-medium text-base">
+                      {historicalData.transfer?.completedAt
+                        ? new Date(historicalData.transfer.completedAt).toLocaleDateString()
+                        : 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Academic Records Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Award className="h-5 w-5" />
+                  Academic Records
+                  <span className="text-sm font-normal text-light-text-secondary dark:text-dark-text-secondary">
+                    ({historicalData.enrollments?.reduce((sum: number, e: any) => sum + (e.grades?.length || 0), 0) || 0} total records)
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <TransferEnrollmentsDisplay 
+                  enrollments={historicalData.enrollments} 
+                  grades={[]}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Action Button */}
+            <div className="flex justify-end pt-2 border-t border-light-border dark:border-dark-border">
+              <Button variant="primary" onClick={onClose}>
+                Close
+              </Button>
+            </div>
+          </>
+        ) : isError || error ? (
+          <div className="text-center py-8">
+            <Alert variant="error">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-5 w-5 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium mb-1">Error Loading Historical Records</p>
+                  <p className="text-sm">
+                    {error && 'data' in error
+                      ? (error.data as any)?.message || 'Failed to load historical records'
+                      : error && 'status' in error
+                      ? `Error ${(error as any).status}: Failed to load historical records`
+                      : 'Failed to load historical records. Please try again.'}
+                  </p>
+                  <p className="text-xs mt-2 text-light-text-muted dark:text-dark-text-muted">
+                    Transfer ID: {transferId} | School ID: {schoolId}
+                  </p>
+                </div>
+              </div>
+            </Alert>
+          </div>
+        ) : (
+          <div className="text-center py-8">
+            <AlertCircle className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+            <p className="text-light-text-secondary dark:text-dark-text-secondary">
+              No historical records found for this transfer
+            </p>
+            <p className="text-xs mt-2 text-light-text-muted dark:text-dark-text-muted">
+              This might occur if the student had no grades recorded during their enrollment.
+            </p>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+// Component to display enrollments with collapsible class levels
+function TransferEnrollmentsDisplay({ enrollments, grades }: { enrollments?: any[]; grades?: any[] }) {
+  const [expandedEnrollments, setExpandedEnrollments] = useState<Set<string>>(new Set());
+
+  // Use enrollments if available, otherwise fall back to grouping grades by class level
+  const enrollmentsData = useMemo(() => {
+    if (enrollments && enrollments.length > 0) {
+      return enrollments;
+    }
+    // Fallback: if no enrollments, try to group grades by academic year and class level
+    if (grades && grades.length > 0) {
+      const grouped: Record<string, any> = {};
+      grades.forEach((grade: any) => {
+        const key = `${grade.academicYear || 'Unknown'}_${grade.term || 'Unknown'}`;
+        if (!grouped[key]) {
+          grouped[key] = {
+            id: key,
+            classLevel: grade.enrollment?.classLevel || 'Unknown Class',
+            academicYear: grade.academicYear || 'Unknown',
+            enrollmentDate: grade.createdAt,
+            isActive: false,
+            grades: [],
+          };
+        }
+        grouped[key].grades.push(grade);
+      });
+      return Object.values(grouped);
+    }
+    return [];
+  }, [enrollments, grades]);
+
+  // Calculate cumulative score for an enrollment
+  const calculateCumulativeScore = (enrollmentGrades: any[]) => {
+    if (enrollmentGrades.length === 0) return { percentage: 0, totalScore: 0, totalMaxScore: 0 };
+    
+    const totalScore = enrollmentGrades.reduce((sum, g) => sum + (g.score || 0), 0);
+    const totalMaxScore = enrollmentGrades.reduce((sum, g) => sum + (g.maxScore || 0), 0);
+    const percentage = totalMaxScore > 0 ? Math.round((totalScore / totalMaxScore) * 100) : 0;
+    
+    return { percentage, totalScore, totalMaxScore };
+  };
+
+  const toggleEnrollment = (enrollmentId: string) => {
+    const newExpanded = new Set(expandedEnrollments);
+    if (newExpanded.has(enrollmentId)) {
+      newExpanded.delete(enrollmentId);
+    } else {
+      newExpanded.add(enrollmentId);
+    }
+    setExpandedEnrollments(newExpanded);
+  };
+
+  const gradeTypeLabels: Record<string, string> = {
+    CA: 'Continuous Assessment',
+    ASSIGNMENT: 'Assignments',
+    EXAM: 'Examinations',
+  };
+
+  if (enrollmentsData.length === 0) {
+    return (
+      <div className="text-center py-8 text-light-text-secondary dark:text-dark-text-secondary">
+        <p>No academic records available for this student.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {enrollmentsData.map((enrollment: any) => {
+        const isExpanded = expandedEnrollments.has(enrollment.id);
+        const cumulative = calculateCumulativeScore(enrollment.grades || []);
+        const gradeCount = enrollment.grades?.length || 0;
+
+        // Group grades by type for display
+        const groupedGrades: Record<string, any[]> = {};
+        (enrollment.grades || []).forEach((grade: any) => {
+          const type = grade.gradeType || 'CA';
+          if (!groupedGrades[type]) {
+            groupedGrades[type] = [];
+          }
+          groupedGrades[type].push(grade);
+        });
+
+        return (
+          <div
+            key={enrollment.id}
+            className="border border-light-border dark:border-dark-border rounded-lg overflow-hidden"
+          >
+            {/* Collapsible Header */}
+            <button
+              onClick={() => toggleEnrollment(enrollment.id)}
+              className="w-full bg-light-surface dark:bg-dark-surface px-4 py-4 hover:bg-gray-50 dark:hover:bg-dark-surface/80 transition-colors flex items-center justify-between"
+            >
+              <div className="flex items-center gap-3 flex-1 text-left">
+                <div className={`transform transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
+                  <ArrowDown className="h-4 w-4 text-light-text-secondary dark:text-dark-text-secondary" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-semibold text-base text-light-text-primary dark:text-dark-text-primary">
+                    {enrollment.classLevel || 'Unknown Class'}
+                  </h4>
+                  <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-0.5">
+                    {enrollment.academicYear || 'Unknown Year'}
+                    {enrollment.isActive && (
+                      <span className="ml-2 px-2 py-0.5 rounded text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+                        Active
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                {/* Cumulative Score */}
+                <div className="text-right">
+                  <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">Cumulative</p>
+                  <p className="text-lg font-bold text-light-text-primary dark:text-dark-text-primary">
+                    {cumulative.percentage}%
+                  </p>
+                  <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">
+                    {cumulative.totalScore}/{cumulative.totalMaxScore}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">Records</p>
+                  <p className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary">
+                    {gradeCount}
+                  </p>
+                </div>
+              </div>
+            </button>
+
+            {/* Expanded Content */}
+            {isExpanded && (
+              <div className="border-t border-light-border dark:border-dark-border bg-white dark:bg-gray-900">
+                <div className="p-4 space-y-6">
+                  {Object.keys(groupedGrades).length === 0 ? (
+                    <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary text-center py-4">
+                      No grades available for this class level.
+                    </p>
+                  ) : (
+                    Object.entries(groupedGrades).map(([gradeType, typeGrades]) => (
+                      <div key={gradeType} className="border border-light-border dark:border-dark-border rounded-lg overflow-hidden">
+                        <div className="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-light-border dark:border-dark-border">
+                          <h5 className="font-medium text-sm flex items-center justify-between">
+                            <span>{gradeTypeLabels[gradeType] || gradeType}</span>
+                            <span className="text-xs font-normal text-light-text-secondary dark:text-dark-text-secondary">
+                              {typeGrades.length} {typeGrades.length === 1 ? 'record' : 'records'}
+                            </span>
+                          </h5>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead className="bg-light-surface dark:bg-dark-surface">
+                              <tr>
+                                <th className="text-left py-2 px-4 font-semibold text-xs text-light-text-secondary dark:text-dark-text-secondary">
+                                  Subject
+                                </th>
+                                <th className="text-left py-2 px-4 font-semibold text-xs text-light-text-secondary dark:text-dark-text-secondary">
+                                  Assessment
+                                </th>
+                                <th className="text-left py-2 px-4 font-semibold text-xs text-light-text-secondary dark:text-dark-text-secondary">
+                                  Score
+                                </th>
+                                <th className="text-left py-2 px-4 font-semibold text-xs text-light-text-secondary dark:text-dark-text-secondary">
+                                  Term
+                                </th>
+                                <th className="text-left py-2 px-4 font-semibold text-xs text-light-text-secondary dark:text-dark-text-secondary">
+                                  Academic Year
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {typeGrades.map((grade: any, idx: number) => (
+                                <tr
+                                  key={grade.id || idx}
+                                  className="border-b border-light-border dark:border-dark-border hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                                >
+                                  <td className="py-2 px-4 font-medium text-sm">
+                                    {grade.subject && grade.subject !== 'N/A' ? grade.subject : (
+                                      <span className="text-light-text-muted dark:text-dark-text-muted italic">
+                                        Not specified
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-2 px-4 text-sm">
+                                    {grade.assessmentName || (grade.sequence ? `${gradeType} ${grade.sequence}` : gradeType)}
+                                  </td>
+                                  <td className="py-2 px-4">
+                                    <span className="font-medium text-sm">
+                                      {grade.score}/{grade.maxScore}
+                                    </span>
+                                    {grade.grade && (
+                                      <span className="ml-2 text-xs px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                                        {grade.grade}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="py-2 px-4 text-sm">{grade.term || 'N/A'}</td>
+                                  <td className="py-2 px-4 text-sm">{grade.academicYear || 'N/A'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function TransfersPage() {
   const router = useRouter();
@@ -53,6 +434,7 @@ export default function TransfersPage() {
   } | null>(null);
   const [showTransferPreview, setShowTransferPreview] = useState<any>(null);
   const [showCompleteModal, setShowCompleteModal] = useState<string | null>(null);
+  const [showHistoricalGradesModal, setShowHistoricalGradesModal] = useState<string | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState('');
   const [studentSearchQuery, setStudentSearchQuery] = useState('');
   const [tacFormData, setTacFormData] = useState({ tac: '', studentId: '' });
@@ -66,31 +448,34 @@ export default function TransfersPage() {
   // Get school ID
   const { data: schoolResponse } = useGetMySchoolQuery();
   const schoolId = schoolResponse?.data?.id;
+  
+  // Get school type
+  const { currentType } = useSchoolType();
 
   // Get students for TAC generation
   const { data: studentsResponse } = useGetStudentsQuery(
-    { schoolId: schoolId!, page: 1, limit: 100 },
+    { schoolId: schoolId!, page: 1, limit: 100, schoolType: currentType || undefined },
     { skip: !schoolId }
   );
   const students = studentsResponse?.data?.items || [];
 
   // Get classes for transfer completion
   const { data: classesResponse } = useGetClassesQuery(
-    { schoolId: schoolId! },
+    { schoolId: schoolId!, type: currentType || undefined },
     { skip: !schoolId }
   );
   const classes = classesResponse?.data || [];
 
   // Outgoing transfers
   const { data: outgoingResponse, refetch: refetchOutgoing } = useGetOutgoingTransfersQuery(
-    { schoolId: schoolId!, page: 1, limit: 50 },
+    { schoolId: schoolId!, page: 1, limit: 50, schoolType: currentType || undefined },
     { skip: !schoolId }
   );
   const outgoingTransfers = outgoingResponse?.data?.transfers || [];
 
   // Incoming transfers
   const { data: incomingResponse, refetch: refetchIncoming } = useGetIncomingTransfersQuery(
-    { schoolId: schoolId!, page: 1, limit: 50 },
+    { schoolId: schoolId!, page: 1, limit: 50, schoolType: currentType || undefined },
     { skip: !schoolId }
   );
   const incomingTransfers = incomingResponse?.data?.transfers || [];
@@ -662,17 +1047,32 @@ export default function TransfersPage() {
                                 </span>
                               </td>
                               <td className="py-4 px-4">
-                                {transfer.tac && !transfer.tacUsedAt && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleRevokeTac(transfer.id)}
-                                    disabled={isRevoking}
-                                  >
-                                    <Trash2 className="h-4 w-4 mr-1" />
-                                    Revoke
-                                  </Button>
-                                )}
+                                <div className="flex items-center gap-2">
+                                  {transfer.status === 'COMPLETED' && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        console.log('Opening historical grades for transfer:', transfer.id);
+                                        setShowHistoricalGradesModal(transfer.id);
+                                      }}
+                                    >
+                                      <Eye className="h-4 w-4 mr-1" />
+                                      View Grades
+                                    </Button>
+                                  )}
+                                  {transfer.tac && !transfer.tacUsedAt && transfer.status !== 'COMPLETED' && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleRevokeTac(transfer.id)}
+                                      disabled={isRevoking}
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-1" />
+                                      Revoke
+                                    </Button>
+                                  )}
+                                </div>
                               </td>
                             </motion.tr>
                           ))}
@@ -869,74 +1269,78 @@ export default function TransfersPage() {
             isOpen={!!showTransferPreview}
             onClose={() => setShowTransferPreview(null)}
             title="Transfer Preview"
-            size="lg"
+            size="xl"
           >
-            <div className="space-y-4">
+            <div className="space-y-6">
               <Alert variant="info">
-                Review the student data below. You can complete or reject this transfer.
+                <div className="flex items-start gap-2">
+                  <Eye className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium mb-1">Review Student Transfer Data</p>
+                    <p className="text-sm">
+                      Please review all student information and academic records below before completing or rejecting this transfer.
+                    </p>
+                  </div>
+                </div>
               </Alert>
-              <div>
-                <h3 className="font-semibold text-lg mb-2">Student Information</h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-light-text-secondary dark:text-dark-text-secondary">Name:</p>
-                    <p className="font-medium">
-                      {showTransferPreview.studentData?.student?.firstName}{' '}
-                      {showTransferPreview.studentData?.student?.lastName}
-                    </p>
+
+              {/* Student Information Card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <GraduationCap className="h-5 w-5" />
+                    Student Information
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mb-1">Full Name</p>
+                      <p className="font-medium text-base">
+                        {showTransferPreview.studentData?.student?.firstName}{' '}
+                        {showTransferPreview.studentData?.student?.middleName}{' '}
+                        {showTransferPreview.studentData?.student?.lastName}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mb-1">Student ID (UID)</p>
+                      <p className="font-medium text-base">{showTransferPreview.studentData?.student?.uid}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mb-1">From School</p>
+                      <p className="font-medium text-base">{showTransferPreview.studentData?.fromSchool?.name}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mb-1">Current Class</p>
+                      <p className="font-medium text-base">
+                        {showTransferPreview.studentData?.enrollment?.classLevel} ({showTransferPreview.studentData?.enrollment?.academicYear})
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-light-text-secondary dark:text-dark-text-secondary">Student ID:</p>
-                    <p className="font-medium">{showTransferPreview.studentData?.student?.uid}</p>
-                  </div>
-                  <div>
-                    <p className="text-light-text-secondary dark:text-dark-text-secondary">From School:</p>
-                    <p className="font-medium">{showTransferPreview.studentData?.fromSchool?.name}</p>
-                  </div>
-                  <div>
-                    <p className="text-light-text-secondary dark:text-dark-text-secondary">Current Class:</p>
-                    <p className="font-medium">
-                      {showTransferPreview.studentData?.enrollment?.classLevel} (
-                      {showTransferPreview.studentData?.enrollment?.academicYear})
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div>
-                <h3 className="font-semibold text-lg mb-2">
-                  Grades ({showTransferPreview.studentData?.grades?.length || 0} records)
-                </h3>
-                <div className="max-h-60 overflow-y-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-2">Subject</th>
-                        <th className="text-left py-2">Score</th>
-                        <th className="text-left py-2">Term</th>
-                        <th className="text-left py-2">Year</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {showTransferPreview.studentData?.grades?.slice(0, 10).map((grade: any, idx: number) => (
-                        <tr key={idx} className="border-b">
-                          <td className="py-2">{grade.subject}</td>
-                          <td className="py-2">
-                            {grade.score}/{grade.maxScore} ({grade.grade})
-                          </td>
-                          <td className="py-2">{grade.term}</td>
-                          <td className="py-2">{grade.academicYear}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {showTransferPreview.studentData?.grades?.length > 10 && (
-                    <p className="text-xs text-light-text-muted dark:text-dark-text-muted mt-2">
-                      ... and {showTransferPreview.studentData.grades.length - 10} more records
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="flex gap-3">
+                </CardContent>
+              </Card>
+
+              {/* Academic Records Section - Grouped by Class Level */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Award className="h-5 w-5" />
+                    Academic Records
+                    <span className="text-sm font-normal text-light-text-secondary dark:text-dark-text-secondary">
+                      ({showTransferPreview.studentData?.enrollments?.reduce((sum: number, e: any) => sum + (e.grades?.length || 0), 0) || showTransferPreview.studentData?.grades?.length || 0} total records)
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <TransferEnrollmentsDisplay 
+                    enrollments={showTransferPreview.studentData?.enrollments} 
+                    grades={showTransferPreview.studentData?.grades}
+                  />
+                </CardContent>
+              </Card>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-2 border-t border-light-border dark:border-dark-border">
                 <Button
                   variant="primary"
                   className="flex-1"
@@ -949,11 +1353,27 @@ export default function TransfersPage() {
                   onClick={() => handleRejectTransfer(showTransferPreview.transferId)}
                   disabled={isRejecting}
                 >
-                  Reject
+                  {isRejecting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Rejecting...
+                    </>
+                  ) : (
+                    'Reject Transfer'
+                  )}
                 </Button>
               </div>
             </div>
           </Modal>
+        )}
+
+        {/* Historical Grades Modal for Completed Transfers */}
+        {showHistoricalGradesModal && (
+          <HistoricalGradesModal
+            schoolId={schoolId!}
+            transferId={showHistoricalGradesModal}
+            onClose={() => setShowHistoricalGradesModal(null)}
+          />
         )}
 
         {/* Complete Transfer Modal */}

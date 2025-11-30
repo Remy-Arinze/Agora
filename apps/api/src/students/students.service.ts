@@ -520,39 +520,6 @@ export class StudentsService {
       return [];
     }
 
-    // Get all class IDs from enrollments
-    let classIds = student.enrollments
-      .map((e) => e.classId)
-      .filter((id): id is string => id !== null);
-
-    // If no classIds found, try to find classes by classLevel
-    if (classIds.length === 0) {
-      const classLevels = student.enrollments
-        .map((e) => e.classLevel)
-        .filter((level): level is string => !!level);
-
-      if (classLevels.length > 0) {
-        // Find classes that match the classLevel
-        const matchingClasses = await this.prisma.class.findMany({
-          where: {
-            schoolId: actualSchoolId,
-            isActive: true,
-            OR: [
-              { name: { in: classLevels } },
-              { classLevel: { in: classLevels } },
-            ],
-          },
-          select: { id: true },
-        });
-
-        classIds = matchingClasses.map((c) => c.id);
-      }
-    }
-
-    if (classIds.length === 0) {
-      return [];
-    }
-
     // Get active term if termId not provided
     let activeTermId = termId;
     if (!activeTermId) {
@@ -579,87 +546,19 @@ export class StudentsService {
       }
     }
 
-    // Get timetable periods for all enrolled classes
-    // Build where clause with proper structure
-    const whereClause: any = {
-      termId: activeTermId,
-      AND: [
-        {
-          OR: [
-            { classId: { in: classIds } },
-            // For classArms, we need to find periods where the classArm's classLevel
-            // matches classes with the same name/classLevel as the enrollment
-            // Since ClassLevel doesn't have a direct relation to Class, we'll just filter by classId
-            // and let the school filter handle the rest
-          ],
-        },
-      ],
-    };
-
-    // Ensure periods belong to the correct school
-    if (actualSchoolId) {
-      whereClause.AND.push({
-        OR: [
-          { class: { schoolId: actualSchoolId } },
-          { classArm: { classLevel: { schoolId: actualSchoolId } } },
-        ],
-      });
+    // Use TimetableService.getTimetableForStudent which handles:
+    // - PRIMARY/SECONDARY: Returns timetable for student's class (existing logic)
+    // - TERTIARY: Merges home class timetable + course registration subjects with conflict detection
+    try {
+      return await this.timetableService.getTimetableForStudent(
+        actualSchoolId,
+        student.id,
+        activeTermId
+      );
+    } catch (error) {
+      // If error, return empty array (e.g., student not found, etc.)
+      return [];
     }
-
-    const periods = await this.prisma.timetablePeriod.findMany({
-      where: whereClause,
-      include: {
-        subject: true,
-        course: true,
-        class: true,
-        teacher: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            subject: true,
-          },
-        },
-        room: true,
-        classArm: {
-          include: {
-            classLevel: true,
-          },
-        },
-        term: true,
-      },
-      orderBy: [
-        { dayOfWeek: 'asc' },
-        { startTime: 'asc' },
-      ],
-    });
-
-    return periods.map((p: any) => ({
-      id: p.id,
-      dayOfWeek: p.dayOfWeek,
-      startTime: p.startTime,
-      endTime: p.endTime,
-      type: p.type,
-      subject: p.subject ? { id: p.subject.id, name: p.subject.name, code: p.subject.code } : null,
-      course: p.course ? { id: p.course.id, name: p.course.name } : null,
-      class: p.class ? { id: p.class.id, name: p.class.name } : null,
-      classArm: p.classArm ? {
-        id: p.classArm.id,
-        name: p.classArm.name,
-        classLevel: p.classArm.classLevel ? {
-          id: p.classArm.classLevel.id,
-          name: p.classArm.classLevel.name,
-        } : null,
-      } : null,
-      teacher: p.teacher ? {
-        id: p.teacher.id,
-        firstName: p.teacher.firstName,
-        lastName: p.teacher.lastName,
-        subject: p.teacher.subject,
-      } : null,
-      room: p.room ? { id: p.room.id, name: p.room.name, code: p.room.code } : null,
-      term: p.term ? { id: p.term.id, name: p.term.name } : null,
-    }));
   }
 
   /**

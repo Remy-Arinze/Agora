@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { motion } from 'framer-motion';
 import { GraduationCap, Users, BookOpen, UserPlus, Loader2, AlertCircle, Calendar, XCircle, Upload } from 'lucide-react';
+import { ImageCropModal } from '@/components/ui/ImageCropModal';
 import { useRouter } from 'next/navigation';
 import { useGetSchoolAdminDashboardQuery, useGetActiveSessionQuery, useGetMySchoolQuery, useEndTermMutation, useUploadSchoolLogoMutation } from '@/lib/store/api/schoolAdminApi';
 import { EndTermModal } from '@/components/modals';
@@ -40,10 +41,13 @@ const getChangeType = (change: number): 'positive' | 'negative' | 'neutral' => {
 
 export default function AdminOverviewPage() {
   const router = useRouter();
-  const { data, isLoading, error, refetch } = useGetSchoolAdminDashboardQuery();
   
   // Get school type and terminology
   const { currentType } = useSchoolType();
+  
+  const { data, isLoading, error, refetch } = useGetSchoolAdminDashboardQuery(
+    currentType || undefined
+  );
   const terminology = getTerminology(currentType);
 
   // Get school and active session
@@ -52,6 +56,10 @@ export default function AdminOverviewPage() {
   const schoolId = school?.id;
   const [uploadSchoolLogo, { isLoading: isUploadingLogo }] = useUploadSchoolLogoMutation();
   const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { data: activeSessionResponse, refetch: refetchActiveSession } = useGetActiveSessionQuery(
     { schoolId: schoolId! },
     { skip: !schoolId }
@@ -60,6 +68,60 @@ export default function AdminOverviewPage() {
 
   const [endTerm, { isLoading: isEndingTerm }] = useEndTermMutation();
   const [showEndTermModal, setShowEndTermModal] = useState(false);
+
+  // Create preview URL when file is selected
+  useEffect(() => {
+    if (selectedLogoFile && logoPreview) {
+      // Cleanup function to revoke the object URL
+      return () => {
+        URL.revokeObjectURL(logoPreview);
+      };
+    }
+  }, [selectedLogoFile, logoPreview]);
+
+  // Handle file selection - open crop modal
+  const handleFileSelect = (file: File) => {
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.');
+      return;
+    }
+
+    // Validate file size (5MB max)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast.error('File size exceeds maximum limit of 5MB');
+      return;
+    }
+
+    // Create preview URL for cropping
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      setImageToCrop(result);
+      setShowCropModal(true);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Handle crop completion
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    // Convert blob to File
+    const croppedFile = new File([croppedBlob], 'school-logo.jpg', {
+      type: 'image/jpeg',
+      lastModified: Date.now(),
+    });
+
+    // Create preview URL
+    const previewUrl = URL.createObjectURL(croppedBlob);
+    setLogoPreview(previewUrl);
+    setSelectedLogoFile(croppedFile);
+
+    // Close crop modal
+    setImageToCrop(null);
+    setShowCropModal(false);
+  };
 
   // Determine button state
   const hasActiveSession = !!activeSession?.session;
@@ -138,12 +200,37 @@ export default function AdminOverviewPage() {
             <div className="flex items-center gap-3">
               {/* School Logo Upload - Passport Size */}
               <div className="flex items-center gap-2">
-                {school?.logo ? (
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      handleFileSelect(file);
+                    }
+                  }}
+                />
+                {/* Show preview if file is selected, otherwise show current logo or upload placeholder */}
+                {logoPreview ? (
+                  <div className="relative group">
+                    <img
+                      src={logoPreview}
+                      alt="Logo Preview"
+                      className="object-cover border-2 border-blue-500 dark:border-blue-400 rounded shadow-sm"
+                      style={{ width: '60px', height: '60px' }}
+                    />
+                    <div className="absolute -top-1 -right-1 bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs">
+                      !
+                    </div>
+                  </div>
+                ) : school?.logo ? (
                   <div className="relative group">
                     <img
                       src={school.logo}
                       alt="School Logo"
-                      className="w-12 h-15 object-cover border-2 border-light-border dark:border-dark-border rounded shadow-sm"
+                      className="object-cover border-2 border-light-border dark:border-dark-border rounded shadow-sm"
                       style={{ width: '60px', height: '60px' }}
                     />
                     <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 rounded transition-opacity flex items-center justify-center opacity-0 group-hover:opacity-100">
@@ -151,17 +238,7 @@ export default function AdminOverviewPage() {
                         variant="ghost"
                         size="sm"
                         onClick={() => {
-                          // Trigger file input click
-                          const input = document.createElement('input');
-                          input.type = 'file';
-                          input.accept = 'image/jpeg,image/png,image/gif,image/webp';
-                          input.onchange = (e) => {
-                            const file = (e.target as HTMLInputElement).files?.[0];
-                            if (file) {
-                              setSelectedLogoFile(file);
-                            }
-                          };
-                          input.click();
+                          fileInputRef.current?.click();
                         }}
                         className="text-white text-xs"
                       >
@@ -172,18 +249,9 @@ export default function AdminOverviewPage() {
                 ) : (
                   <div
                     className="border-2 border-dashed border-light-border dark:border-dark-border rounded cursor-pointer hover:border-blue-300 dark:hover:border-blue-700 transition-colors flex items-center justify-center bg-gray-50 dark:bg-gray-800"
-                    style={{ width: '48px', height: '60px' }}
+                    style={{ width: '60px', height: '60px' }}
                     onClick={() => {
-                      const input = document.createElement('input');
-                      input.type = 'file';
-                      input.accept = 'image/jpeg,image/png,image/gif,image/webp';
-                      input.onchange = (e) => {
-                        const file = (e.target as HTMLInputElement).files?.[0];
-                        if (file) {
-                          setSelectedLogoFile(file);
-                        }
-                      };
-                      input.click();
+                      fileInputRef.current?.click();
                     }}
                   >
                     <Upload className="h-4 w-4 text-light-text-muted dark:text-dark-text-muted" />
@@ -200,6 +268,10 @@ export default function AdminOverviewPage() {
                           await uploadSchoolLogo({ file: selectedLogoFile }).unwrap();
                           toast.success('School logo uploaded successfully!');
                           setSelectedLogoFile(null);
+                          setLogoPreview(null);
+                          if (fileInputRef.current) {
+                            fileInputRef.current.value = '';
+                          }
                           refetchSchool();
                         } catch (error: any) {
                           toast.error(error?.data?.message || 'Failed to upload logo');
@@ -224,6 +296,10 @@ export default function AdminOverviewPage() {
                       size="sm"
                       onClick={() => {
                         setSelectedLogoFile(null);
+                        setLogoPreview(null);
+                        if (fileInputRef.current) {
+                          fileInputRef.current.value = '';
+                        }
                       }}
                       disabled={isUploadingLogo}
                     >
@@ -391,7 +467,7 @@ export default function AdminOverviewPage() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {recentStudents.map((student) => (
+                    {recentStudents.map((student: any) => (
                       <Link
                         key={student.id}
                         href={`/dashboard/school/students/${student.id}`}
@@ -439,6 +515,27 @@ export default function AdminOverviewPage() {
           termName={activeSession?.term?.name}
           sessionName={activeSession?.session?.name}
         />
+
+        {/* Image Crop Modal */}
+        {imageToCrop && (
+          <ImageCropModal
+            isOpen={showCropModal}
+            onClose={() => {
+              setShowCropModal(false);
+              setImageToCrop(null);
+              if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+              }
+            }}
+            imageSrc={imageToCrop}
+            onCropComplete={handleCropComplete}
+            aspectRatio={1}
+            cropShape="rect"
+            title="Crop School Logo"
+            minZoom={1}
+            maxZoom={3}
+          />
+        )}
       </div>
     </ProtectedRoute>
   );

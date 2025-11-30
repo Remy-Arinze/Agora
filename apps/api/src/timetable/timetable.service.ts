@@ -385,6 +385,183 @@ export class TimetableService {
   }
 
   /**
+   * Get timetable for a student (Hybrid approach for TERTIARY)
+   * For PRIMARY/SECONDARY: Returns timetable for student's class level (existing logic)
+   * For TERTIARY: Merges home class timetable + course registration subjects
+   */
+  async getTimetableForStudent(
+    schoolId: string,
+    studentId: string,
+    termId: string
+  ): Promise<TimetablePeriodDto[]> {
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    // Get student with enrollment
+    const student = await this.prisma.student.findUnique({
+      where: { id: studentId },
+      include: {
+        enrollments: {
+          where: {
+            schoolId: school.id,
+            isActive: true,
+          },
+          include: {
+            class: true,
+          },
+          take: 1,
+        },
+      },
+    });
+
+    if (!student || student.enrollments.length === 0) {
+      throw new NotFoundException('Student not found or not enrolled in this school');
+    }
+
+    const enrollment = student.enrollments[0];
+    const classData = enrollment.class;
+
+    if (!classData) {
+      throw new NotFoundException('Student is not assigned to a class');
+    }
+
+    // Check if this is a TERTIARY institution
+    const isTertiary = school.hasTertiary && classData.type === 'TERTIARY';
+
+    if (!isTertiary) {
+      // PRIMARY/SECONDARY: Use existing logic - get timetable for student's class
+      return this.getTimetableForClass(schoolId, classData.id, termId);
+    }
+
+    // TERTIARY: Hybrid approach - merge home class timetable + course registrations
+    const [homeClassTimetable, courseRegistrations] = await Promise.all([
+      // 1. Get home class timetable (e.g., 400 Level)
+      this.getTimetableForClass(schoolId, classData.id, termId),
+      // 2. Get active course registrations for this student and term
+      (this.prisma as any).courseRegistration.findMany({
+        where: {
+          studentId: student.id,
+          termId: termId,
+          isActive: true,
+        },
+        include: {
+          subject: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    // 3. Get timetable slots for registered subjects (carry-overs)
+    const registeredSubjectIds = courseRegistrations.map((cr) => cr.subjectId);
+    let registeredSubjectTimetable: TimetablePeriodDto[] = [];
+
+    if (registeredSubjectIds.length > 0) {
+      const registeredPeriods = await this.timetablePeriodModel.findMany({
+        where: {
+          termId: termId,
+          subjectId: { in: registeredSubjectIds },
+        },
+        include: {
+          subject: true,
+          course: true,
+          class: true,
+          teacher: true,
+          room: true,
+          classArm: {
+            include: {
+              classLevel: true,
+            },
+          },
+        },
+        orderBy: [
+          { dayOfWeek: 'asc' },
+          { startTime: 'asc' },
+        ],
+      });
+
+      registeredSubjectTimetable = registeredPeriods.map((p: any) => {
+        const dto = this.mapToPeriodDto(p);
+        // Mark as from course registration
+        (dto as any).isFromCourseRegistration = true;
+        return dto;
+      });
+    }
+
+    // 4. Merge both timetables
+    const mergedTimetable = [...homeClassTimetable, ...registeredSubjectTimetable];
+
+    // 5. Detect conflicts (time overlaps)
+    const timetableWithConflicts = this.detectTimeConflicts(mergedTimetable);
+
+    return timetableWithConflicts;
+  }
+
+  /**
+   * Detect time conflicts in a merged timetable
+   * Two periods conflict if they overlap in time on the same day
+   */
+  private detectTimeConflicts(periods: TimetablePeriodDto[]): TimetablePeriodDto[] {
+    const periodsWithConflicts = periods.map((period) => ({ ...period }));
+
+    for (let i = 0; i < periodsWithConflicts.length; i++) {
+      const period1 = periodsWithConflicts[i];
+      const conflicts: string[] = [];
+      let conflictMessage = '';
+
+      for (let j = i + 1; j < periodsWithConflicts.length; j++) {
+        const period2 = periodsWithConflicts[j];
+
+        // Check if periods are on the same day and overlap in time
+        if (
+          period1.dayOfWeek === period2.dayOfWeek &&
+          this.doPeriodsOverlap(period1.startTime, period1.endTime, period2.startTime, period2.endTime)
+        ) {
+          conflicts.push(period2.id);
+          if (!period2.hasConflict) {
+            period2.hasConflict = true;
+            period2.conflictingPeriodIds = period2.conflictingPeriodIds || [];
+            period2.conflictingPeriodIds.push(period1.id);
+          }
+
+          // Build conflict message
+          const period1Name = period1.subjectName || period1.courseName || 'Unknown';
+          const period2Name = period2.subjectName || period2.courseName || 'Unknown';
+          conflictMessage = `Course clash: ${period1Name} conflicts with ${period2Name} at ${period1.startTime} on ${period1.dayOfWeek}`;
+        }
+      }
+
+      if (conflicts.length > 0) {
+        period1.hasConflict = true;
+        period1.conflictingPeriodIds = conflicts;
+        period1.conflictMessage = conflictMessage;
+      }
+    }
+
+    return periodsWithConflicts;
+  }
+
+  /**
+   * Check if two time periods overlap
+   * Periods overlap if: startTime1 < endTime2 AND endTime1 > startTime2
+   */
+  private doPeriodsOverlap(
+    start1: string,
+    end1: string,
+    start2: string,
+    end2: string
+  ): boolean {
+    // Times are in HH:mm format, so string comparison works for lexicographic ordering
+    return start1 < end2 && end1 > start2;
+  }
+
+  /**
    * Get all timetables for a school type (grouped by class)
    */
   async getTimetablesForSchoolType(
@@ -740,7 +917,7 @@ export class TimetableService {
    * Map Prisma period to DTO
    */
   private mapToPeriodDto(period: any): TimetablePeriodDto {
-    return {
+    const dto: TimetablePeriodDto = {
       id: period.id,
       dayOfWeek: period.dayOfWeek,
       startTime: period.startTime,
@@ -763,6 +940,22 @@ export class TimetableService {
       termId: period.termId,
       createdAt: period.createdAt,
     };
+
+    // Add optional fields if they exist
+    if (period.hasConflict !== undefined) {
+      (dto as any).hasConflict = period.hasConflict;
+    }
+    if (period.conflictMessage) {
+      (dto as any).conflictMessage = period.conflictMessage;
+    }
+    if (period.conflictingPeriodIds) {
+      (dto as any).conflictingPeriodIds = period.conflictingPeriodIds;
+    }
+    if (period.isFromCourseRegistration !== undefined) {
+      (dto as any).isFromCourseRegistration = period.isFromCourseRegistration;
+    }
+
+    return dto;
   }
 }
 
