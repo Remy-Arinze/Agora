@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import Link from 'next/link';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -22,17 +23,71 @@ import {
   useGetMyStudentClassesQuery,
   useGetTimetableForClassQuery,
   useGetTimetableForClassArmQuery,
-  useGetTimetableForStudentQuery,
   useGetActiveSessionQuery,
   useGetSessionsQuery,
   useGetCurriculumForClassQuery,
+  useGetMyClassmatesQuery,
 } from '@/lib/store/api/schoolAdminApi';
 import { TeacherTimetableGrid } from '@/components/timetable/TeacherTimetableGrid';
 import { useSchoolType } from '@/hooks/useSchoolType';
 import { getTerminology } from '@/lib/utils/terminology';
 import toast from 'react-hot-toast';
 
-type TabType = 'overview' | 'teachers' | 'resources' | 'curriculum' | 'timetable';
+type TabType = 'overview' | 'teachers' | 'resources' | 'curriculum' | 'timetable' | 'classmates';
+
+// Classmate Card Component
+function ClassmateCard({ classmate }: { classmate: any }) {
+  const [imageError, setImageError] = useState(false);
+
+  const getInitials = () => {
+    const first = classmate.firstName?.[0]?.toUpperCase() || '';
+    const last = classmate.lastName?.[0]?.toUpperCase() || '';
+    return first + last || '?';
+  };
+
+  const fullName = `${classmate.firstName || ''} ${classmate.lastName || ''}`.trim() || 'Unknown';
+  const shouldShowImage = classmate.profileImage && !imageError && classmate.profileImage.trim() !== '';
+
+  return (
+    <Link href={`/dashboard/school/students/${classmate.id}`}>
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="p-4 border border-light-border dark:border-dark-border rounded-lg hover:border-blue-500 dark:hover:border-blue-500 hover:shadow-md transition-all cursor-pointer bg-light-card dark:bg-dark-surface"
+      >
+        <div className="flex items-center gap-4">
+          {shouldShowImage ? (
+            <img
+              src={classmate.profileImage}
+              alt={fullName}
+              className="w-12 h-12 rounded-full object-cover border-2 border-light-border dark:border-dark-border"
+              onError={() => setImageError(true)}
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 flex items-center justify-center text-white font-semibold text-sm border-2 border-light-border dark:border-dark-border">
+              {getInitials()}
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary truncate">
+              {fullName}
+            </h3>
+            {classmate.enrollment?.classLevel && (
+              <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                {classmate.enrollment.classLevel}
+              </p>
+            )}
+            {classmate.uid && (
+              <p className="text-xs text-light-text-muted dark:text-dark-text-muted mt-1">
+                ID: {classmate.uid}
+              </p>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    </Link>
+  );
+}
 
 export default function StudentClassesPage() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
@@ -84,6 +139,13 @@ export default function StudentClassesPage() {
     },
     { skip: !schoolId || !classData?.id || activeTab !== 'curriculum' }
   );
+
+  // Get classmates
+  const { data: classmatesResponse, isLoading: isLoadingClassmates } = useGetMyClassmatesQuery(
+    { classId: classData?.id },
+    { skip: !classData?.id || activeTab !== 'classmates' }
+  );
+  const classmates = classmatesResponse?.data || [];
 
   // Get all sessions for term selector
   const { data: sessionsResponse } = useGetSessionsQuery(
@@ -226,6 +288,12 @@ export default function StudentClassesPage() {
       id: 'timetable' as TabType,
       label: 'Timetable',
       icon: <Clock className="h-4 w-4" />,
+      available: true,
+    },
+    {
+      id: 'classmates' as TabType,
+      label: 'Classmates',
+      icon: <Users className="h-4 w-4" />,
       available: true,
     },
   ];
@@ -606,6 +674,39 @@ export default function StudentClassesPage() {
                       <Clock className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
                       <p className="text-light-text-secondary dark:text-dark-text-secondary">
                         No timetable available for the selected {terminology.periodSingular.toLowerCase()}
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Classmates Tab */}
+          {activeTab === 'classmates' && (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-light-text-primary dark:text-dark-text-primary">
+                    Classmates
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingClassmates ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="h-8 w-8 text-light-text-muted dark:text-dark-text-muted animate-spin" />
+                    </div>
+                  ) : classmates.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {classmates.map((classmate: any) => (
+                        <ClassmateCard key={classmate.id} classmate={classmate} />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <Users className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+                      <p className="text-light-text-secondary dark:text-dark-text-secondary">
+                        No classmates found in this {terminology.courseSingular.toLowerCase()}
                       </p>
                     </div>
                   )}

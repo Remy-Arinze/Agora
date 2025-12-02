@@ -85,7 +85,13 @@ export const studentAdmissionFormSchema = z.object({
   allergies: z.string().optional(),
   medications: z.string().optional(),
   emergencyContact: z.string().optional(),
-  emergencyContactPhone: z.string().min(10, 'Emergency contact phone must be at least 10 characters').optional().or(z.literal('')),
+  emergencyContactPhone: z
+    .union([
+      z.string().min(10, 'Emergency contact phone must be at least 10 characters'),
+      z.literal(''),
+    ])
+    .optional()
+    .transform((val) => (val === '' ? undefined : val)),
   medicalNotes: z.string().optional(),
 });
 

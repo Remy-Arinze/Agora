@@ -102,6 +102,16 @@ export class StaffImportService {
         // Process based on type
         if (row.type === 'teacher') {
           try {
+            // Safely convert isTemporary to boolean
+            let isTemporary = false;
+            if (row.isTemporary !== undefined && row.isTemporary !== null && row.isTemporary !== '') {
+              if (typeof row.isTemporary === 'boolean') {
+                isTemporary = row.isTemporary;
+              } else if (typeof row.isTemporary === 'string') {
+                isTemporary = row.isTemporary.trim().toLowerCase() === 'true';
+              }
+            }
+
             const result = await this.teacherService.addTeacher(schoolId, {
               firstName: row.firstName.trim(),
               lastName: row.lastName.trim(),
@@ -109,7 +119,7 @@ export class StaffImportService {
               phone: row.phone.trim(),
               subject: row.subject?.trim() || undefined,
               employeeId: row.employeeId?.trim() || undefined,
-              isTemporary: row.isTemporary?.toLowerCase() === 'true',
+              isTemporary,
             });
 
             summary.successCount++;

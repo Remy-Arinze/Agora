@@ -786,24 +786,45 @@ export class ClassService {
       }
     }
 
-    // For secondary schools: subject is required
+    // For secondary schools: 
+    // - Form teachers (isPrimary: true) don't need a subject
+    // - Subject teachers (isPrimary: false/undefined) require a subject
     if (classData.type === ClassType.SECONDARY) {
-      if (!assignmentData.subject) {
-        throw new BadRequestException('Subject is required for secondary school class assignments');
-      }
+      // If this is a form teacher assignment (isPrimary: true), subject is optional
+      if (assignmentData.isPrimary) {
+        // Form teacher - no subject required
+        // Check if there's already a form teacher for this class
+        const existingFormTeacher = await this.classTeacherModel.findFirst({
+          where: {
+            classId: classData.id,
+            isPrimary: true,
+          },
+        });
 
-      // Check if another teacher is already assigned to this subject
-      const existingSubjectTeacher = await this.classTeacherModel.findFirst({
-        where: {
-          classId: classData.id,
-          subject: assignmentData.subject,
-        },
-      });
+        if (existingFormTeacher && existingFormTeacher.teacherId !== teacherId) {
+          throw new ConflictException(
+            'Another teacher is already assigned as the form teacher for this class'
+          );
+        }
+      } else {
+        // Subject teacher - subject is required
+        if (!assignmentData.subject) {
+          throw new BadRequestException('Subject is required for subject teacher assignments in secondary schools');
+        }
 
-      if (existingSubjectTeacher && existingSubjectTeacher.teacherId !== teacherId) {
-        throw new ConflictException(
-          `Another teacher is already assigned to teach ${assignmentData.subject} in this class`
-        );
+        // Check if another teacher is already assigned to this subject
+        const existingSubjectTeacher = await this.classTeacherModel.findFirst({
+          where: {
+            classId: classData.id,
+            subject: assignmentData.subject,
+          },
+        });
+
+        if (existingSubjectTeacher && existingSubjectTeacher.teacherId !== teacherId) {
+          throw new ConflictException(
+            `Another teacher is already assigned to teach ${assignmentData.subject} in this class`
+          );
+        }
       }
     }
 

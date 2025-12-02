@@ -79,13 +79,13 @@ export function AnalyticsChart({
         }
         
         return (
-          <PieChart>
+          <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
             <Pie
               data={pieData}
               cx="50%"
               cy="50%"
               labelLine={false}
-              label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+              label={false}
               outerRadius={type === 'donut' ? 80 : 100}
               innerRadius={type === 'donut' ? 40 : 0}
               fill="#8884d8"
@@ -96,14 +96,30 @@ export function AnalyticsChart({
               ))}
             </Pie>
             <Tooltip
+              formatter={(value: number, name: string, props: any) => {
+                const total = pieData.reduce((sum, item) => sum + item.value, 0);
+                const percent = ((value / total) * 100).toFixed(1);
+                return [`${value} (${percent}%)`, props.payload.name];
+              }}
               contentStyle={{
                 backgroundColor: '#0f1b3d',
                 border: '1px solid #1a2f5c',
                 borderRadius: '8px',
                 color: '#94a3b8',
+                padding: '8px 12px',
               }}
             />
-            <Legend />
+            <Legend 
+              wrapperStyle={{ paddingTop: '10px' }}
+              iconSize={10}
+              fontSize={11}
+              formatter={(value, entry: any) => {
+                const total = pieData.reduce((sum, item) => sum + item.value, 0);
+                const percent = ((entry.payload.value / total) * 100).toFixed(1);
+                const displayName = value.length > 15 ? `${value.substring(0, 15)}...` : value;
+                return `${displayName} (${percent}%)`;
+              }}
+            />
           </PieChart>
         );
       case 'horizontal':

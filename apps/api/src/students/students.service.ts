@@ -1697,6 +1697,115 @@ export class StudentsService {
     return classes;
   }
 
+  /**
+   * Get classmates (students in the same class)
+   */
+  async getMyClassmates(user: UserWithContext, classId?: string): Promise<any[]> {
+    if (user.role !== 'STUDENT') {
+      throw new ForbiddenException('Access denied. Student role required.');
+    }
+
+    // Get current student's active enrollment
+    const student = await this.prisma.student.findFirst({
+      where: {
+        userId: user.id,
+        enrollments: {
+          some: {
+            isActive: true,
+            ...(user.currentSchoolId ? { schoolId: user.currentSchoolId } : {}),
+          },
+        },
+      },
+      include: {
+        enrollments: {
+          where: {
+            isActive: true,
+            ...(user.currentSchoolId ? { schoolId: user.currentSchoolId } : {}),
+          },
+          orderBy: { enrollmentDate: 'desc' },
+          take: 1,
+          include: {
+            class: true,
+          },
+        },
+      },
+    });
+
+    if (!student || student.enrollments.length === 0) {
+      return [];
+    }
+
+    const enrollment = student.enrollments[0];
+    const targetClassId = classId || enrollment.classId;
+    const schoolId = enrollment.schoolId;
+    const academicYear = enrollment.academicYear;
+    const classLevel = enrollment.classLevel;
+
+    if (!targetClassId && !classLevel) {
+      return [];
+    }
+
+    // Get all students in the same class
+    const enrollments = await this.prisma.enrollment.findMany({
+      where: {
+        schoolId,
+        isActive: true,
+        academicYear,
+        // Exclude current student
+        studentId: { not: student.id },
+        OR: [
+          // Match by classId if available
+          ...(targetClassId ? [{ classId: targetClassId }] : []),
+          // Or match by classLevel if no classId
+          ...(classLevel ? [
+            {
+              AND: [
+                { classLevel },
+                { classId: null },
+              ],
+            },
+          ] : []),
+        ],
+      },
+      include: {
+        student: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                phone: true,
+                accountStatus: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: {
+        student: {
+          lastName: 'asc',
+        },
+      },
+    });
+
+    return enrollments.map((enrollment) => ({
+      id: enrollment.student.id,
+      uid: enrollment.student.uid,
+      firstName: enrollment.student.firstName,
+      middleName: enrollment.student.middleName,
+      lastName: enrollment.student.lastName,
+      profileImage: enrollment.student.profileImage,
+      dateOfBirth: enrollment.student.dateOfBirth.toISOString().split('T')[0],
+      enrollment: {
+        id: enrollment.id,
+        classLevel: enrollment.classLevel,
+        academicYear: enrollment.academicYear,
+        enrollmentDate: enrollment.enrollmentDate.toISOString(),
+      },
+      user: enrollment.student.user,
+    }));
+  }
+
   async getMySchool(user: UserWithContext): Promise<any> {
     if (user.role !== 'STUDENT') {
       throw new ForbiddenException('Access denied. Student role required.');
@@ -1726,6 +1835,7 @@ export class StudentsService {
                 id: true,
                 name: true,
                 subdomain: true,
+                logo: true,
                 hasPrimary: true,
                 hasSecondary: true,
                 hasTertiary: true,

@@ -94,7 +94,10 @@ export default function TimetablesPage() {
   );
 
   const { data: subjectsResponse } = useGetSubjectsQuery(
-    { schoolId: schoolId! },
+    {
+      schoolId: schoolId!,
+      schoolType: currentType || undefined,
+    },
     { skip: !schoolId }
   );
 

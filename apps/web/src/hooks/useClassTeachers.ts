@@ -6,6 +6,7 @@ interface UseClassTeachersParams {
   isPrimary: boolean;
   showAssignTeacher: boolean;
   classData: any; // Class data to check existing assignments
+  currentType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY' | null; // School type for filtering
 }
 
 interface UseClassTeachersReturn {
@@ -25,10 +26,15 @@ export function useClassTeachers({
   isPrimary,
   showAssignTeacher,
   classData,
+  currentType,
 }: UseClassTeachersParams): UseClassTeachersReturn {
-  // Get staff list for teacher assignment - filter by role 'Teacher' to get only teachers
+  // Get staff list for teacher assignment - filter by role 'Teacher' and school type
   const { data: staffResponse, isLoading: isLoadingTeachers } = useGetStaffListQuery(
-    { limit: 100, role: 'Teacher' },
+    { 
+      limit: 100, 
+      role: 'Teacher',
+      schoolType: currentType || undefined,
+    },
     { skip: !showAssignTeacher }
   );
 
@@ -40,9 +46,21 @@ export function useClassTeachers({
 
   // Filter staff list to only include teachers (type === 'teacher')
   // This is a safety check since we're already filtering by role, but ensures we only get teachers
+  // Preserve all teacher fields including profileImage
   const allTeachers = useMemo(() => {
     const staffItems = staffResponse?.data?.items || [];
-    return staffItems.filter((staff) => staff.type === 'teacher');
+    return staffItems
+      .filter((staff) => staff.type === 'teacher')
+      .map((staff) => ({
+        id: staff.id,
+        firstName: staff.firstName,
+        lastName: staff.lastName,
+        email: staff.email,
+        phone: staff.phone,
+        subject: staff.subject,
+        profileImage: staff.profileImage,
+        employeeId: staff.employeeId,
+      }));
   }, [staffResponse]);
 
   const primaryClasses = primaryClassesResponse?.data || [];

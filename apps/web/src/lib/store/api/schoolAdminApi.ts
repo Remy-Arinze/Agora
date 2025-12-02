@@ -1133,6 +1133,15 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
       query: () => '/students/me/classes',
       providesTags: ['Student', 'Class'],
     }),
+    getMyClassmates: builder.query<ResponseDto<any[]>, { classId?: string }>({
+      query: (params) => {
+        const queryParams = new URLSearchParams();
+        if (params.classId) queryParams.append('classId', params.classId);
+        const queryString = queryParams.toString();
+        return `/students/me/classmates${queryString ? `?${queryString}` : ''}`;
+      },
+      providesTags: ['Student'],
+    }),
     getMyStudentTimetable: builder.query<
       ResponseDto<any[]>,
       { termId?: string }
@@ -1896,6 +1905,7 @@ export const {
   useGetMyStudentProfileQuery,
   useGetMyStudentEnrollmentsQuery,
   useGetMyStudentClassesQuery,
+  useGetMyClassmatesQuery,
   useGetMyStudentTimetableQuery,
   useGetMyStudentGradesQuery,
   useGetMyStudentAttendanceQuery,

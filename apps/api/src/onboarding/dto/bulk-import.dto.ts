@@ -16,8 +16,11 @@ export class BulkImportRowDto {
   })
   dateOfBirth: string;
 
-  @ApiProperty({ example: 'JSS1', description: 'Class level (must match existing class name)' })
-  class: string;
+  @ApiProperty({ example: 'JSS1', description: 'Class level (must match existing class name). Accepts both "class" and "classLevel" field names.', required: false })
+  class?: string;
+
+  @ApiProperty({ example: 'JSS1', description: 'Class level (must match existing class name). Alternative to "class" field.', required: false })
+  classLevel?: string;
 
   @ApiProperty({ 
     example: 'student@example.com', 

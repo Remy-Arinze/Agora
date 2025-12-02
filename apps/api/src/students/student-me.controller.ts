@@ -258,6 +258,21 @@ export class StudentMeController {
     return ResponseDto.ok(data, 'Classes retrieved successfully');
   }
 
+  @Get('me/classmates')
+  @ApiOperation({ summary: 'Get classmates (students in the same class)' })
+  @ApiQuery({ name: 'classId', required: false, type: String })
+  @ApiResponse({
+    status: 200,
+    description: 'Classmates retrieved successfully',
+  })
+  async getMyClassmates(
+    @CurrentUser() user: UserWithContext,
+    @Query('classId') classId?: string,
+  ): Promise<ResponseDto<any[]>> {
+    const data = await this.studentsService.getMyClassmates(user, classId);
+    return ResponseDto.ok(data, 'Classmates retrieved successfully');
+  }
+
   @Get('me/school')
   @ApiOperation({ summary: 'Get current school for student' })
   @ApiResponse({

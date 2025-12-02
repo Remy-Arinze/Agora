@@ -6,6 +6,8 @@ import { RootState } from '@/lib/store/store';
 import { SidebarBody, SidebarLink, useSidebar } from '@/components/ui/sidebar';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/Button';
+import { useGetMyStudentProfileQuery } from '@/lib/store/api/schoolAdminApi';
+import { useState } from 'react';
 import {
   LayoutDashboard,
   Building2,
@@ -27,7 +29,6 @@ import {
   School,
   Award,
 } from 'lucide-react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { getActivePluginsForTeacher } from '@/lib/plugins';
@@ -232,11 +233,38 @@ function UserProfileSection() {
   const user = useSelector((state: RootState) => state.auth.user);
   const { open } = useSidebar();
   const pathname = usePathname();
+  const [imageError, setImageError] = useState(false);
+
+  // Get student profile if user is a student
+  const { data: studentProfileResponse } = useGetMyStudentProfileQuery(undefined, {
+    skip: user?.role !== 'STUDENT',
+  });
+  const studentProfile = studentProfileResponse?.data;
 
   if (!user) return null;
 
-  // Get user avatar - using a placeholder from Unsplash
-  const userAvatar = `https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=50&h=50&fit=crop&crop=face`;
+  // Get profile image and name
+  const profileImage = user.role === 'STUDENT' ? studentProfile?.profileImage : null;
+  const firstName = user.role === 'STUDENT' ? studentProfile?.firstName : null;
+  const lastName = user.role === 'STUDENT' ? studentProfile?.lastName : null;
+  
+  // Get initials for fallback
+  const getInitials = () => {
+    if (user.role === 'STUDENT' && firstName && lastName) {
+      return `${firstName[0]?.toUpperCase() || ''}${lastName[0]?.toUpperCase() || ''}`;
+    }
+    // Fallback to email/phone initials
+    const identifier = user.email || user.phone || 'U';
+    return identifier[0]?.toUpperCase() || 'U';
+  };
+
+  const initials = getInitials();
+  const displayName = user.role === 'STUDENT' && firstName && lastName
+    ? `${firstName} ${lastName}`
+    : user.email || user.phone || 'User';
+
+  // Determine if we should show the image
+  const shouldShowImage = profileImage && !imageError && profileImage.trim() !== '';
 
   return (
     <div className="mb-6 pb-6 border-b border-gray-200 dark:border-dark-border">
@@ -248,13 +276,18 @@ function UserProfileSection() {
             : 'hover:bg-gray-50 dark:hover:bg-dark-surface/50'
         }`}
       >
-        <Image
-          src={userAvatar}
-          className={`${open ? 'h-10 w-10' : 'h-8 w-8'} flex-shrink-0 rounded-full object-cover`}
-          width={50}
-          height={50}
-          alt="Avatar"
-        />
+        {shouldShowImage ? (
+          <img
+            src={profileImage!}
+            alt={displayName}
+            className={`${open ? 'h-10 w-10' : 'h-8 w-8'} flex-shrink-0 rounded-full object-cover border-2 border-light-border dark:border-dark-border`}
+            onError={() => setImageError(true)}
+          />
+        ) : (
+          <div className={`${open ? 'h-10 w-10' : 'h-8 w-8'} rounded-full bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 flex items-center justify-center text-white font-semibold text-sm border-2 border-light-border dark:border-dark-border shadow-sm flex-shrink-0`}>
+            {initials}
+          </div>
+        )}
         <motion.div
           animate={{
             display: open ? "block" : "none",
@@ -267,7 +300,7 @@ function UserProfileSection() {
               ? 'text-white dark:text-white'
               : 'text-gray-900 dark:text-dark-text-primary'
           }`}>
-            {user.email || user.phone || 'User'}
+            {displayName}
           </p>
           <p className={`text-xs capitalize truncate ${
             pathname === '/dashboard/profile'

@@ -442,17 +442,20 @@ export class ResourcesService {
       }
     }
 
-    // Check if subject code already exists
+    // Check if subject code already exists for the same schoolType
     if (dto.code) {
       const existing = await this.subjectModel.findFirst({
         where: {
           schoolId: school.id,
           code: dto.code,
+          schoolType: dto.schoolType || null, // Match null if schoolType is not provided
         },
       });
 
       if (existing) {
-        throw new BadRequestException(`Subject with code "${dto.code}" already exists`);
+        throw new BadRequestException(
+          `Subject with code "${dto.code}" already exists for ${dto.schoolType || 'this school type'}`
+        );
       }
     }
 
@@ -525,17 +528,22 @@ export class ResourcesService {
       }
     }
 
-    // Check if subject code already exists (if changing code)
+    // Check if subject code already exists for the same schoolType (if changing code)
     if (dto.code && dto.code !== subject.code) {
+      const schoolTypeToCheck = dto.schoolType !== undefined ? dto.schoolType : subject.schoolType;
       const existing = await this.subjectModel.findFirst({
         where: {
           schoolId: school.id,
           code: dto.code,
+          schoolType: schoolTypeToCheck || null, // Match null if schoolType is not provided
+          id: { not: subjectId }, // Exclude the current subject
         },
       });
 
       if (existing) {
-        throw new BadRequestException(`Subject with code "${dto.code}" already exists`);
+        throw new BadRequestException(
+          `Subject with code "${dto.code}" already exists for ${schoolTypeToCheck || 'this school type'}`
+        );
       }
     }
 

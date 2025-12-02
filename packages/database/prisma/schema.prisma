@@ -437,7 +437,7 @@ model Subject {
   subjectTeachers  SubjectTeacher[]
   courseRegistrations CourseRegistration[] // For TERTIARY: Students registered for this subject
 
-  @@unique([schoolId, code])
+  @@unique([schoolId, code, schoolType])
   @@index([schoolId])
   @@index([schoolType])
   @@index([classLevelId])

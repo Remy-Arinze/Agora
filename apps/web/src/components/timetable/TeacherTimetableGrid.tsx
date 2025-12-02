@@ -150,11 +150,11 @@ export function TeacherTimetableGrid({
     }
 
     // PRIMARY
-    const className = period.classArmName || period.className || 'Class';
-    const subject = period.subjectName;
+    const subject = period.subjectName || 'Free Period';
+    const className = period.classArmName || period.className || '';
     return {
-      title: className,
-      subtitle: subject || 'Free Period',
+      title: subject,
+      subtitle: className || '',
       classInfo: period.roomName || '',
     };
   };

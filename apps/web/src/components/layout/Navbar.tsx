@@ -18,7 +18,7 @@ export function Navbar() {
 
   // Get school name and logo for school admins, teachers, and students
   const { data: schoolResponse } = useGetMySchoolQuery(undefined, {
-    skip: userRole !== 'SCHOOL_ADMIN' && userRole !== 'TEACHER',
+    skip: userRole !== 'SCHOOL_ADMIN',
   });
   const { data: teacherSchoolResponse } = useGetMyTeacherSchoolQuery(undefined, {
     skip: userRole !== 'TEACHER',
@@ -26,6 +26,8 @@ export function Navbar() {
   const { data: studentSchoolResponse } = useGetMyStudentSchoolQuery(undefined, {
     skip: userRole !== 'STUDENT',
   });
+  
+  // Combine school data from all sources
   const school = schoolResponse?.data || teacherSchoolResponse?.data || studentSchoolResponse?.data;
   const schoolName = school?.name;
   const schoolLogo = school?.logo;
@@ -34,8 +36,11 @@ export function Navbar() {
   // Show school type selector only for school admins
   const showSchoolTypeSelector = userRole === 'SCHOOL_ADMIN';
   
-  // Determine which logo to show
-  const showSchoolLogo = schoolLogo && !logoError && (userRole === 'SCHOOL_ADMIN' || userRole === 'TEACHER' || userRole === 'STUDENT');
+  // Determine which logo to show - show school logo if available and no error, otherwise show Agora logo
+  const shouldShowSchoolLogo = 
+    (userRole === 'SCHOOL_ADMIN' || userRole === 'TEACHER' || userRole === 'STUDENT') &&
+    schoolLogo && 
+    !logoError;
 
   return (
     <nav className={`bg-[var(--light-bg)] dark:bg-dark-bg transition-all duration-300 fixed top-0 right-0 left-0 z-30 ${open ? 'md:left-[250px]' : 'md:left-[80px]'
@@ -44,15 +49,16 @@ export function Navbar() {
         <div className="flex justify-between h-16">
           <div className="flex items-center">
             <Link href="/" className="flex items-center space-x-2">
-              {showSchoolLogo ? (
+              {shouldShowSchoolLogo ? (
                 <img
                   src={schoolLogo!}
                   alt={schoolName || 'School Logo'}
-                  className="h-8 w-8 object-contain flex-shrink-0"
+                  className="h-8 w-8 object-contain flex-shrink-0 rounded"
                   onError={() => setLogoError(true)}
                 />
               ) : (
-                <div className="h-6 w-7 bg-blue-600 dark:bg-blue-500 rounded-br-lg rounded-tr-sm rounded-tl-lg rounded-bl-sm flex-shrink-0" />
+                // Agora default logo fallback
+                <div className="h-8 w-9 bg-blue-600 dark:bg-blue-500 rounded-br-lg rounded-tr-sm rounded-tl-lg rounded-bl-sm flex-shrink-0" />
               )}
               <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                 {(userRole === 'SCHOOL_ADMIN' || userRole === 'TEACHER' || userRole === 'STUDENT') && schoolName ? schoolName : 'Agora'}

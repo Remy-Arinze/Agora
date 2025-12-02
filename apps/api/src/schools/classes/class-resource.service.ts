@@ -119,7 +119,7 @@ export class ClassResourceService {
       throw new NotFoundException('Class not found');
     }
 
-    // Get resources
+    // Get resources with uploader information
     const resources = await this.classResourceModel.findMany({
       where: {
         classId: classId,
@@ -129,7 +129,18 @@ export class ClassResourceService {
       },
     });
 
-    return resources.map((resource: any) => this.mapToDto(resource));
+    // Fetch uploader names for all resources
+    const resourcesWithUploader = await Promise.all(
+      resources.map(async (resource: any) => {
+        const uploaderName = await this.getUploaderName(resource.uploadedBy);
+        return {
+          ...resource,
+          uploadedByName: uploaderName,
+        };
+      })
+    );
+
+    return resourcesWithUploader.map((resource: any) => this.mapToDto(resource));
   }
 
   /**
@@ -166,7 +177,14 @@ export class ClassResourceService {
       throw new NotFoundException('Resource not found');
     }
 
-    return this.mapToDto(resource);
+    // Get uploader name
+    const uploaderName = await this.getUploaderName(resource.uploadedBy);
+    const resourceWithUploader = {
+      ...resource,
+      uploadedByName: uploaderName,
+    };
+
+    return this.mapToDto(resourceWithUploader);
   }
 
   /**
@@ -323,6 +341,43 @@ export class ClassResourceService {
   }
 
   /**
+   * Get uploader name from userId
+   */
+  private async getUploaderName(userId: string): Promise<string> {
+    try {
+      // First, try to find as SchoolAdmin
+      const schoolAdmin = await this.prisma.schoolAdmin.findFirst({
+        where: { userId },
+        select: { firstName: true, lastName: true },
+      });
+
+      if (schoolAdmin) {
+        return `${schoolAdmin.firstName} ${schoolAdmin.lastName}`.trim();
+      }
+
+      // Then, try to find as Teacher
+      const teacher = await this.prisma.teacher.findFirst({
+        where: { userId },
+        select: { firstName: true, lastName: true },
+      });
+
+      if (teacher) {
+        return `${teacher.firstName} ${teacher.lastName}`.trim();
+      }
+
+      // Fallback to user email if no profile found
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true },
+      });
+
+      return user?.email || 'Unknown';
+    } catch (error) {
+      return 'Unknown';
+    }
+  }
+
+  /**
    * Map Prisma resource to DTO
    */
   private mapToDto(resource: any): ClassResourceDto {
@@ -337,6 +392,7 @@ export class ClassResourceService {
       description: resource.description,
       classId: resource.classId,
       uploadedBy: resource.uploadedBy,
+      uploadedByName: resource.uploadedByName,
       createdAt: resource.createdAt,
       updatedAt: resource.updatedAt,
       downloadUrl: resource.filePath, // Cloudinary URL for direct download

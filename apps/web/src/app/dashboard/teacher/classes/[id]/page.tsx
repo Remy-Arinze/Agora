@@ -46,6 +46,7 @@ import {
   type Grade,
   type GradeType
 } from '@/lib/store/api/schoolAdminApi';
+import { useClassResources } from '@/hooks/useClassResources';
 import { BulkGradeEntryModal } from '@/components/modals/BulkGradeEntryModal';
 import { GradeEntryModal } from '@/components/modals/GradeEntryModal';
 import { CreateCurriculumModal } from '@/components/modals/CreateCurriculumModal';
@@ -73,6 +74,7 @@ export default function ClassDetailPage() {
   const [sequenceFilter, setSequenceFilter] = useState<number | ''>('');
   const [selectedTimetableTermId, setSelectedTimetableTermId] = useState<string>('');
   const [showCreateCurriculumModal, setShowCreateCurriculumModal] = useState(false);
+  const [showUploadResourceModal, setShowUploadResourceModal] = useState(false);
 
   const { currentType } = useSchoolType();
   const terminology = getTerminology(currentType) || {
@@ -193,6 +195,25 @@ export default function ClassDetailPage() {
         (student.middleName?.toLowerCase().includes(query) ?? false)
     );
   }, [students, searchQuery]);
+
+  // Get class resources using the hook
+  const {
+    resources,
+    isLoading: isLoadingResources,
+    isUploading: isUploadingResource,
+    isDeleting: isDeletingResource,
+    selectedFile,
+    resourceDescription,
+    setSelectedFile,
+    setResourceDescription,
+    handleUpload,
+    handleDelete: handleDeleteResource,
+    refetchResources,
+  } = useClassResources({
+    schoolId,
+    classId,
+    activeTab,
+  });
   const activePlugins = getActivePluginsForTeacher();
   const hasSocratesAI = activePlugins.some(p => p.slug === 'socrates-ai');
   const hasRollCall = activePlugins.some(p => p.slug === 'rollcall');
@@ -749,20 +770,136 @@ export default function ClassDetailPage() {
             <div className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-light-text-primary dark:text-dark-text-primary">
-                    Resources
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-light-text-primary dark:text-dark-text-primary">
+                      Class Resources
+                    </CardTitle>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => setShowUploadResourceModal(true)}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload Resource
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-center py-12">
-                    <FileText className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
-                    <p className="text-light-text-secondary dark:text-dark-text-secondary mb-4">
-                      Resource management will be available soon.
-                    </p>
-                    <p className="text-sm text-light-text-muted dark:text-dark-text-muted">
-                      You'll be able to upload and manage class resources here.
-                    </p>
-                  </div>
+                  {isLoadingResources ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="h-8 w-8 text-light-text-muted dark:text-dark-text-muted animate-spin" />
+                    </div>
+                  ) : resources.length > 0 ? (
+                    <div className="space-y-4">
+                      {resources.map((resource: any) => (
+                        <motion.div
+                          key={resource.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="p-4 border border-light-border dark:border-dark-border rounded-lg hover:border-blue-500 dark:hover:border-blue-500 transition-colors bg-light-card dark:bg-dark-surface"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4 flex-1 min-w-0">
+                              <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                                <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-semibold text-light-text-primary dark:text-dark-text-primary truncate">
+                                  {resource.name}
+                                </h4>
+                                {resource.description && (
+                                  <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-1 line-clamp-2">
+                                    {resource.description}
+                                  </p>
+                                )}
+                                <div className="flex items-center gap-4 mt-2 text-xs text-light-text-muted dark:text-dark-text-muted">
+                                  <span>{resource.fileType || 'Document'}</span>
+                                  {resource.fileSize && (
+                                    <span>
+                                      {(resource.fileSize / 1024 / 1024).toFixed(2)} MB
+                                    </span>
+                                  )}
+                                  {resource.createdAt && (
+                                    <span>
+                                      {new Date(resource.createdAt).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                  {resource.uploadedByName && (
+                                    <span className="text-light-text-secondary dark:text-dark-text-secondary">
+                                      By {resource.uploadedByName}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 ml-4">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  if (!schoolId || !classId) return;
+                                  const downloadUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api'}/schools/${schoolId}/classes/${classId}/resources/${resource.id}/download`;
+                                  const token = typeof window !== 'undefined' ? (localStorage.getItem('token') || localStorage.getItem('accessToken')) : null;
+                                  
+                                  fetch(downloadUrl, {
+                                    headers: token ? { Authorization: `Bearer ${token}` } : {},
+                                  })
+                                    .then((response) => response.blob())
+                                    .then((blob) => {
+                                      const url = window.URL.createObjectURL(blob);
+                                      const a = document.createElement('a');
+                                      a.href = url;
+                                      a.download = resource.name;
+                                      document.body.appendChild(a);
+                                      a.click();
+                                      window.URL.revokeObjectURL(url);
+                                      document.body.removeChild(a);
+                                    })
+                                    .catch((error) => {
+                                      toast.error('Failed to download resource');
+                                      console.error('Download error:', error);
+                                    });
+                                }}
+                              >
+                                <Download className="h-4 w-4 mr-2" />
+                                Download
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteResource(resource.id)}
+                                disabled={isDeletingResource}
+                                className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                              >
+                                {isDeletingResource ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  'Delete'
+                                )}
+                              </Button>
+                            </div>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <FileText className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+                      <p className="text-light-text-secondary dark:text-dark-text-secondary mb-4">
+                        No resources uploaded yet.
+                      </p>
+                      <p className="text-sm text-light-text-muted dark:text-dark-text-muted mb-4">
+                        Upload documents, spreadsheets, and other files for your students.
+                      </p>
+                      <Button
+                        variant="primary"
+                        onClick={() => setShowUploadResourceModal(true)}
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        Upload Your First Resource
+                      </Button>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -1054,6 +1191,119 @@ export default function ClassDetailPage() {
         variant="danger"
         isLoading={isDeleting}
       />
+
+      {/* Upload Resource Modal */}
+      {showUploadResourceModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-light-card dark:bg-dark-surface rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+          >
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-light-text-primary dark:text-dark-text-primary">
+                  Upload Resource
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowUploadResourceModal(false);
+                    setSelectedFile(null);
+                    setResourceDescription('');
+                  }}
+                  className="text-light-text-secondary dark:text-dark-text-secondary hover:text-light-text-primary dark:hover:text-dark-text-primary"
+                >
+                  <XCircle className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-light-text-primary dark:text-dark-text-primary mb-2">
+                    Select File <span className="text-red-500">*</span>
+                  </label>
+                  <div className="border-2 border-dashed border-light-border dark:border-dark-border rounded-lg p-6 text-center hover:border-blue-500 dark:hover:border-blue-500 transition-colors">
+                    <input
+                      type="file"
+                      id="file-upload"
+                      className="hidden"
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          setSelectedFile(file);
+                        }
+                      }}
+                    />
+                    <label
+                      htmlFor="file-upload"
+                      className="cursor-pointer flex flex-col items-center"
+                    >
+                      <Upload className="h-8 w-8 text-light-text-muted dark:text-dark-text-muted mb-2" />
+                      <span className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                        {selectedFile ? selectedFile.name : 'Click to upload or drag and drop'}
+                      </span>
+                      <span className="text-xs text-light-text-muted dark:text-dark-text-muted mt-1">
+                        PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, CSV (Max 50MB)
+                      </span>
+                    </label>
+                  </div>
+                  {selectedFile && (
+                    <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary mt-2">
+                      Selected: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-light-text-primary dark:text-dark-text-primary mb-2">
+                    Description (Optional)
+                  </label>
+                  <Input
+                    placeholder="Add a description for this resource..."
+                    value={resourceDescription}
+                    onChange={(e) => setResourceDescription(e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setShowUploadResourceModal(false);
+                    setSelectedFile(null);
+                    setResourceDescription('');
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={async () => {
+                    await handleUpload();
+                    setShowUploadResourceModal(false);
+                  }}
+                  disabled={isUploadingResource || !selectedFile}
+                >
+                  {isUploadingResource ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload Resource
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </ProtectedRoute>
   );
 }

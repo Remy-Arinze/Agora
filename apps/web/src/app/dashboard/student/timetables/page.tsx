@@ -10,7 +10,7 @@ import {
   useGetMyStudentClassesQuery,
   useGetTimetableForClassQuery,
   useGetTimetableForClassArmQuery,
-  useGetTimetableForStudentQuery,
+  useGetMyStudentTimetableQuery,
   useGetActiveSessionQuery,
   useGetSessionsQuery,
 } from '@/lib/store/api/schoolAdminApi';
@@ -24,7 +24,6 @@ export default function StudentTimetablesPage() {
   // Get student profile
   const { data: profileResponse } = useGetMyStudentProfileQuery();
   const student = profileResponse?.data;
-  const studentId = student?.id;
 
   // Get student's classes to find the school ID
   const { data: classesResponse, isLoading: isLoadingClasses } = useGetMyStudentClassesQuery();
@@ -64,21 +63,17 @@ export default function StudentTimetablesPage() {
   // Determine which term to use (selected or active)
   const currentTermId = selectedTermId || activeSession?.term?.id || '';
 
-  // For TERTIARY: Use getTimetableForStudent (hybrid approach with course registrations)
-  // For PRIMARY/SECONDARY: Fallback to class timetable
+  // For TERTIARY: Use getMyStudentTimetable (hybrid approach with course registrations)
+  // For PRIMARY/SECONDARY: Use class and classArm timetables (same as calendar page)
   const isTertiary = currentType === 'TERTIARY';
   
   const { 
     data: studentTimetableResponse, 
     isLoading: isLoadingStudentTimetable, 
     error: studentTimetableError 
-  } = useGetTimetableForStudentQuery(
-    {
-      schoolId: schoolId!,
-      studentId: studentId!,
-      termId: currentTermId,
-    },
-    { skip: !schoolId || !studentId || !currentTermId || !isTertiary }
+  } = useGetMyStudentTimetableQuery(
+    { termId: currentTermId },
+    { skip: !currentTermId || !isTertiary }
   );
 
   // Fallback for PRIMARY/SECONDARY: Get timetable for the class

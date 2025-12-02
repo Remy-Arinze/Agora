@@ -21,8 +21,11 @@ import {
 import {
   useGetMyStudentProfileQuery,
   useGetMyStudentEnrollmentsQuery,
+  useGetMyStudentClassesQuery,
   useGetMyStudentGradesQuery,
   useGetMyStudentTimetableQuery,
+  useGetTimetableForClassQuery,
+  useGetTimetableForClassArmQuery,
   useGetMyStudentCalendarQuery,
   useGetActiveSessionQuery,
   useGetUpcomingEventsQuery,
@@ -52,14 +55,21 @@ export default function StudentOverviewPage() {
   // Get enrollments
   const { data: enrollmentsResponse, isLoading: isLoadingEnrollments } = useGetMyStudentEnrollmentsQuery();
   const enrollments = enrollmentsResponse?.data || [];
-
+  
   // Get active enrollment (current school)
   const activeEnrollment = useMemo(() => {
     return enrollments.find((e: any) => e.isActive) || enrollments[0];
   }, [enrollments]);
-
+  
   // Get school ID from active enrollment
   const schoolId = activeEnrollment?.school?.id;
+
+  // Get student's classes to find class data for timetable
+  const { data: classesResponse, isLoading: isLoadingClasses } = useGetMyStudentClassesQuery();
+  const classes = classesResponse?.data || [];
+  const classData = useMemo(() => {
+    return classes[0] || null; // Get the active/primary class
+  }, [classes]);
 
   // Get active session
   const { data: activeSessionResponse } = useGetActiveSessionQuery(
@@ -69,24 +79,100 @@ export default function StudentOverviewPage() {
   const activeSession = activeSessionResponse?.data;
   const activeTermId = activeSession?.term?.id;
 
-  // Get recent grades (last 5)
+  // Get recent grades (last 5) - only published grades
   const { data: gradesResponse, isLoading: isLoadingGrades } = useGetMyStudentGradesQuery(
     { termId: activeTermId },
     { skip: !activeTermId }
   );
   const allGrades = gradesResponse?.data || [];
-  const recentGrades = useMemo(() => {
-    return allGrades
-      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      .slice(0, 5);
+  
+  // Filter to only published grades and get recent ones
+  const publishedGrades = useMemo(() => {
+    return allGrades.filter((g: any) => g.isPublished !== false);
   }, [allGrades]);
+  
+  const recentGrades = useMemo(() => {
+    return publishedGrades
+      .sort((a: any, b: any) => {
+        // Sort by published date (updatedAt or createdAt) - most recent first
+        const dateA = new Date(a.updatedAt || a.createdAt).getTime();
+        const dateB = new Date(b.updatedAt || b.createdAt).getTime();
+        return dateB - dateA;
+      })
+      .slice(0, 5);
+  }, [publishedGrades]);
 
-  // Get today's timetable
-  const { data: timetableResponse, isLoading: isLoadingTimetable } = useGetMyStudentTimetableQuery(
+  // Get recently published grades count (last 7 days)
+  const recentlyPublishedGrades = useMemo(() => {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    return publishedGrades.filter((g: any) => {
+      const publishedDate = new Date(g.updatedAt || g.createdAt);
+      return publishedDate >= sevenDaysAgo;
+    });
+  }, [publishedGrades]);
+
+  // Get timetable - use same approach as timetables page
+  const isTertiary = currentType === 'TERTIARY';
+  
+  // For TERTIARY: Use getMyStudentTimetable
+  const { 
+    data: studentTimetableResponse, 
+    isLoading: isLoadingStudentTimetable 
+  } = useGetMyStudentTimetableQuery(
     { termId: activeTermId },
-    { skip: !activeTermId }
+    { skip: !activeTermId || !isTertiary }
   );
-  const timetable = timetableResponse?.data || [];
+
+  // For PRIMARY/SECONDARY: Use class and classArm timetables
+  const { 
+    data: classTimetableResponse, 
+    isLoading: isLoadingClassTimetable 
+  } = useGetTimetableForClassQuery(
+    {
+      schoolId: schoolId!,
+      classId: classData?.id!,
+      termId: activeTermId!,
+    },
+    { skip: !schoolId || !classData?.id || !activeTermId || isTertiary }
+  );
+
+  const classArmId = classData?.classArmId || classData?.enrollment?.classArmId;
+  const { 
+    data: classArmTimetableResponse, 
+    isLoading: isLoadingClassArmTimetable 
+  } = useGetTimetableForClassArmQuery(
+    {
+      schoolId: schoolId!,
+      classArmId: classArmId!,
+      termId: activeTermId!,
+    },
+    { skip: !schoolId || !classArmId || !activeTermId || isTertiary }
+  );
+
+  // Combine timetables based on school type
+  const timetable = useMemo(() => {
+    if (isTertiary && studentTimetableResponse?.data) {
+      return studentTimetableResponse.data;
+    } else {
+      const classPeriods = classTimetableResponse?.data || [];
+      const classArmPeriods = classArmTimetableResponse?.data || [];
+      const allPeriods = [...classPeriods, ...classArmPeriods];
+      return Array.from(
+        new Map(allPeriods.map((p: any) => [p.id, p])).values()
+      );
+    }
+  }, [
+    isTertiary,
+    studentTimetableResponse,
+    classTimetableResponse,
+    classArmTimetableResponse
+  ]);
+
+  const isLoadingTimetable = isTertiary 
+    ? isLoadingStudentTimetable 
+    : (isLoadingClassTimetable || isLoadingClassArmTimetable);
 
   // Get today's schedule
   const todaySchedule = useMemo(() => {
@@ -100,19 +186,32 @@ export default function StudentOverviewPage() {
     });
   }, [timetable]);
 
-  // Get upcoming events
-  const { data: upcomingEventsResponse } = useGetUpcomingEventsQuery(
-    { schoolId: schoolId!, days: 7, schoolType: currentType || undefined },
+  // Get calendar data (events + timetable) for next 7 days
+  const startDate = new Date().toISOString().split('T')[0];
+  const endDate = new Date();
+  endDate.setDate(endDate.getDate() + 7);
+  const endDateStr = endDate.toISOString().split('T')[0];
+
+  const { data: calendarResponse } = useGetMyStudentCalendarQuery(
+    { startDate, endDate: endDateStr },
     { skip: !schoolId }
   );
-  const upcomingEvents = upcomingEventsResponse?.data || [];
+  const calendarData = calendarResponse?.data;
+  const calendarEvents = calendarData?.events || [];
+
+  // Get upcoming events (fallback to events query if calendar doesn't have events)
+  const { data: upcomingEventsResponse } = useGetUpcomingEventsQuery(
+    { schoolId: schoolId!, days: 7, schoolType: currentType || undefined },
+    { skip: !schoolId || (calendarEvents && calendarEvents.length > 0) }
+  );
+  const upcomingEvents = calendarEvents.length > 0 ? calendarEvents : (upcomingEventsResponse?.data || []);
 
   // Calculate stats
   const stats = useMemo(() => {
-    // Calculate GPA/Average
+    // Calculate GPA/Average (only from published grades)
     let totalScore = 0;
     let totalMaxScore = 0;
-    allGrades.forEach((grade: any) => {
+    publishedGrades.forEach((grade: any) => {
       totalScore += grade.score || 0;
       totalMaxScore += grade.maxScore || 0;
     });
@@ -124,11 +223,12 @@ export default function StudentOverviewPage() {
     return {
       average,
       activeClassesCount,
-      totalGrades: allGrades.length,
+      totalGrades: publishedGrades.length,
+      recentlyPublished: recentlyPublishedGrades.length,
     };
-  }, [allGrades, enrollments]);
+  }, [publishedGrades, enrollments, recentlyPublishedGrades]);
 
-  const isLoading = isLoadingProfile || isLoadingEnrollments || isLoadingGrades || isLoadingTimetable;
+  const isLoading = isLoadingProfile || isLoadingEnrollments || isLoadingClasses || isLoadingGrades || isLoadingTimetable;
 
   if (isLoading) {
     return (
@@ -231,6 +331,11 @@ export default function StudentOverviewPage() {
                   <p className="text-3xl font-bold text-light-text-primary dark:text-dark-text-primary mt-2">
                     {stats.totalGrades}
                   </p>
+                  {stats.recentlyPublished > 0 && (
+                    <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                      {stats.recentlyPublished} new this week
+                    </p>
+                  )}
                 </div>
                 <div className="h-12 w-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
                   <Award className="h-6 w-6 text-green-600 dark:text-green-400" />
@@ -276,7 +381,7 @@ export default function StudentOverviewPage() {
             </CardHeader>
             <CardContent>
               {recentGrades.length > 0 ? (
-                <div className="space-y-4">
+                <div className="space-y-4 max-h-[400px] overflow-y-auto scrollbar-hide pr-2">
                   {recentGrades.map((grade: any) => (
                     <motion.div
                       key={grade.id}
@@ -332,32 +437,77 @@ export default function StudentOverviewPage() {
             </CardHeader>
             <CardContent>
               {todaySchedule.length > 0 ? (
-                <div className="space-y-4">
-                  {todaySchedule.map((period: any, index: number) => (
-                    <motion.div
-                      key={period.id || index}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="p-4 bg-gray-50 dark:bg-dark-surface rounded-lg"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-semibold text-light-text-primary dark:text-dark-text-primary">
-                            {period.subject?.name || period.course?.name || period.class?.name || 'Class'}
-                          </h4>
-                          <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-1">
-                            {period.teacher ? `${period.teacher.firstName} ${period.teacher.lastName}` : 'No teacher'} 
-                            {period.room ? ` • ${period.room.name}` : ''}
-                          </p>
+                <div className="space-y-3 max-h-[400px] overflow-y-auto scrollbar-hide pr-2">
+                  {todaySchedule.map((period: any, index: number) => {
+                    // Check if class is currently ongoing
+                    const now = new Date();
+                    const [startHour, startMin] = period.startTime.split(':').map(Number);
+                    const [endHour, endMin] = period.endTime.split(':').map(Number);
+                    const startTime = new Date();
+                    startTime.setHours(startHour, startMin, 0, 0);
+                    const endTime = new Date();
+                    endTime.setHours(endHour, endMin, 0, 0);
+                    const isOngoing = now >= startTime && now <= endTime;
+                    const isUpcoming = now < startTime;
+                    
+                    // Check if it's a free period (no subject/course or type is not LESSON)
+                    const isFreePeriod = period.type !== 'LESSON' || 
+                      (!period.subjectName && !period.subject?.name && !period.courseName && !period.course?.name);
+                    
+                    const periodTitle = isFreePeriod 
+                      ? 'Free Period'
+                      : (period.subjectName || period.subject?.name || period.courseName || period.course?.name || 'Class');
+                    
+                    return (
+                      <motion.div
+                        key={period.id || index}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`p-4 rounded-lg border-2 transition-all ${
+                          isOngoing 
+                            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500 dark:border-blue-500' 
+                            : isUpcoming
+                            ? 'bg-gray-50 dark:bg-dark-surface border-gray-200 dark:border-dark-border'
+                            : 'bg-gray-50 dark:bg-dark-surface border-gray-200 dark:border-dark-border opacity-60'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-semibold text-light-text-primary dark:text-dark-text-primary">
+                                {periodTitle}
+                              </h4>
+                              {isOngoing && (
+                                <span className="px-2 py-0.5 text-xs font-medium bg-blue-500 text-white rounded-full">
+                                  Now
+                                </span>
+                              )}
+                              {period.isFromCourseRegistration && (
+                                <span className="px-2 py-0.5 text-xs font-medium bg-purple-500 text-white rounded-full">
+                                  CO
+                                </span>
+                              )}
+                            </div>
+                            {period.roomName || period.room?.name ? (
+                              <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-1">
+                                {period.roomName || period.room.name}
+                              </p>
+                            ) : null}
+                          </div>
+                          <div className="text-right ml-4">
+                            <p className="text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
+                              {period.startTime} - {period.endTime}
+                            </p>
+                            {period.hasConflict && (
+                              <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                                Conflict
+                              </p>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
-                            {period.startTime} - {period.endTime}
-                          </p>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
+                      </motion.div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="text-center py-8">

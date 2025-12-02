@@ -278,6 +278,14 @@ export default function StudentResourcesPage() {
                               <span>{formatFileSize(resource.fileSize || 0)}</span>
                               <span>•</span>
                               <span>{new Date(resource.createdAt).toLocaleDateString()}</span>
+                              {resource.uploadedByName && (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-light-text-secondary dark:text-dark-text-secondary">
+                                    By {resource.uploadedByName}
+                                  </span>
+                                </>
+                              )}
                               {resource.class && (
                                 <>
                                   <span>•</span>

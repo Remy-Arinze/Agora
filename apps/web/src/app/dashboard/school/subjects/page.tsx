@@ -83,6 +83,7 @@ export default function SubjectsPage() {
         id: staff.id,
         firstName: staff.firstName,
         lastName: staff.lastName,
+        subject: staff.subject, // Include subject field for filtering
       }));
   }, [staffResponse]);
 
@@ -224,7 +225,7 @@ export default function SubjectsPage() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4">
             <div>
               <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
                 {currentType === 'TERTIARY' ? 'Courses' : 'Subjects'}
@@ -239,22 +240,6 @@ export default function SubjectsPage() {
             </Button>
           </div>
         </motion.div>
-
-        {/* Search */}
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-light-text-muted dark:text-dark-text-muted" />
-              <Input
-                type="text"
-                placeholder={currentType === 'TERTIARY' ? 'Search courses...' : 'Search subjects...'}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Subjects List */}
         {currentType === 'SECONDARY' ? (
@@ -303,9 +288,21 @@ export default function SubjectsPage() {
             )}
             {groupedSubjects.all.length > 0 && (
               <div>
-                <h2 className="text-xl font-semibold mb-4 text-light-text-primary dark:text-dark-text-primary">
-                  General Subjects
-                </h2>
+                <div className="flex items-center justify-between mb-4 gap-4">
+                  <h2 className="text-xl font-semibold text-light-text-primary dark:text-dark-text-primary">
+                    General Subjects
+                  </h2>
+                  <div className="relative w-[40%]">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-light-text-muted dark:text-dark-text-muted" />
+                    <Input
+                      type="text"
+                      placeholder={currentType === 'TERTIARY' ? 'Search courses...' : 'Search subjects...'}
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {groupedSubjects.all.map((subject) => (
                     <SubjectCard
@@ -324,7 +321,23 @@ export default function SubjectsPage() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div>
+            <div className="flex items-center justify-between mb-4 gap-4">
+              <h2 className="text-xl font-semibold text-light-text-primary dark:text-dark-text-primary">
+                {currentType === 'TERTIARY' ? 'Courses' : 'Subjects'}
+              </h2>
+              <div className="relative w-[40%]">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-light-text-muted dark:text-dark-text-muted" />
+                <Input
+                  type="text"
+                  placeholder={currentType === 'TERTIARY' ? 'Search courses...' : 'Search subjects...'}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredSubjects.map((subject) => (
               <SubjectCard
                 key={subject.id}
@@ -337,6 +350,7 @@ export default function SubjectsPage() {
                 currentType={currentType}
               />
             ))}
+            </div>
           </div>
         )}
 
@@ -464,15 +478,17 @@ function SubjectCard({
                 </span>
               )}
             </span>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={onAssignTeacher}
-              disabled={currentType === 'PRIMARY' && subject.teachers && subject.teachers.length > 0}
-            >
-              <Users className="h-4 w-4 mr-1" />
-              {currentType === 'PRIMARY' && subject.teachers && subject.teachers.length > 0 ? 'Replace' : 'Assign'}
-            </Button>
+            {/* Commented out for PRIMARY schools */}
+            {currentType !== 'PRIMARY' && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={onAssignTeacher}
+              >
+                <Users className="h-4 w-4 mr-1" />
+                Assign
+              </Button>
+            )}
           </div>
           {subject.teachers && subject.teachers.length > 0 ? (
             <div className="space-y-1">
@@ -670,7 +686,7 @@ function AssignTeacherModal({
   currentType,
 }: {
   subject: Subject;
-  teachers: Array<{ id: string; firstName: string; lastName: string }>;
+  teachers: Array<{ id: string; firstName: string; lastName: string; subject?: string | null }>;
   assignedTeachers: Array<{ id: string; firstName: string; lastName: string }>;
   selectedTeacherId: string;
   onSelectTeacher: (teacherId: string) => void;
@@ -680,7 +696,22 @@ function AssignTeacherModal({
   isLoading: boolean;
   currentType: 'PRIMARY' | 'SECONDARY' | 'TERTIARY' | null;
 }) {
-  const availableTeachers = teachers.filter(
+  // For SECONDARY schools, filter teachers by subject name match
+  // For other school types, show all teachers
+  // Use flexible matching: check if teacher's subject contains subject name or vice versa
+  const filteredTeachers = currentType === 'SECONDARY' 
+    ? teachers.filter((t) => {
+        if (!t.subject) return false;
+        const teacherSubject = t.subject.trim().toLowerCase();
+        const subjectName = subject.name.trim().toLowerCase();
+        // Match if teacher's subject contains subject name or subject name contains teacher's subject
+        return teacherSubject === subjectName || 
+               teacherSubject.includes(subjectName) || 
+               subjectName.includes(teacherSubject);
+      })
+    : teachers;
+  
+  const availableTeachers = filteredTeachers.filter(
     (t) => !assignedTeachers.some((at) => at.id === t.id)
   );
 
@@ -784,7 +815,9 @@ function AssignTeacherModal({
 
           {availableTeachers.length === 0 && (
             <p className="text-sm text-light-text-muted dark:text-dark-text-muted text-center py-4">
-              All teachers are already assigned to this subject.
+              {currentType === 'SECONDARY' && filteredTeachers.length === 0
+                ? `No teachers registered with subject "${subject.name}" found. Please add teachers with this subject name first.`
+                : 'All teachers are already assigned to this subject.'}
             </p>
           )}
         </div>

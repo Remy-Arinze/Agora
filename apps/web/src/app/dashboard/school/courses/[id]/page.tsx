@@ -148,6 +148,7 @@ export default function ClassDetailPage() {
     isPrimary,
     showAssignTeacher,
     classData,
+    currentType,
   });
 
   // Mutations
@@ -160,10 +161,7 @@ export default function ClassDetailPage() {
       return;
     }
 
-    if (isSecondary && !selectedSubject) {
-      toast.error('Please enter a subject for secondary school classes');
-      return;
-    }
+    // Subject is not required for form teachers
 
     try {
       await assignTeacher({
@@ -172,7 +170,9 @@ export default function ClassDetailPage() {
         assignment: {
           teacherId: selectedTeacherId,
           subject: isPrimary ? undefined : (selectedSubject || undefined),
-          isPrimary: isPrimary ? true : undefined,
+          // For primary schools: isPrimary indicates the main class teacher
+          // For secondary schools: isPrimary: true indicates form teacher (no subject required)
+          isPrimary: isPrimary ? true : (isSecondary ? true : undefined),
         },
       }).unwrap();
 
@@ -479,7 +479,7 @@ export default function ClassDetailPage() {
                   {showAssignTeacherButton && (
                     <Button variant="primary" size="sm" onClick={() => setShowAssignTeacher(true)}>
                       <UserPlus className="h-4 w-4 mr-2" />
-                      {isPrimary ? 'Assign Teacher' : 'Add Teacher'}
+                      {isPrimary ? 'Assign Teacher' : currentType === 'SECONDARY' ? 'Assign Form Teacher' : 'Add Teacher'}
                     </Button>
                   )}
                 </div>
@@ -494,7 +494,7 @@ export default function ClassDetailPage() {
                     {showAssignTeacherButton && (
                       <Button variant="primary" onClick={() => setShowAssignTeacher(true)}>
                         <UserPlus className="h-4 w-4 mr-2" />
-                        {isPrimary ? 'Assign Teacher' : 'Add Teacher'}
+                        {isPrimary ? 'Assign Teacher' : currentType === 'SECONDARY' ? 'Assign Form Teacher' : 'Add Teacher'}
                       </Button>
                     )}
                   </div>
@@ -941,6 +941,14 @@ export default function ClassDetailPage() {
                                   <span>{resource.fileType}</span>
                                   <span>•</span>
                                   <span>{new Date(resource.createdAt).toLocaleDateString()}</span>
+                                  {resource.uploadedByName && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="text-light-text-secondary dark:text-dark-text-secondary">
+                                        By {resource.uploadedByName}
+                                      </span>
+                                    </>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -986,7 +994,7 @@ export default function ClassDetailPage() {
               <div className="p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-2xl font-bold text-light-text-primary dark:text-dark-text-primary">
-                    {isPrimary ? 'Assign Teacher' : 'Add Teacher'} to {classData.name}
+                    {isPrimary ? 'Assign Teacher' : currentType === 'SECONDARY' ? 'Assign Form Teacher' : 'Add Teacher'} to {classData.name}
                   </h2>
                   <button
                     onClick={() => {
@@ -1018,26 +1026,85 @@ export default function ClassDetailPage() {
                         Loading teachers...
                       </div>
                     ) : (
-                      <select
-                        value={selectedTeacherId}
-                        onChange={(e) => setSelectedTeacherId(e.target.value)}
-                        className="w-full px-3 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-light-card dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary"
-                        disabled={isPrimary && teachers.length === 0}
-                      >
-                        <option value="">Select a teacher...</option>
+                      <div className="space-y-2 max-h-60 overflow-y-auto border-2 border-gray-300 dark:border-gray-600 rounded-lg p-2">
                         {teachers.length === 0 && !isLoadingTeachers ? (
-                          <option value="" disabled>
+                          <div className="w-full px-3 py-2 text-light-text-secondary dark:text-dark-text-secondary text-center">
                             No teachers available
-                          </option>
+                          </div>
                         ) : (
-                          teachers.map((teacher) => (
-                            <option key={teacher.id} value={teacher.id}>
-                              {teacher.firstName} {teacher.lastName}
-                              {teacher.subject && ` - ${teacher.subject}`}
-                            </option>
-                          ))
+                          <>
+                            {!selectedTeacherId && (
+                              <p className="text-xs text-light-text-muted dark:text-dark-text-muted px-2 py-1">
+                                Select a teacher...
+                              </p>
+                            )}
+                            {teachers.map((teacher) => {
+                            const initials = `${teacher.firstName?.[0] || ''}${teacher.lastName?.[0] || ''}`.toUpperCase();
+                            const isSelected = selectedTeacherId === teacher.id;
+                            return (
+                              <button
+                                key={teacher.id}
+                                type="button"
+                                onClick={() => setSelectedTeacherId(teacher.id)}
+                                disabled={isPrimary && teachers.length === 0}
+                                className={`w-full flex items-center gap-3 px-3 py-2 border-2 rounded-lg transition-colors ${
+                                  isSelected
+                                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                                    : 'border-gray-300 dark:border-gray-600 bg-light-card dark:bg-dark-surface hover:border-blue-300 dark:hover:border-blue-700'
+                                } ${isPrimary && teachers.length === 0 ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                              >
+                                {/* Avatar */}
+                                <div className="flex-shrink-0">
+                                  {teacher.profileImage ? (
+                                    <img
+                                      src={teacher.profileImage}
+                                      alt={`${teacher.firstName} ${teacher.lastName}`}
+                                      className="w-10 h-10 rounded-full object-cover border-2 border-gray-200 dark:border-gray-700"
+                                      onError={(e) => {
+                                        // Fallback to initials if image fails to load
+                                        const target = e.target as HTMLImageElement;
+                                        target.style.display = 'none';
+                                        const parent = target.parentElement;
+                                        if (parent) {
+                                          const fallback = parent.querySelector('.avatar-fallback') as HTMLElement;
+                                          if (fallback) fallback.style.display = 'flex';
+                                        }
+                                      }}
+                                    />
+                                  ) : null}
+                                  <div
+                                    className={`avatar-fallback w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold text-white ${
+                                      teacher.profileImage ? 'hidden' : 'flex'
+                                    } ${
+                                      isSelected
+                                        ? 'bg-blue-500'
+                                        : 'bg-gray-400 dark:bg-gray-600'
+                                    }`}
+                                  >
+                                    {initials || '?'}
+                                  </div>
+                                </div>
+                                {/* Teacher Info */}
+                                <div className="flex-1 text-left">
+                                  <p className="font-medium text-light-text-primary dark:text-dark-text-primary">
+                                    {teacher.firstName} {teacher.lastName}
+                                  </p>
+                                  {teacher.subject && (
+                                    <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">
+                                      {teacher.subject}
+                                    </p>
+                                  )}
+                                </div>
+                                {/* Selection Indicator */}
+                                {isSelected && (
+                                  <CheckCircle className="h-5 w-5 text-blue-500 flex-shrink-0" />
+                                )}
+                              </button>
+                            );
+                          })}
+                          </>
                         )}
-                      </select>
+                      </div>
                     )}
                     {isPrimary && allTeachers.length > teachers.length && (
                       <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary mt-1">
@@ -1046,19 +1113,19 @@ export default function ClassDetailPage() {
                     )}
                   </div>
 
-                  {(isSecondary || currentType === 'TERTIARY') && (
+                  {currentType === 'TERTIARY' && (
                     <div>
                       <label className="block text-sm font-medium text-light-text-primary dark:text-dark-text-primary mb-2">
-                        Subject {isSecondary && <span className="text-red-500">*</span>}
+                        Subject
                       </label>
                       <Input
-                        placeholder={isSecondary ? "e.g., Mathematics, English, Physics" : "e.g., Course Module/Topic"}
+                        placeholder="e.g., Course Module/Topic"
                         value={selectedSubject}
                         onChange={(e) => setSelectedSubject(e.target.value)}
                         className="w-full"
                       />
                       <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary mt-1">
-                        {isSecondary ? 'Required for secondary school classes' : 'Optional: Course module or topic the teacher handles'}
+                        Optional: Course module or topic the teacher handles
                       </p>
                     </div>
                   )}
@@ -1078,7 +1145,7 @@ export default function ClassDetailPage() {
                   <Button
                     variant="primary"
                     onClick={handleAssignTeacher}
-                    disabled={isAssigningTeacher || !selectedTeacherId || (isSecondary && !selectedSubject)}
+                    disabled={isAssigningTeacher || !selectedTeacherId}
                   >
                     {isAssigningTeacher ? (
                       <>
@@ -1088,7 +1155,7 @@ export default function ClassDetailPage() {
                     ) : (
                       <>
                         <UserPlus className="h-4 w-4 mr-2" />
-                        Assign Teacher
+                        {isPrimary ? 'Assign Teacher' : currentType === 'SECONDARY' ? 'Assign Form Teacher' : 'Add Teacher'}
                       </>
                     )}
                   </Button>

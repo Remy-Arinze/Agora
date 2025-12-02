@@ -87,6 +87,7 @@ export class TeacherCurrentSchoolService {
         id: true,
         name: true,
         subdomain: true,
+        logo: true,
         hasPrimary: true,
         hasSecondary: true,
         hasTertiary: true,
