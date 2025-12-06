@@ -26,6 +26,11 @@ export class InitializeSessionDto {
   @IsEnum(SessionType)
   @IsNotEmpty()
   type: SessionType;
+
+  @ApiProperty({ description: 'School type (PRIMARY, SECONDARY, TERTIARY)', required: false })
+  @IsString()
+  @IsOptional()
+  schoolType?: string;
 }
 
 export class CreateTermDto {

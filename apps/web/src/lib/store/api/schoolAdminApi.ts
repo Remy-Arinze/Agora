@@ -447,6 +447,7 @@ export interface AcademicSession {
   endDate: string;
   status: SessionStatus;
   schoolId: string;
+  schoolType?: string; // PRIMARY, SECONDARY, TERTIARY
   terms: Term[];
   createdAt: string;
 }
@@ -461,6 +462,7 @@ export interface InitializeSessionDto {
   startDate: string;
   endDate: string;
   type: SessionType;
+  schoolType?: string; // PRIMARY, SECONDARY, TERTIARY
 }
 
 export interface CreateTermDto {
@@ -796,12 +798,22 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
       invalidatesTags: (result, error, { classId }) => [{ type: 'Class', id: classId }, 'School'],
     }),
     // Session Management
-    getSessions: builder.query<ResponseDto<AcademicSession[]>, { schoolId: string }>({
-      query: ({ schoolId }) => `/schools/${schoolId}/sessions`,
+    getSessions: builder.query<ResponseDto<AcademicSession[]>, { schoolId: string; schoolType?: string }>({
+      query: ({ schoolId, schoolType }) => {
+        const queryParams = new URLSearchParams();
+        if (schoolType) queryParams.append('schoolType', schoolType);
+        const queryString = queryParams.toString();
+        return `/schools/${schoolId}/sessions${queryString ? `?${queryString}` : ''}`;
+      },
       providesTags: ['Session'],
     }),
-    getActiveSession: builder.query<ResponseDto<ActiveSession>, { schoolId: string }>({
-      query: ({ schoolId }) => `/schools/${schoolId}/sessions/active`,
+    getActiveSession: builder.query<ResponseDto<ActiveSession>, { schoolId: string; schoolType?: string }>({
+      query: ({ schoolId, schoolType }) => {
+        const queryParams = new URLSearchParams();
+        if (schoolType) queryParams.append('schoolType', schoolType);
+        const queryString = queryParams.toString();
+        return `/schools/${schoolId}/sessions/active${queryString ? `?${queryString}` : ''}`;
+      },
       providesTags: ['Session'],
     }),
     initializeSession: builder.mutation<ResponseDto<AcademicSession>, { schoolId: string; data: InitializeSessionDto }>({
@@ -836,11 +848,28 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['Session', 'School'],
     }),
-    endTerm: builder.mutation<ResponseDto<{ term: Term }>, { schoolId: string }>({
-      query: ({ schoolId }) => ({
-        url: `/schools/${schoolId}/sessions/end-term`,
-        method: 'POST',
-      }),
+    endTerm: builder.mutation<ResponseDto<{ term: Term }>, { schoolId: string; schoolType?: string }>({
+      query: ({ schoolId, schoolType }) => {
+        const queryParams = new URLSearchParams();
+        if (schoolType) queryParams.append('schoolType', schoolType);
+        const queryString = queryParams.toString();
+        return {
+          url: `/schools/${schoolId}/sessions/end-term${queryString ? `?${queryString}` : ''}`,
+          method: 'POST',
+        };
+      },
+      invalidatesTags: ['Session', 'School'],
+    }),
+    endSession: builder.mutation<ResponseDto<{ session: AcademicSession }>, { schoolId: string; schoolType?: string }>({
+      query: ({ schoolId, schoolType }) => {
+        const queryParams = new URLSearchParams();
+        if (schoolType) queryParams.append('schoolType', schoolType);
+        const queryString = queryParams.toString();
+        return {
+          url: `/schools/${schoolId}/sessions/end-session${queryString ? `?${queryString}` : ''}`,
+          method: 'POST',
+        };
+      },
       invalidatesTags: ['Session', 'School'],
     }),
     // Timetable Management
@@ -1848,6 +1877,7 @@ export const {
   useStartNewTermMutation,
   useMigrateStudentsMutation,
   useEndTermMutation,
+  useEndSessionMutation,
   // Timetable hooks
   useGetTimetableForClassArmQuery,
   useGetTimetableForTeacherQuery,

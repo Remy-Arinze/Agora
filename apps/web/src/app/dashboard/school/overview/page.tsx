@@ -137,14 +137,14 @@ export default function AdminOverviewPage() {
       };
     } else if (!hasActiveTerm) {
       return {
-        text: 'Start Term',
+        text: `Session`,
         icon: Calendar,
         onClick: () => router.push('/dashboard/school/settings/session'),
         variant: 'primary' as const,
       };
     } else {
       return {
-        text: 'End Term',
+        text: `End ${terminology.term}`,
         icon: XCircle,
         onClick: () => setShowEndTermModal(true),
         variant: 'danger' as const,
@@ -159,13 +159,13 @@ export default function AdminOverviewPage() {
     }
 
     try {
-      await endTerm({ schoolId }).unwrap();
-      toast.success('Term ended successfully');
+      await endTerm({ schoolId, schoolType: currentType || undefined }).unwrap();
+      toast.success(`${terminology.term} ended successfully`);
       setShowEndTermModal(false);
       refetchActiveSession();
       refetch();
     } catch (error: any) {
-      toast.error(error?.data?.message || 'Failed to end term');
+      toast.error(error?.data?.message || `Failed to end ${terminology.term.toLowerCase()}`);
     }
   };
 
@@ -318,7 +318,7 @@ export default function AdminOverviewPage() {
                 {isEndingTerm ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Ending Term...
+                    Ending {terminology.term}...
                   </>
                 ) : (
                   <>
@@ -514,6 +514,7 @@ export default function AdminOverviewPage() {
           isLoading={isEndingTerm}
           termName={activeSession?.term?.name}
           sessionName={activeSession?.session?.name}
+          termLabel={terminology.term}
         />
 
         {/* Image Crop Modal */}

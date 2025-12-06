@@ -4,6 +4,7 @@ import { SchoolRepository } from '../schools/domain/repositories/school.reposito
 import { IdGeneratorService } from '../schools/shared/id-generator.service';
 import { AuthService } from '../auth/auth.service';
 import { AddStudentDto } from '../schools/dto/add-student.dto';
+import { TermStatus, SessionStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -125,7 +126,21 @@ export class StudentAdmissionService {
           },
         });
 
-        // Create enrollment
+        // Find active term to link enrollment to
+        const activeTerm = await tx.term.findFirst({
+          where: {
+            status: TermStatus.ACTIVE,
+            academicSession: {
+              schoolId: school.id,
+              status: SessionStatus.ACTIVE,
+            },
+          },
+          orderBy: {
+            number: 'desc',
+          },
+        });
+
+        // Create enrollment with term link
         await tx.enrollment.create({
           data: {
             studentId: newStudent.id,
@@ -133,6 +148,7 @@ export class StudentAdmissionService {
             classLevel: studentData.classLevel,
             academicYear: academicYear,
             isActive: true,
+            termId: activeTerm?.id || null, // Link to active term if exists
           },
         });
 

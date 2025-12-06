@@ -313,22 +313,27 @@ model ClassTeacher {
 }
 
 model AcademicSession {
-  id        String        @id @default(cuid())
-  name      String // e.g., "2025/2026"
-  startDate DateTime
-  endDate   DateTime
-  status    SessionStatus @default(DRAFT)
-  schoolId  String
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  id         String        @id @default(cuid())
+  name       String // e.g., "2025/2026"
+  startDate  DateTime
+  endDate    DateTime
+  status     SessionStatus @default(DRAFT)
+  schoolId   String
+  schoolType String? // "PRIMARY", "SECONDARY", "TERTIARY" - allows independent sessions per school type
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
 
   school      School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   terms       Term[]
   enrollments Enrollment[]
 
+  // Note: Uniqueness for active sessions is enforced at the application level
+  // This allows reusing session names after a session is COMPLETED (e.g., fixing mistakes)
   @@index([schoolId])
   @@index([status])
   @@index([startDate])
+  @@index([schoolType])
+  @@index([schoolId, name, schoolType]) // For efficient lookups
 }
 
 model Term {

@@ -4,9 +4,10 @@ import {
   Post,
   Body,
   Param,
+  Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { SessionService } from './session.service';
 import { InitializeSessionDto, CreateTermDto, MigrateStudentsDto } from './dto/initialize-session.dto';
 import { AcademicSessionDto, TermDto, ActiveSessionDto } from './dto/session.dto';
@@ -82,43 +83,64 @@ export class SessionController {
 
   @Get('active')
   @ApiOperation({ summary: 'Get active session and term for the school' })
+  @ApiQuery({ name: 'schoolType', required: false, description: 'Filter by school type (PRIMARY, SECONDARY, TERTIARY)' })
   @ApiResponse({
     status: 200,
     description: 'Active session retrieved successfully',
     type: ActiveSessionDto,
   })
   async getActiveSession(
-    @Param('schoolId') schoolId: string
+    @Param('schoolId') schoolId: string,
+    @Query('schoolType') schoolType?: string
   ): Promise<ResponseDto<ActiveSessionDto>> {
-    const data = await this.sessionService.getActiveSession(schoolId);
+    const data = await this.sessionService.getActiveSession(schoolId, schoolType);
     return ResponseDto.ok(data, 'Active session retrieved successfully');
   }
 
   @Get()
   @ApiOperation({ summary: 'Get all sessions for a school' })
+  @ApiQuery({ name: 'schoolType', required: false, description: 'Filter by school type (PRIMARY, SECONDARY, TERTIARY)' })
   @ApiResponse({
     status: 200,
     description: 'Sessions retrieved successfully',
     type: [AcademicSessionDto],
   })
   async getSessions(
-    @Param('schoolId') schoolId: string
+    @Param('schoolId') schoolId: string,
+    @Query('schoolType') schoolType?: string
   ): Promise<ResponseDto<AcademicSessionDto[]>> {
-    const data = await this.sessionService.getSessions(schoolId);
+    const data = await this.sessionService.getSessions(schoolId, schoolType);
     return ResponseDto.ok(data, 'Sessions retrieved successfully');
   }
 
   @Post('end-term')
   @ApiOperation({ summary: 'End the current active term' })
+  @ApiQuery({ name: 'schoolType', required: false, description: 'Filter by school type (PRIMARY, SECONDARY, TERTIARY)' })
   @ApiResponse({
     status: 200,
     description: 'Term ended successfully',
   })
   async endTerm(
-    @Param('schoolId') schoolId: string
+    @Param('schoolId') schoolId: string,
+    @Query('schoolType') schoolType?: string
   ): Promise<ResponseDto<{ term: TermDto }>> {
-    const data = await this.sessionService.endTerm(schoolId);
+    const data = await this.sessionService.endTerm(schoolId, schoolType);
     return ResponseDto.ok(data, 'Term ended successfully');
+  }
+
+  @Post('end-session')
+  @ApiOperation({ summary: 'End the current active session' })
+  @ApiQuery({ name: 'schoolType', required: false, description: 'Filter by school type (PRIMARY, SECONDARY, TERTIARY)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Session ended successfully',
+  })
+  async endSession(
+    @Param('schoolId') schoolId: string,
+    @Query('schoolType') schoolType?: string
+  ): Promise<ResponseDto<{ session: AcademicSessionDto }>> {
+    const data = await this.sessionService.endSession(schoolId, schoolType);
+    return ResponseDto.ok(data, 'Session ended successfully');
   }
 }
 

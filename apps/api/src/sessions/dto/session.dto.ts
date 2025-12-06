@@ -52,6 +52,9 @@ export class AcademicSessionDto {
   @ApiProperty()
   schoolId: string;
 
+  @ApiProperty({ required: false })
+  schoolType?: string;
+
   @ApiProperty({ type: [TermDto] })
   terms: TermDto[];
 

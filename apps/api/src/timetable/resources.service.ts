@@ -211,6 +211,15 @@ export class ResourcesService {
           createdLevels.push(level);
         }
 
+        // Set up nextLevelId chain for promotion (e.g., Class 1 → Class 2 → Class 3...)
+        for (let i = 0; i < createdLevels.length - 1; i++) {
+          await this.classLevelModel.update({
+            where: { id: createdLevels[i].id },
+            data: { nextLevelId: createdLevels[i + 1].id },
+          });
+        }
+        // Last level has no nextLevelId (graduates/alumni)
+
         // Create default ClassArms for each ClassLevel (one default arm per level)
         for (const level of createdLevels) {
           await this.classArmModel.create({

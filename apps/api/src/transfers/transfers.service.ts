@@ -8,7 +8,7 @@ import {
 import { PrismaService } from '../database/prisma.service';
 import { EmailService } from '../email/email.service';
 import { GenerateTacDto, InitiateTransferDto, CompleteTransferDto, RejectTransferDto } from './dto/transfer.dto';
-import { TransferStatus } from '@prisma/client';
+import { TransferStatus, TermStatus, SessionStatus } from '@prisma/client';
 import { randomBytes } from 'crypto';
 
 @Injectable()
@@ -475,6 +475,20 @@ export class TransfersService {
       }
     }
 
+    // Find active term to link enrollment to
+    const activeTerm = await this.prisma.term.findFirst({
+      where: {
+        status: TermStatus.ACTIVE,
+        academicSession: {
+          schoolId: schoolId,
+          status: SessionStatus.ACTIVE,
+        },
+      },
+      orderBy: {
+        number: 'desc',
+      },
+    });
+
     // Create new enrollment in destination school
     const newEnrollment = await this.prisma.enrollment.create({
       data: {
@@ -486,6 +500,7 @@ export class TransfersService {
         academicYear: dto.academicYear,
         enrollmentDate: new Date(),
         isActive: true,
+        termId: activeTerm?.id || null, // Link to active term if exists
       },
     });
 

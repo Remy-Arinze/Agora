@@ -732,5 +732,318 @@ export class EmailService {
       return false;
     }
   }
+
+  /**
+   * Send session start notification email to all school members
+   */
+  async sendSessionStartEmail(
+    email: string,
+    recipientName: string,
+    role: string,
+    sessionName: string,
+    termName: string,
+    startDate: Date,
+    endDate: Date,
+    schoolName: string
+  ): Promise<void> {
+    const fromEmail = this.configService.get<string>('MAIL_FROM') || 
+                      this.configService.get<string>('SMTP_FROM') || 
+                      this.configService.get<string>('MAIL_USER') || 
+                      this.configService.get<string>('SMTP_USER');
+    
+    if (!fromEmail) {
+      this.logger.error('No FROM email address configured.');
+      throw new Error('Email configuration error: No FROM address');
+    }
+
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const loginUrl = `${frontendUrl}/auth/login`;
+
+    const mailOptions = {
+      from: fromEmail,
+      to: email,
+      subject: `New Academic Session Started - ${sessionName} - ${schoolName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>New Academic Session Started</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #10b981; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+            <h1 style="color: white; margin: 0;">🎓 New Session Started!</h1>
+          </div>
+          <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
+            <h2 style="color: #1f2937; margin-top: 0;">Welcome to ${sessionName}</h2>
+            <p>Hello ${recipientName},</p>
+            <p>A new academic session has begun at <strong>${schoolName}</strong>. We're excited to have you as part of this journey!</p>
+            <div style="background-color: #d1fae5; border-left: 4px solid #10b981; padding: 15px; margin: 20px 0; border-radius: 4px;">
+              <p style="margin: 0; color: #065f46; font-weight: bold; font-size: 16px;">📅 Session Details</p>
+              <table style="margin-top: 10px; color: #065f46;">
+                <tr><td style="padding: 5px 15px 5px 0;"><strong>Session:</strong></td><td>${sessionName}</td></tr>
+                <tr><td style="padding: 5px 15px 5px 0;"><strong>Current Term:</strong></td><td>${termName}</td></tr>
+                <tr><td style="padding: 5px 15px 5px 0;"><strong>Start Date:</strong></td><td>${startDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</td></tr>
+                <tr><td style="padding: 5px 15px 5px 0;"><strong>End Date:</strong></td><td>${endDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</td></tr>
+              </table>
+            </div>
+            <p>As a <strong>${role}</strong>, you can now access your dashboard for the new session.</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${loginUrl}" style="background-color: #10b981; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">Go to Dashboard</a>
+            </div>
+            <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
+              We wish you a productive and successful academic session!
+            </p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+            <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
+              © ${new Date().getFullYear()} Agora Education Platform. All rights reserved.
+            </p>
+          </div>
+        </body>
+        </html>
+      `,
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      this.logger.log(`Session start email sent successfully to ${email}`);
+    } catch (error: any) {
+      this.logger.error(`Failed to send session start email to ${email}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Send term start notification email to all school members
+   */
+  async sendTermStartEmail(
+    email: string,
+    recipientName: string,
+    role: string,
+    sessionName: string,
+    termName: string,
+    startDate: Date,
+    endDate: Date,
+    schoolName: string
+  ): Promise<void> {
+    const fromEmail = this.configService.get<string>('MAIL_FROM') || 
+                      this.configService.get<string>('SMTP_FROM') || 
+                      this.configService.get<string>('MAIL_USER') || 
+                      this.configService.get<string>('SMTP_USER');
+    
+    if (!fromEmail) {
+      this.logger.error('No FROM email address configured.');
+      throw new Error('Email configuration error: No FROM address');
+    }
+
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const loginUrl = `${frontendUrl}/auth/login`;
+
+    const mailOptions = {
+      from: fromEmail,
+      to: email,
+      subject: `${termName} Has Started - ${sessionName} - ${schoolName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>New Term Started</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #3b82f6; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+            <h1 style="color: white; margin: 0;">📚 ${termName} Has Started!</h1>
+          </div>
+          <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
+            <h2 style="color: #1f2937; margin-top: 0;">Welcome Back!</h2>
+            <p>Hello ${recipientName},</p>
+            <p>A new term has begun at <strong>${schoolName}</strong>. Get ready for an exciting period of learning and growth!</p>
+            <div style="background-color: #dbeafe; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px;">
+              <p style="margin: 0; color: #1e40af; font-weight: bold; font-size: 16px;">📅 Term Details</p>
+              <table style="margin-top: 10px; color: #1e40af;">
+                <tr><td style="padding: 5px 15px 5px 0;"><strong>Session:</strong></td><td>${sessionName}</td></tr>
+                <tr><td style="padding: 5px 15px 5px 0;"><strong>Term:</strong></td><td>${termName}</td></tr>
+                <tr><td style="padding: 5px 15px 5px 0;"><strong>Start Date:</strong></td><td>${startDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</td></tr>
+                <tr><td style="padding: 5px 15px 5px 0;"><strong>End Date:</strong></td><td>${endDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</td></tr>
+              </table>
+            </div>
+            <p>As a <strong>${role}</strong>, you can now access your dashboard for the new term.</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${loginUrl}" style="background-color: #3b82f6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">Go to Dashboard</a>
+            </div>
+            <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
+              We wish you a productive term ahead!
+            </p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+            <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
+              © ${new Date().getFullYear()} Agora Education Platform. All rights reserved.
+            </p>
+          </div>
+        </body>
+        </html>
+      `,
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      this.logger.log(`Term start email sent successfully to ${email}`);
+    } catch (error: any) {
+      this.logger.error(`Failed to send term start email to ${email}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Send student promotion notification email
+   */
+  async sendStudentPromotionEmail(
+    email: string,
+    studentName: string,
+    previousClass: string,
+    newClass: string,
+    sessionName: string,
+    schoolName: string
+  ): Promise<void> {
+    const fromEmail = this.configService.get<string>('MAIL_FROM') || 
+                      this.configService.get<string>('SMTP_FROM') || 
+                      this.configService.get<string>('MAIL_USER') || 
+                      this.configService.get<string>('SMTP_USER');
+    
+    if (!fromEmail) {
+      this.logger.error('No FROM email address configured.');
+      throw new Error('Email configuration error: No FROM address');
+    }
+
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const loginUrl = `${frontendUrl}/auth/login`;
+
+    const mailOptions = {
+      from: fromEmail,
+      to: email,
+      subject: `🎉 Congratulations! You've Been Promoted - ${schoolName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Class Promotion</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #8b5cf6; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+            <h1 style="color: white; margin: 0;">🎉 Congratulations!</h1>
+          </div>
+          <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
+            <h2 style="color: #1f2937; margin-top: 0;">You've Been Promoted!</h2>
+            <p>Dear ${studentName},</p>
+            <p>We are thrilled to inform you that you have been successfully promoted to the next class level at <strong>${schoolName}</strong>!</p>
+            <div style="background-color: #f3e8ff; border-left: 4px solid #8b5cf6; padding: 15px; margin: 20px 0; border-radius: 4px;">
+              <p style="margin: 0; color: #6b21a8; font-weight: bold; font-size: 16px;">🏆 Your Promotion Details</p>
+              <table style="margin-top: 10px; color: #6b21a8;">
+                <tr><td style="padding: 5px 15px 5px 0;"><strong>Previous Class:</strong></td><td>${previousClass}</td></tr>
+                <tr><td style="padding: 5px 15px 5px 0;"><strong>New Class:</strong></td><td style="font-weight: bold; color: #059669;">${newClass}</td></tr>
+                <tr><td style="padding: 5px 15px 5px 0;"><strong>Session:</strong></td><td>${sessionName}</td></tr>
+              </table>
+            </div>
+            <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 4px;">
+              <p style="margin: 0; color: #92400e;">
+                🌟 This achievement reflects your hard work and dedication. Keep up the excellent effort in your new class!
+              </p>
+            </div>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${loginUrl}" style="background-color: #8b5cf6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">View Your Dashboard</a>
+            </div>
+            <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
+              Best wishes for a successful academic year ahead!
+            </p>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+            <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
+              © ${new Date().getFullYear()} Agora Education Platform. All rights reserved.
+            </p>
+          </div>
+        </body>
+        </html>
+      `,
+    };
+
+    try {
+      await this.transporter.sendMail(mailOptions);
+      this.logger.log(`Promotion email sent successfully to ${email}`);
+    } catch (error: any) {
+      this.logger.error(`Failed to send promotion email to ${email}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Send bulk emails (for session/term notifications)
+   * Sends emails in batches to avoid overwhelming the SMTP server
+   */
+  async sendBulkEmails(
+    emails: Array<{
+      to: string;
+      name: string;
+      role: string;
+    }>,
+    emailType: 'session' | 'term',
+    sessionName: string,
+    termName: string,
+    startDate: Date,
+    endDate: Date,
+    schoolName: string
+  ): Promise<{ sent: number; failed: number }> {
+    let sent = 0;
+    let failed = 0;
+
+    // Process in batches of 10 to avoid rate limits
+    const batchSize = 10;
+    for (let i = 0; i < emails.length; i += batchSize) {
+      const batch = emails.slice(i, i + batchSize);
+      
+      await Promise.all(
+        batch.map(async (recipient) => {
+          try {
+            if (emailType === 'session') {
+              await this.sendSessionStartEmail(
+                recipient.to,
+                recipient.name,
+                recipient.role,
+                sessionName,
+                termName,
+                startDate,
+                endDate,
+                schoolName
+              );
+            } else {
+              await this.sendTermStartEmail(
+                recipient.to,
+                recipient.name,
+                recipient.role,
+                sessionName,
+                termName,
+                startDate,
+                endDate,
+                schoolName
+              );
+            }
+            sent++;
+          } catch (error) {
+            this.logger.error(`Failed to send ${emailType} email to ${recipient.to}`);
+            failed++;
+          }
+        })
+      );
+
+      // Small delay between batches
+      if (i + batchSize < emails.length) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+
+    this.logger.log(`Bulk ${emailType} emails completed: ${sent} sent, ${failed} failed`);
+    return { sent, failed };
+  }
 }
 
