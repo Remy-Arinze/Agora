@@ -58,12 +58,12 @@ export default function TimetablesPage() {
   const { currentType } = useSchoolType();
 
   const { data: activeSessionResponse } = useGetActiveSessionQuery(
-    { schoolId: schoolId! },
+    { schoolId: schoolId!, schoolType: currentType || undefined },
     { skip: !schoolId }
   );
 
   const { data: sessionsResponse } = useGetSessionsQuery(
-    { schoolId: schoolId! },
+    { schoolId: schoolId!, schoolType: currentType || undefined },
     { skip: !schoolId }
   );
 
@@ -144,12 +144,16 @@ export default function TimetablesPage() {
     );
   }, [sessionsResponse]);
 
-  // Auto-select active term if available
+  // Auto-select active term if available, reset when school type changes
   useEffect(() => {
-    if (activeSessionResponse?.data?.term?.id && !selectedTermId) {
+    if (activeSessionResponse?.data?.term?.id) {
       setSelectedTermId(activeSessionResponse.data.term.id);
+    } else {
+      setSelectedTermId('');
     }
-  }, [activeSessionResponse, selectedTermId]);
+    // Also reset selected class when school type changes
+    setSelectedClassId('');
+  }, [activeSessionResponse, currentType]);
 
   const handleCreateTimetable = async () => {
     if (!schoolId || !newTimetableClassId || !newTimetableTermId) {
