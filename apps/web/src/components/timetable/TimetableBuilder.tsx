@@ -24,13 +24,16 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
-import { Clock, GripVertical, X, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { Clock, GripVertical, X, Loader2, Sparkles } from 'lucide-react';
+import { motion } from 'framer-motion';
 import {
   type TimetablePeriod,
   type DayOfWeek,
   type PeriodType,
 } from '@/lib/store/api/schoolAdminApi';
 import { getScheduleForSchoolType, getLessonPeriods, type SchedulePeriod } from '@/lib/utils/nigerianSchoolSchedule';
+import { useAutoGenerateTimetable } from '@/hooks/useAutoGenerateTimetable';
 
 const DAYS: DayOfWeek[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'];
 const DAY_LABELS: Record<DayOfWeek, string> = {
@@ -56,6 +59,17 @@ export interface TimetableSlot {
   periodData?: TimetablePeriod;
 }
 
+interface GeneratedPeriod {
+  dayOfWeek: DayOfWeek;
+  startTime: string;
+  endTime: string;
+  type: 'LESSON' | 'BREAK' | 'LUNCH' | 'ASSEMBLY';
+  subjectId?: string;
+  subjectName?: string;
+  courseId?: string;
+  courseName?: string;
+}
+
 interface TimetableBuilderProps {
   schoolType: 'PRIMARY' | 'SECONDARY' | 'TERTIARY' | null;
   subjects: DraggableSubject[];
@@ -65,6 +79,7 @@ interface TimetableBuilderProps {
   termId: string;
   onPeriodUpdate: (slot: TimetableSlot, subjectId?: string, courseId?: string) => Promise<void>;
   onPeriodDelete: (periodId: string) => Promise<void>;
+  onAutoGenerate?: (periods: GeneratedPeriod[]) => Promise<void>;
   isLoading?: boolean;
   readOnly?: boolean; // If true, disable drag-and-drop and editing
 }
@@ -183,10 +198,36 @@ export function TimetableBuilder({
   termId,
   onPeriodUpdate,
   onPeriodDelete,
+  onAutoGenerate,
   isLoading = false,
   readOnly = false,
 }: TimetableBuilderProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [showAutoGenerateModal, setShowAutoGenerateModal] = useState(false);
+  const [isAutoGenerating, setIsAutoGenerating] = useState(false);
+
+  // Auto-generate hook
+  const { generateTimetable, canGenerate } = useAutoGenerateTimetable({
+    schoolType,
+    subjects: subjects.filter(s => s.type !== 'free').map(s => ({ id: s.id, name: s.name, code: s.code })),
+    courses: courses.filter(c => c.type !== 'free').map(c => ({ id: c.id, name: c.name, code: c.code })),
+    existingPeriods: timetable,
+  });
+
+  const handleAutoGenerate = async () => {
+    if (!onAutoGenerate) return;
+    
+    setIsAutoGenerating(true);
+    try {
+      const generatedPeriods = generateTimetable();
+      await onAutoGenerate(generatedPeriods);
+      setShowAutoGenerateModal(false);
+    } catch (error) {
+      console.error('Failed to auto-generate timetable:', error);
+    } finally {
+      setIsAutoGenerating(false);
+    }
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -429,11 +470,27 @@ export function TimetableBuilder({
         <div className="col-span-3">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">
-                {schoolType === 'TERTIARY' ? 'Courses' : 'Subjects'}
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">
+                  {schoolType === 'TERTIARY' ? 'Courses' : 'Subjects'}
+                </CardTitle>
+              </div>
             </CardHeader>
             <CardContent>
+              {/* Auto-Fill Button */}
+              {onAutoGenerate && canGenerate && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setShowAutoGenerateModal(true)}
+                  disabled={isLoading || isAutoGenerating}
+                  className="w-full mb-3"
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Auto-Fill Timetable
+                </Button>
+              )}
+              
               <SortableContext items={draggableItems.map((item) => item.id)} strategy={verticalListSortingStrategy}>
                 <div className="space-y-2 max-h-[600px] overflow-y-auto">
                   {draggableItems.length === 0 ? (
@@ -572,6 +629,78 @@ export function TimetableBuilder({
         ) : null}
       </DragOverlay>
 
+      {/* Auto-Generate Confirmation Modal */}
+      {showAutoGenerateModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white dark:bg-dark-surface rounded-lg p-6 max-w-md w-full mx-4"
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+                <Sparkles className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary">
+                Auto-Fill Timetable
+              </h3>
+            </div>
+
+            <div className="space-y-3 mb-6">
+              <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                This will automatically fill empty slots with:
+              </p>
+              <ul className="text-sm text-light-text-secondary dark:text-dark-text-secondary space-y-1 ml-4">
+                <li className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
+                  Random {schoolType === 'TERTIARY' ? 'courses' : 'subjects'} (core subjects appear more often)
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                  Assembly, Break & Lunch periods
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
+                  1-2 Free periods per day
+                </li>
+              </ul>
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mt-3">
+                <p className="text-sm text-amber-800 dark:text-amber-300">
+                  <strong>Note:</strong> Existing assignments won't be changed. Only empty slots will be filled.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                variant="primary"
+                onClick={handleAutoGenerate}
+                disabled={isAutoGenerating}
+                className="flex-1"
+              >
+                {isAutoGenerating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Generate
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => setShowAutoGenerateModal(false)}
+                disabled={isAutoGenerating}
+              >
+                Cancel
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </DndContext>
   );
 }

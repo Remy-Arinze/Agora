@@ -2,12 +2,13 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { X, Save, Loader2, Plus, ChevronDown, Trash2 } from 'lucide-react';
+import { X, Save, Loader2, Plus, ChevronDown, Trash2, Sparkles } from 'lucide-react';
+import { motion } from 'framer-motion';
 import {
   type TimetablePeriod,
   type DayOfWeek,
 } from '@/lib/store/api/schoolAdminApi';
+import { useAutoGenerateTimetable } from '@/hooks/useAutoGenerateTimetable';
 
 const DAYS: DayOfWeek[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'];
 const DAY_LABELS: Record<DayOfWeek, string> = {
@@ -61,6 +62,33 @@ export function EditableTimetableTable({
       type: period.type || 'LESSON',
     }));
   });
+
+  const [showAutoGenerateModal, setShowAutoGenerateModal] = useState(false);
+
+  // Auto-generate hook
+  const { generateTimetable, canGenerate } = useAutoGenerateTimetable({
+    schoolType,
+    subjects,
+    courses,
+    existingPeriods: timetable,
+  });
+
+  const handleAutoGenerate = () => {
+    const generatedPeriods = generateTimetable();
+    
+    // Convert generated periods to editable format
+    const newPeriods: EditablePeriod[] = generatedPeriods.map((p) => ({
+      dayOfWeek: p.dayOfWeek,
+      startTime: p.startTime,
+      endTime: p.endTime,
+      type: p.type,
+      subjectId: p.subjectId,
+      courseId: p.courseId,
+    }));
+
+    setEditablePeriods(newPeriods);
+    setShowAutoGenerateModal(false);
+  };
 
   // Get all unique time periods
   const timePeriods = useMemo(() => {
@@ -185,12 +213,25 @@ export function EditableTimetableTable({
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-dark-surface rounded-lg shadow-xl w-full max-w-7xl max-h-[90vh] flex flex-col">
+      <div className="bg-white dark:bg-dark-surface rounded-lg shadow-xl w-full max-w-[95vw] max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-light-border dark:border-dark-border">
-          <h2 className="text-xl font-semibold text-light-text-primary dark:text-dark-text-primary">
-            Edit Timetable
-          </h2>
+          <div className="flex items-center gap-4">
+            <h2 className="text-xl font-semibold text-light-text-primary dark:text-dark-text-primary">
+              Edit Timetable
+            </h2>
+            {canGenerate && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowAutoGenerateModal(true)}
+                disabled={isLoading}
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                Auto-Fill
+              </Button>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="text-light-text-muted dark:text-dark-text-muted hover:text-light-text-primary dark:hover:text-dark-text-primary"
@@ -205,7 +246,7 @@ export function EditableTimetableTable({
             <table className="w-full border-collapse">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-10 bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border px-4 py-3 text-left text-sm font-semibold text-light-text-primary dark:text-dark-text-primary">
+                  <th className="sticky left-0 z-10 bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border px-3 py-3 text-left text-sm font-semibold text-light-text-primary dark:text-dark-text-primary min-w-[200px]">
                     Time
                   </th>
                   {DAYS.map((day) => (
@@ -233,26 +274,26 @@ export function EditableTimetableTable({
                   if (isBreakType && breakType) {
                     return (
                       <tr key={`${timePeriod.startTime}-${breakType}`}>
-                        <td className="sticky left-0 z-10 bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <Input
+                        <td className="sticky left-0 z-10 bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border px-3 py-3 min-w-[200px]">
+                          <div className="flex items-center gap-1.5">
+                            <input
                               type="time"
                               value={timePeriod.startTime}
                               onChange={(e) => {
                                 const newStartTime = e.target.value;
                                 updateTimeForAllDays(timePeriod.startTime, timePeriod.endTime, newStartTime, timePeriod.endTime);
                               }}
-                              className="w-24 text-sm"
+                              className="w-[90px] px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary"
                             />
-                            <span className="text-sm">-</span>
-                            <Input
+                            <span className="text-xs text-light-text-muted">-</span>
+                            <input
                               type="time"
                               value={timePeriod.endTime}
                               onChange={(e) => {
                                 const newEndTime = e.target.value;
                                 updateTimeForAllDays(timePeriod.startTime, timePeriod.endTime, timePeriod.startTime, newEndTime);
                               }}
-                              className="w-24 text-sm"
+                              className="w-[90px] px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary"
                             />
                           </div>
                         </td>
@@ -292,9 +333,9 @@ export function EditableTimetableTable({
                   // Lesson periods
                   return (
                     <tr key={timePeriod.startTime}>
-                      <td className="sticky left-0 z-10 bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <Input
+                      <td className="sticky left-0 z-10 bg-white dark:bg-dark-surface border border-light-border dark:border-dark-border px-3 py-3 min-w-[200px]">
+                        <div className="flex items-center gap-1.5">
+                          <input
                             type="time"
                             value={timePeriod.startTime}
                             onChange={(e) => {
@@ -308,10 +349,10 @@ export function EditableTimetableTable({
                                   });
                                 });
                             }}
-                            className="w-24 text-sm"
+                            className="w-[90px] px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary"
                           />
-                          <span className="text-sm">-</span>
-                          <Input
+                          <span className="text-xs text-light-text-muted">-</span>
+                          <input
                             type="time"
                             value={timePeriod.endTime}
                             onChange={(e) => {
@@ -325,7 +366,7 @@ export function EditableTimetableTable({
                                   });
                                 });
                             }}
-                            className="w-24 text-sm"
+                            className="w-[90px] px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary"
                           />
                         </div>
                       </td>
@@ -433,6 +474,68 @@ export function EditableTimetableTable({
             )}
           </Button>
         </div>
+
+        {/* Auto-Generate Confirmation Modal */}
+        {showAutoGenerateModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-white dark:bg-dark-surface rounded-lg p-6 max-w-md w-full mx-4"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full">
+                  <Sparkles className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary">
+                  Auto-Fill Timetable
+                </h3>
+              </div>
+
+              <div className="space-y-3 mb-6">
+                <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                  This will automatically fill empty slots with:
+                </p>
+                <ul className="text-sm text-light-text-secondary dark:text-dark-text-secondary space-y-1 ml-4">
+                  <li className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
+                    Random {schoolType === 'TERTIARY' ? 'courses' : 'subjects'} (core subjects appear more often)
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>
+                    Assembly, Break & Lunch periods
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
+                    1-2 Free periods per day
+                  </li>
+                </ul>
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 mt-3">
+                  <p className="text-sm text-amber-800 dark:text-amber-300">
+                    <strong>Note:</strong> Existing assignments won't be changed. Only empty slots will be filled.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  variant="primary"
+                  onClick={handleAutoGenerate}
+                  className="flex-1"
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Generate
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowAutoGenerateModal(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -514,21 +617,19 @@ function InsertButton({ onInsert, previousTime }: InsertButtonProps) {
         <div className="text-xs font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
           Insert {insertType === 'BREAK' ? 'Break' : insertType === 'LUNCH' ? 'Lunch' : 'Assembly'}
         </div>
-        <div className="flex items-center gap-2">
-          <Input
+        <div className="flex items-center gap-1.5">
+          <input
             type="time"
             value={startTime}
             onChange={(e) => setStartTime(e.target.value)}
-            className="w-20 text-xs"
-            placeholder="Start"
+            className="w-[85px] px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary"
           />
-          <span className="text-xs">-</span>
-          <Input
+          <span className="text-xs text-light-text-muted">-</span>
+          <input
             type="time"
             value={endTime}
             onChange={(e) => setEndTime(e.target.value)}
-            className="w-20 text-xs"
-            placeholder="End"
+            className="w-[85px] px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary"
           />
         </div>
         <div className="flex gap-1">

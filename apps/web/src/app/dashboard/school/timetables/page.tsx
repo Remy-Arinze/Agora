@@ -268,6 +268,89 @@ export default function TimetablesPage() {
     }
   };
 
+  const handleAutoGenerate = async (generatedPeriods: Array<{
+    dayOfWeek: DayOfWeek;
+    startTime: string;
+    endTime: string;
+    type: 'LESSON' | 'BREAK' | 'LUNCH' | 'ASSEMBLY';
+    subjectId?: string;
+    subjectName?: string;
+    courseId?: string;
+    courseName?: string;
+  }>) => {
+    if (!schoolId || !selectedClassId || !selectedTermId) return;
+
+    try {
+      // Create a map of existing periods with their IDs for updates
+      const existingMap = new Map<string, TimetablePeriod>();
+      timetable.forEach((period) => {
+        const key = `${period.dayOfWeek}-${period.startTime}-${period.endTime}`;
+        existingMap.set(key, period);
+      });
+
+      let createdCount = 0;
+      let updatedCount = 0;
+      
+      for (const period of generatedPeriods) {
+        const key = `${period.dayOfWeek}-${period.startTime}-${period.endTime}`;
+        const existingPeriod = existingMap.get(key);
+        
+        if (existingPeriod) {
+          // Period exists - check if we need to update it
+          const existingHasSubject = existingPeriod.subjectId || existingPeriod.courseId;
+          const newHasSubject = period.subjectId || period.courseId;
+          
+          // Only update if:
+          // 1. Existing period has no subject (is a free period) AND new period has a subject
+          // 2. Or it's a break/lunch/assembly type update
+          if ((!existingHasSubject && newHasSubject) || period.type !== 'LESSON') {
+            await updatePeriod({
+              schoolId,
+              periodId: existingPeriod.id,
+              data: {
+                type: period.type as PeriodType,
+                subjectId: currentType !== 'TERTIARY' ? period.subjectId : undefined,
+                courseId: currentType === 'TERTIARY' ? period.courseId : undefined,
+              },
+            }).unwrap();
+            updatedCount++;
+          }
+        } else {
+          // Period doesn't exist - create new one
+          await createPeriod({
+            schoolId,
+            data: {
+              dayOfWeek: period.dayOfWeek,
+              startTime: period.startTime,
+              endTime: period.endTime,
+              type: period.type as PeriodType,
+              subjectId: currentType !== 'TERTIARY' ? period.subjectId : undefined,
+              courseId: currentType === 'TERTIARY' ? period.courseId : undefined,
+              classId: selectedClassId,
+              termId: selectedTermId,
+            },
+          }).unwrap();
+          createdCount++;
+        }
+      }
+
+      const totalChanges = createdCount + updatedCount;
+      if (totalChanges > 0) {
+        toast.success(`Timetable generated! ${createdCount} created, ${updatedCount} updated.`);
+      } else {
+        toast.success('Timetable is already up to date!');
+      }
+      await refetchTimetable();
+      refetchTimetables();
+    } catch (error: any) {
+      if (error?.status === 409) {
+        toast.error(error?.data?.message || 'Conflict detected');
+      } else {
+        toast.error(error?.data?.message || 'Failed to generate timetable');
+      }
+    }
+  };
+
   const handleDeleteTimetable = async () => {
     if (!schoolId || !deleteConfirmModal) return;
     try {
@@ -568,6 +651,7 @@ export default function TimetablesPage() {
                     termId={selectedTermId}
                     onPeriodUpdate={handlePeriodUpdate}
                     onPeriodDelete={handlePeriodDelete}
+                    onAutoGenerate={handleAutoGenerate}
                     isLoading={isCreating || isUpdating || isDeleting}
                   />
                   {isEditMode && (
