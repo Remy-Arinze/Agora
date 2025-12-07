@@ -216,12 +216,20 @@ export default function TimetablesPage() {
 
     try {
       if (slot.periodData) {
+        // For Free Period, explicitly pass null to clear the subject/course
+        // undefined means "don't change", null means "clear it"
+        const isFreeperiod = subjectId === undefined && courseId === undefined;
+        
         await updatePeriod({
           schoolId,
           periodId: slot.periodData.id,
           data: {
-            subjectId: currentType !== 'TERTIARY' ? subjectId : undefined,
-            courseId: currentType === 'TERTIARY' ? courseId : undefined,
+            subjectId: currentType !== 'TERTIARY' 
+              ? (isFreeperiod ? null : subjectId) 
+              : undefined,
+            courseId: currentType === 'TERTIARY' 
+              ? (isFreeperiod ? null : courseId) 
+              : undefined,
             teacherId: slot.periodData.teacherId || undefined,
             roomId: slot.periodData.roomId || undefined,
             startTime: slot.periodData.startTime,

@@ -522,8 +522,8 @@ export interface CreateTimetablePeriodDto {
   startTime: string;
   endTime: string;
   type?: PeriodType;
-  subjectId?: string;
-  courseId?: string;
+  subjectId?: string | null;
+  courseId?: string | null;
   teacherId?: string;
   roomId?: string;
   classId?: string;
