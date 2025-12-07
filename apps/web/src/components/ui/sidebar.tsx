@@ -185,7 +185,7 @@ export const SidebarLink = ({
         "flex items-center justify-start gap-2 group/sidebar py-2 px-3 rounded-lg transition-colors",
         isActive
           ? "bg-blue-600 dark:bg-blue-500 text-white dark:text-white"
-          : "text-light-text-secondary dark:text-dark-text-secondary hover:bg-light-bg dark:hover:bg-dark-surface/50",
+          : "text-light-text-secondary dark:text-dark-text-secondary hover:bg-gray-100 dark:hover:bg-[var(--dark-hover)]",
         className
       )}
       {...props}

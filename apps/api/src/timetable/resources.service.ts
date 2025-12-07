@@ -10,6 +10,8 @@ import {
   CreateRoomDto,
   CreateSubjectDto,
   UpdateSubjectDto,
+  AutoGenerateSubjectsDto,
+  AutoGenerateSubjectsResponseDto,
 } from './dto/resource.dto';
 
 @Injectable()
@@ -819,6 +821,117 @@ export class ResourcesService {
       type: c.type,
       isActive: c.isActive,
     }));
+  }
+
+  // Predefined subjects for auto-generation
+  private readonly primarySubjects = [
+    { name: 'English Language', code: 'ENG', color: '#3B82F6' },
+    { name: 'Mathematics', code: 'MATH', color: '#10B981' },
+    { name: 'Basic Science', code: 'BSCI', color: '#8B5CF6' },
+    { name: 'Social Studies', code: 'SOCS', color: '#F59E0B' },
+    { name: 'Civic Education', code: 'CVCE', color: '#EF4444' },
+    { name: 'Physical & Health Education', code: 'PHE', color: '#06B6D4' },
+    { name: 'Creative Arts', code: 'CART', color: '#EC4899' },
+    { name: 'Agricultural Science', code: 'AGSC', color: '#84CC16' },
+    { name: 'Computer Studies', code: 'COMP', color: '#6366F1' },
+    { name: 'Home Economics', code: 'HECO', color: '#F97316' },
+    { name: 'Religious Studies', code: 'RELS', color: '#14B8A6' },
+    { name: 'French', code: 'FREN', color: '#A855F7' },
+    { name: 'Yoruba', code: 'YORB', color: '#22C55E' },
+    { name: 'Music', code: 'MUSC', color: '#E11D48' },
+  ];
+
+  private readonly secondarySubjects = [
+    { name: 'English Language', code: 'ENG', color: '#3B82F6' },
+    { name: 'Mathematics', code: 'MATH', color: '#10B981' },
+    { name: 'Physics', code: 'PHY', color: '#8B5CF6' },
+    { name: 'Chemistry', code: 'CHEM', color: '#F59E0B' },
+    { name: 'Biology', code: 'BIO', color: '#EF4444' },
+    { name: 'Further Mathematics', code: 'FMATH', color: '#06B6D4' },
+    { name: 'Economics', code: 'ECON', color: '#EC4899' },
+    { name: 'Government', code: 'GOVT', color: '#84CC16' },
+    { name: 'Literature in English', code: 'LIT', color: '#6366F1' },
+    { name: 'Geography', code: 'GEO', color: '#F97316' },
+    { name: 'Agricultural Science', code: 'AGSC', color: '#14B8A6' },
+    { name: 'Computer Science', code: 'COMP', color: '#A855F7' },
+    { name: 'Civic Education', code: 'CVCE', color: '#22C55E' },
+    { name: 'History', code: 'HIST', color: '#E11D48' },
+    { name: 'Fine Arts', code: 'FART', color: '#0EA5E9' },
+    { name: 'Technical Drawing', code: 'TDRW', color: '#7C3AED' },
+    { name: 'Food & Nutrition', code: 'FNU', color: '#F472B6' },
+    { name: 'Christian Religious Studies', code: 'CRS', color: '#34D399' },
+    { name: 'Islamic Religious Studies', code: 'IRS', color: '#FBBF24' },
+    { name: 'French', code: 'FREN', color: '#818CF8' },
+    { name: 'Yoruba', code: 'YORB', color: '#2DD4BF' },
+    { name: 'Commerce', code: 'COMM', color: '#FB7185' },
+    { name: 'Accounting', code: 'ACCT', color: '#4ADE80' },
+  ];
+
+  async autoGenerateSubjects(
+    schoolId: string,
+    dto: AutoGenerateSubjectsDto
+  ): Promise<AutoGenerateSubjectsResponseDto> {
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    const predefinedSubjects = dto.schoolType === 'PRIMARY' 
+      ? this.primarySubjects 
+      : this.secondarySubjects;
+
+    // Get existing subjects for this school and schoolType
+    const existingSubjects = await this.subjectModel.findMany({
+      where: {
+        schoolId: school.id,
+        schoolType: dto.schoolType,
+      },
+    });
+
+    const existingNames = new Set(existingSubjects.map((s: any) => s.name.toLowerCase()));
+    const existingCodes = new Set(existingSubjects.map((s: any) => s.code?.toLowerCase()));
+
+    const createdSubjects: SubjectDto[] = [];
+    let skipped = 0;
+
+    for (const subjectData of predefinedSubjects) {
+      // Skip if subject with same name or code already exists
+      if (
+        existingNames.has(subjectData.name.toLowerCase()) ||
+        existingCodes.has(subjectData.code.toLowerCase())
+      ) {
+        skipped++;
+        continue;
+      }
+
+      const subject = await this.subjectModel.create({
+        data: {
+          name: subjectData.name,
+          code: subjectData.code,
+          schoolId: school.id,
+          schoolType: dto.schoolType,
+          isActive: true,
+        },
+      });
+
+      createdSubjects.push({
+        id: subject.id,
+        name: subject.name,
+        code: subject.code,
+        schoolId: subject.schoolId,
+        schoolType: subject.schoolType,
+        classLevelId: subject.classLevelId,
+        description: subject.description,
+        isActive: subject.isActive,
+        teachers: [],
+      });
+    }
+
+    return {
+      created: createdSubjects.length,
+      skipped,
+      subjects: createdSubjects,
+    };
   }
 }
 

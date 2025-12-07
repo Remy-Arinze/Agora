@@ -61,7 +61,7 @@ export default function AdminOverviewPage() {
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { data: activeSessionResponse, refetch: refetchActiveSession } = useGetActiveSessionQuery(
-    { schoolId: schoolId! },
+    { schoolId: schoolId!, schoolType: currentType || undefined },
     { skip: !schoolId }
   );
   const activeSession = activeSessionResponse?.data;
@@ -137,14 +137,14 @@ export default function AdminOverviewPage() {
       };
     } else if (!hasActiveTerm) {
       return {
-        text: `Session`,
+        text: `Start ${terminology.periodSingular}`,
         icon: Calendar,
         onClick: () => router.push('/dashboard/school/settings/session'),
         variant: 'primary' as const,
       };
     } else {
       return {
-        text: `End ${terminology.term}`,
+        text: `End ${terminology.periodSingular}`,
         icon: XCircle,
         onClick: () => setShowEndTermModal(true),
         variant: 'danger' as const,
@@ -160,12 +160,12 @@ export default function AdminOverviewPage() {
 
     try {
       await endTerm({ schoolId, schoolType: currentType || undefined }).unwrap();
-      toast.success(`${terminology.term} ended successfully`);
+      toast.success(`${terminology.periodSingular} ended successfully`);
       setShowEndTermModal(false);
       refetchActiveSession();
       refetch();
     } catch (error: any) {
-      toast.error(error?.data?.message || `Failed to end ${terminology.term.toLowerCase()}`);
+      toast.error(error?.data?.message || `Failed to end ${terminology.periodSingular.toLowerCase()}`);
     }
   };
 
@@ -318,7 +318,7 @@ export default function AdminOverviewPage() {
                 {isEndingTerm ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Ending {terminology.term}...
+                    Ending {terminology.periodSingular}...
                   </>
                 ) : (
                   <>
@@ -450,7 +450,7 @@ export default function AdminOverviewPage() {
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
-                    Recent Students
+                    Recently Added Students
                   </CardTitle>
                   <Link href="/dashboard/school/students">
                     <Button variant="ghost" size="sm" className="text-blue-600 dark:text-blue-400">
@@ -475,7 +475,7 @@ export default function AdminOverviewPage() {
                         <motion.div
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
-                          className="p-4 bg-gray-50 dark:bg-dark-surface rounded-lg hover:bg-gray-100 dark:hover:bg-dark-surface/80 transition-colors cursor-pointer"
+                          className="p-4 bg-transparent rounded-lg hover:bg-gray-100 dark:hover:bg-[var(--dark-hover)] transition-colors cursor-pointer border border-transparent hover:border-gray-200 dark:hover:border-dark-border"
                         >
                           <div className="flex items-center justify-between">
                             <div>
@@ -514,7 +514,8 @@ export default function AdminOverviewPage() {
           isLoading={isEndingTerm}
           termName={activeSession?.term?.name}
           sessionName={activeSession?.session?.name}
-          termLabel={terminology.term}
+          termLabel={terminology.periodSingular}
+          termEndDate={activeSession?.term?.endDate}
         />
 
         {/* Image Crop Modal */}

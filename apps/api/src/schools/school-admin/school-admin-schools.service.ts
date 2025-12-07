@@ -144,42 +144,33 @@ export class SchoolAdminSchoolsService {
             : {}),
         },
       }),
-      // Teachers - filter by classes of schoolType if provided
-      schoolType && classIds && classIds.length > 0
-        ? this.prisma.teacher.count({
-            where: {
-              schoolId,
-              classTeachers: {
-                some: {
-                  classId: { in: classIds },
-                },
-              },
-            },
-          })
-        : this.prisma.teacher.count({
-            where: { schoolId },
-          }),
-      schoolType && classIds && classIds.length > 0
-        ? this.prisma.teacher.count({
-            where: {
-              schoolId,
-              createdAt: { lte: lastMonth },
-              classTeachers: {
-                some: {
-                  classId: { in: classIds },
-                },
-              },
-            },
-          })
-        : this.prisma.teacher.count({
-            where: {
-              schoolId,
-              createdAt: { lte: lastMonth },
-            },
-          }),
-      // Courses (placeholder - will be 0 if Course model doesn't exist)
-      this.getCourseCount(schoolId).catch(() => 0),
-      this.getCourseCount(schoolId, lastMonth).catch(() => 0),
+      // Teachers - count all teachers for the school
+      // (teachers may or may not be assigned to classes yet)
+      this.prisma.teacher.count({
+        where: { schoolId },
+      }),
+      this.prisma.teacher.count({
+        where: {
+          schoolId,
+          createdAt: { lte: lastMonth },
+        },
+      }),
+      // Classes/Courses - count classes filtered by schoolType if provided
+      this.prisma.class.count({
+        where: {
+          schoolId,
+          isActive: true,
+          ...(schoolType ? { type: schoolType as any } : {}),
+        },
+      }),
+      this.prisma.class.count({
+        where: {
+          schoolId,
+          isActive: true,
+          createdAt: { lte: lastMonth },
+          ...(schoolType ? { type: schoolType as any } : {}),
+        },
+      }),
       // Pending admissions (placeholder - will be 0 if Admission model doesn't exist)
       this.getPendingAdmissionsCount(schoolId).catch(() => 0),
       this.getPendingAdmissionsCount(schoolId, lastMonth).catch(() => 0),
@@ -286,8 +277,14 @@ export class SchoolAdminSchoolsService {
         },
       });
 
-      // Get courses created in this month
-      const monthCourses = await this.getCourseCount(schoolId, monthDate, nextMonthDate).catch(() => 0);
+      // Get classes created in this month
+      const monthCourses = await this.prisma.class.count({
+        where: {
+          schoolId,
+          isActive: true,
+          createdAt: { gte: monthDate, lt: nextMonthDate },
+        },
+      });
 
       growthTrends.push({
         name: monthNames[monthDate.getMonth()],

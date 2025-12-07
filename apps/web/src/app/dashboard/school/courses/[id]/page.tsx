@@ -763,7 +763,7 @@ export default function ClassDetailPage() {
                                 : 'Unknown';
 
                               return (
-                                <tr key={grade.id} className="hover:bg-light-surface dark:hover:bg-dark-surface">
+                                <tr key={grade.id} className="hover:bg-light-surface dark:hover:bg-[var(--dark-hover)]">
                                   <td className="px-4 py-3">
                                     <div>
                                       <p className="text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
@@ -919,7 +919,7 @@ export default function ClassDetailPage() {
                           key={resource.id}
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
-                          className="p-4 border border-light-border dark:border-dark-border rounded-lg hover:bg-gray-50 dark:hover:bg-dark-surface/50 transition-colors"
+                          className="p-4 border border-light-border dark:border-dark-border rounded-lg hover:bg-gray-50 dark:hover:bg-[var(--dark-hover)] transition-colors"
                         >
                           <div className="flex items-center justify-between gap-4">
                             <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -1449,7 +1449,7 @@ function ClassStudentsTab({
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: index * 0.05 }}
-                      className="border-b border-light-border dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-surface/50 transition-colors"
+                      className="border-b border-light-border dark:border-dark-border hover:bg-gray-50 dark:hover:bg-[var(--dark-hover)] transition-colors"
                     >
                       <td className="py-4 px-4">
                         <div>

@@ -294,7 +294,7 @@ function TransferEnrollmentsDisplay({ enrollments, grades }: { enrollments?: any
             {/* Collapsible Header */}
             <button
               onClick={() => toggleEnrollment(enrollment.id)}
-              className="w-full bg-light-surface dark:bg-dark-surface px-4 py-4 hover:bg-gray-50 dark:hover:bg-dark-surface/80 transition-colors flex items-center justify-between"
+              className="w-full bg-light-surface dark:bg-dark-surface px-4 py-4 hover:bg-gray-50 dark:hover:bg-[var(--dark-hover)] transition-colors flex items-center justify-between"
             >
               <div className="flex items-center gap-3 flex-1 text-left">
                 <div className={`transform transition-transform ${isExpanded ? 'rotate-90' : ''}`}>
@@ -847,7 +847,7 @@ export default function TransfersPage() {
                               initial={{ opacity: 0, x: -20 }}
                               animate={{ opacity: 1, x: 0 }}
                               transition={{ delay: index * 0.05 }}
-                              className="border-b border-light-border dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-surface/50 transition-colors"
+                              className="border-b border-light-border dark:border-dark-border hover:bg-gray-50 dark:hover:bg-[var(--dark-hover)] transition-colors"
                             >
                               <td className="py-4 px-4">
                                 <p className="font-medium text-light-text-primary dark:text-dark-text-primary">
@@ -984,7 +984,7 @@ export default function TransfersPage() {
                               initial={{ opacity: 0, x: -20 }}
                               animate={{ opacity: 1, x: 0 }}
                               transition={{ delay: index * 0.05 }}
-                              className="border-b border-light-border dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-surface/50 transition-colors"
+                              className="border-b border-light-border dark:border-dark-border hover:bg-gray-50 dark:hover:bg-[var(--dark-hover)] transition-colors"
                             >
                               <td className="py-4 px-4">
                                 <p className="font-medium text-light-text-primary dark:text-dark-text-primary">

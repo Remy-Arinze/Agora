@@ -16,6 +16,7 @@ import {
   useStartNewTermMutation,
   useEndSessionMutation,
   useEndTermMutation,
+  useReactivateTermMutation,
   useGetSessionsQuery,
   type SessionType,
 } from '@/lib/store/api/schoolAdminApi';
@@ -153,7 +154,7 @@ export default function SessionWizardPage() {
   const [endDate, setEndDate] = useState('');
   const [halfTermStart, setHalfTermStart] = useState('');
   const [halfTermEnd, setHalfTermEnd] = useState('');
-  const [carryOver, setCarryOver] = useState<boolean>(true);
+  const [carryOver, setCarryOver] = useState<boolean>(false); // Default to promote for new sessions
   const [selectedTermId, setSelectedTermId] = useState<string>('');
   const [showInfoModal, setShowInfoModal] = useState(false);
   
@@ -177,6 +178,7 @@ export default function SessionWizardPage() {
   );
 
   const [startNewTerm, { isLoading: isStarting }] = useStartNewTermMutation();
+  const [reactivateTerm, { isLoading: isReactivating }] = useReactivateTermMutation();
   const [endSession, { isLoading: isEndingSession }] = useEndSessionMutation();
   const [endTerm, { isLoading: isEndingTerm }] = useEndTermMutation();
 
@@ -187,25 +189,51 @@ export default function SessionWizardPage() {
   // Check if there's an active term
   const hasActiveTerm = !!activeSession?.term;
 
-  // Filter to only show DRAFT terms (not active or completed)
+  // Filter to show:
+  // 1. DRAFT terms (can be started)
+  // 2. COMPLETED terms whose endDate hasn't passed (can be continued)
   const availableTerms = useMemo(() => {
-    const terms: { id: string; name: string; sessionName: string; status: string }[] = [];
+    const terms: { id: string; name: string; sessionName: string; status: string; endDate?: string; canContinue?: boolean }[] = [];
+    const now = new Date();
+    
     sessions.forEach((session) => {
       if (session.terms) {
         session.terms.forEach((term) => {
-          // Only include DRAFT terms that haven't been activated yet
+          // Include DRAFT terms (not activated yet)
           if (term.status === 'DRAFT') {
             terms.push({
               id: term.id,
               name: term.name,
               sessionName: session.name,
               status: term.status,
+              endDate: term.endDate,
+              canContinue: false,
             });
+          }
+          // Include COMPLETED terms whose endDate hasn't passed (can be continued)
+          else if (term.status === 'COMPLETED' && term.endDate) {
+            const termEndDate = new Date(term.endDate);
+            if (termEndDate > now) {
+              terms.push({
+                id: term.id,
+                name: term.name,
+                sessionName: session.name,
+                status: term.status,
+                endDate: term.endDate,
+                canContinue: true,
+              });
+            }
           }
         });
       }
     });
-    return terms;
+    
+    // Sort: continuable terms first, then by term number
+    return terms.sort((a, b) => {
+      if (a.canContinue && !b.canContinue) return -1;
+      if (!a.canContinue && b.canContinue) return 1;
+      return 0;
+    });
   }, [sessions]);
 
   // Show info modal when page loads if no active session
@@ -238,6 +266,16 @@ export default function SessionWizardPage() {
     : null;
 
   const handleNext = () => {
+    // If continuing a term (reactivation), skip dates step - go directly to submit from step 1
+    if (currentStep === 1 && isReactivation) {
+      handleSubmit();
+      return;
+    }
+    if (currentStep === 2 && !shouldShowMigrationStep) {
+      // Skip step 3 for NEW_TERM on PRIMARY/SECONDARY - go directly to submit
+      handleSubmit();
+      return;
+    }
     if (currentStep < 3) {
       setCurrentStep((prev) => (prev + 1) as Step);
     }
@@ -279,6 +317,10 @@ export default function SessionWizardPage() {
     }
   };
 
+  // Check if selected term is a "continue" (reactivation) scenario
+  const selectedTermData = availableTerms.find(t => t.id === selectedTermId);
+  const isReactivation = selectedTermData?.canContinue === true;
+
   const handleSubmit = async () => {
     if (!schoolId) {
       toast.error('School not found');
@@ -286,6 +328,22 @@ export default function SessionWizardPage() {
     }
 
     try {
+      // If continuing a completed term, use reactivateTerm
+      if (sessionType === 'NEW_TERM' && isReactivation && selectedTermId) {
+        await reactivateTerm({
+          schoolId,
+          termId: selectedTermId,
+          schoolType: currentType || undefined,
+        }).unwrap();
+
+        toast.success(
+          `${termLabel} continued successfully for ${getSchoolTypeLabel(currentType)}!`
+        );
+        router.push('/dashboard/school/overview');
+        return;
+      }
+
+      // Otherwise, start a new term normally
       const result = await startNewTerm({
         schoolId,
         data: {
@@ -303,7 +361,7 @@ export default function SessionWizardPage() {
       );
       router.push('/dashboard/school/overview');
     } catch (error: any) {
-      toast.error(error?.data?.message || 'Failed to start term');
+      toast.error(error?.data?.message || `Failed to ${isReactivation ? 'continue' : 'start'} ${termLabel.toLowerCase()}`);
     }
   };
 
@@ -314,6 +372,13 @@ export default function SessionWizardPage() {
       : selectedTermId.trim().length > 0 && availableTerms.length > 0 && !hasActiveTerm);
   const canProceedStep2 = startDate && endDate && !sessionDateError;
   const canProceedStep3 = true; // Logic gate is just a question
+
+  // For NEW_TERM on PRIMARY/SECONDARY, skip step 3 (migration options)
+  // because student promotion only happens per session, not per term
+  const shouldShowMigrationStep = sessionType === 'NEW_SESSION' || currentType === 'TERTIARY';
+
+  // When continuing a term (reactivation), skip the dates step - term already has dates
+  const shouldShowDatesStep = !isReactivation;
 
   return (
     <ProtectedRoute roles={['SCHOOL_ADMIN']}>
@@ -340,31 +405,48 @@ export default function SessionWizardPage() {
 
         {/* Progress Steps */}
         <div className="flex items-center justify-between mb-8">
-          {[1, 2, 3].map((step) => (
-            <div key={step} className="flex items-center flex-1">
-              <div className="flex flex-col items-center">
-                <div
-                  className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
-                    currentStep >= step
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
-                  }`}
-                >
-                  {currentStep > step ? <CheckCircle className="h-5 w-5" /> : step}
+          {(() => {
+            // Determine which steps to show
+            let steps: number[];
+            if (isReactivation) {
+              // Continuing a term: only 1 step (select term)
+              steps = [1];
+            } else if (shouldShowMigrationStep) {
+              // New session or tertiary: 3 steps
+              steps = [1, 2, 3];
+            } else {
+              // New term for primary/secondary: 2 steps
+              steps = [1, 2];
+            }
+            
+            return steps.map((step, idx, arr) => (
+              <div key={step} className="flex items-center flex-1">
+                <div className="flex flex-col items-center">
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold ${
+                      currentStep >= step
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                    }`}
+                  >
+                    {currentStep > step ? <CheckCircle className="h-5 w-5" /> : idx + 1}
+                  </div>
+                  <p className="text-xs mt-2 text-center text-light-text-secondary dark:text-dark-text-secondary">
+                    {step === 1 
+                      ? (isReactivation ? 'Continue Term' : 'Session & Term') 
+                      : step === 2 ? 'Dates' : 'Migration'}
+                  </p>
                 </div>
-                <p className="text-xs mt-2 text-center text-light-text-secondary dark:text-dark-text-secondary">
-                  {step === 1 ? 'Session & Term' : step === 2 ? 'Dates' : 'Migration'}
-                </p>
+                {idx < arr.length - 1 && (
+                  <div
+                    className={`flex-1 h-1 mx-2 ${
+                      currentStep > step ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+                    }`}
+                  />
+                )}
               </div>
-              {step < 3 && (
-                <div
-                  className={`flex-1 h-1 mx-2 ${
-                    currentStep > step ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
-                  }`}
-                />
-              )}
-            </div>
-          ))}
+            ));
+          })()}
         </div>
 
         {/* Step 1: Select Session & Term */}
@@ -526,16 +608,24 @@ export default function SessionWizardPage() {
                           }`}
                         >
                           <option value="">Select a {termLabel.toLowerCase()}...</option>
-                          {availableTerms.map((term) => (
-                            <option key={term.id} value={term.id}>
-                              {term.sessionName} - {term.name}
-                            </option>
-                          ))}
+                          {availableTerms.map((term) => {
+                            const daysRemaining = term.endDate 
+                              ? Math.ceil((new Date(term.endDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+                              : 0;
+                            return (
+                              <option key={term.id} value={term.id}>
+                                {term.canContinue ? '↩ Continue' : '▶ Start'} {term.sessionName} - {term.name}
+                                {term.canContinue && daysRemaining > 0 ? ` (${daysRemaining} days left)` : ''}
+                              </option>
+                            );
+                          })}
                         </select>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                           {hasActiveTerm 
                             ? `End the current ${termLabel.toLowerCase()} to select a new one.`
-                            : `Only ${termLabel.toLowerCase()}s that haven't been activated yet are shown.`}
+                            : availableTerms.some(t => t.canContinue)
+                              ? `You can continue a ${termLabel.toLowerCase()} that was ended early, or start a new one.`
+                              : `Only ${termLabel.toLowerCase()}s that haven't been activated yet are shown.`}
                         </p>
                       </>
                     )}
@@ -557,8 +647,22 @@ export default function SessionWizardPage() {
               )}
 
               <div className="flex justify-end">
-                <Button onClick={handleNext} disabled={!canProceedStep1}>
-                  Next <ArrowRight className="h-4 w-4 ml-2" />
+                <Button onClick={handleNext} disabled={!canProceedStep1 || isReactivating}>
+                  {isReactivation ? (
+                    isReactivating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Continuing {termLabel}...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Continue {termLabel}
+                      </>
+                    )
+                  ) : (
+                    <>Next <ArrowRight className="h-4 w-4 ml-2" /></>
+                  )}
                 </Button>
               </div>
             </CardContent>
@@ -634,16 +738,28 @@ export default function SessionWizardPage() {
                 <Button variant="ghost" onClick={handleBack}>
                   Back
                 </Button>
-                <Button onClick={handleNext} disabled={!canProceedStep2}>
-                  Next <ArrowRight className="h-4 w-4 ml-2" />
+                <Button onClick={handleNext} disabled={!canProceedStep2 || isStarting || isReactivating}>
+                  {shouldShowMigrationStep ? (
+                    <>Next <ArrowRight className="h-4 w-4 ml-2" /></>
+                  ) : (isStarting || isReactivating) ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      {isReactivation ? 'Continuing' : 'Starting'} {termLabel}...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      {isReactivation ? 'Continue' : 'Start'} {termLabel}
+                    </>
+                  )}
                 </Button>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Step 3: Logic Gate */}
-        {currentStep === 3 && (
+        {/* Step 3: Logic Gate - Only shown for NEW_SESSION or TERTIARY schools */}
+        {currentStep === 3 && shouldShowMigrationStep && (
           <Card>
             <CardHeader>
               <CardTitle>Step 3: Student Migration</CardTitle>
@@ -741,10 +857,37 @@ export default function SessionWizardPage() {
         isOpen={showEndTermModal}
         onClose={() => setShowEndTermModal(false)}
         onConfirm={handleEndTerm}
-        title={`End Current ${termLabel}?`}
-        message={`Are you sure you want to end "${activeSession?.term?.name}" for ${getSchoolTypeLabel(currentType)}? You will then be able to start a new ${termLabel.toLowerCase()}.`}
-        confirmText={`End ${termLabel}`}
-        confirmVariant="warning"
+        title={(() => {
+          const termEndDate = activeSession?.term?.endDate;
+          const isEarly = termEndDate && new Date(termEndDate) > new Date();
+          return isEarly ? `End ${termLabel} Early?` : `End Current ${termLabel}?`;
+        })()}
+        message={(() => {
+          const termEndDate = activeSession?.term?.endDate;
+          const isEarly = termEndDate && new Date(termEndDate) > new Date();
+          const daysRemaining = termEndDate 
+            ? Math.ceil((new Date(termEndDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+            : 0;
+          
+          let msg = `Are you sure you want to end "${activeSession?.term?.name}" for ${getSchoolTypeLabel(currentType)}?`;
+          
+          if (isEarly) {
+            msg += `\n\n⚠️ WARNING: You are ending this ${termLabel.toLowerCase()} ${daysRemaining} days before its scheduled end date. You can continue it later from this wizard.`;
+          }
+          
+          msg += `\n\nYou will then be able to start a new ${termLabel.toLowerCase()}.`;
+          return msg;
+        })()}
+        confirmText={(() => {
+          const termEndDate = activeSession?.term?.endDate;
+          const isEarly = termEndDate && new Date(termEndDate) > new Date();
+          return isEarly ? `End ${termLabel} Early` : `End ${termLabel}`;
+        })()}
+        confirmVariant={(() => {
+          const termEndDate = activeSession?.term?.endDate;
+          const isEarly = termEndDate && new Date(termEndDate) > new Date();
+          return isEarly ? 'danger' : 'warning';
+        })()}
         isLoading={isEndingTerm}
       />
     </ProtectedRoute>

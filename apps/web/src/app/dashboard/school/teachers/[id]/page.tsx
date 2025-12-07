@@ -397,7 +397,7 @@ export default function StaffDetailPage() {
                             return (
                               <div
                                 key={classItem.id}
-                                className="border border-light-border dark:border-dark-border rounded-lg p-4 hover:bg-light-surface dark:hover:bg-dark-surface transition-colors"
+                                className="border border-light-border dark:border-dark-border rounded-lg p-4 hover:bg-light-surface dark:hover:bg-[var(--dark-hover)] transition-colors"
                               >
                                 <div className="flex items-start justify-between">
                                   <div className="flex-1">

@@ -22,6 +22,7 @@ const config: Config = {
         'dark-bg': 'var(--dark-bg)',
         'dark-surface': 'var(--dark-surface)',
         'dark-border': 'var(--dark-border)',
+        'dark-hover': 'var(--dark-hover)',
         'dark-text-primary': 'var(--dark-text-primary)',
         'dark-text-secondary': 'var(--dark-text-secondary)',
         'dark-text-muted': 'var(--dark-text-muted)',

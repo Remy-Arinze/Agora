@@ -1124,6 +1124,81 @@ export class SessionService {
   }
 
   /**
+   * Reactivate a completed term (continue a term that was ended early)
+   * Only allows reactivation if the term's end date hasn't passed yet
+   */
+  async reactivateTerm(schoolId: string, termId: string, schoolType?: string): Promise<{ term: TermDto }> {
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    // Find the term
+    const term = await this.prisma.term.findUnique({
+      where: { id: termId },
+      include: {
+        academicSession: true,
+      },
+    });
+
+    if (!term) {
+      throw new NotFoundException('Term not found');
+    }
+
+    // Verify term belongs to this school
+    if (term.academicSession.schoolId !== school.id) {
+      throw new BadRequestException('Term does not belong to this school');
+    }
+
+    // Verify school type matches if specified
+    if (schoolType && term.academicSession.schoolType !== schoolType) {
+      throw new BadRequestException('Term does not match the specified school type');
+    }
+
+    // Check if term is COMPLETED (only completed terms can be reactivated)
+    if (term.status !== TermStatus.COMPLETED) {
+      throw new BadRequestException('Only completed terms can be reactivated');
+    }
+
+    // Check if term's end date hasn't passed yet
+    const now = new Date();
+    if (term.endDate < now) {
+      throw new BadRequestException(
+        `Cannot reactivate this term - its end date (${term.endDate.toLocaleDateString()}) has already passed`
+      );
+    }
+
+    // Deactivate any currently active term for this session
+    await this.prisma.term.updateMany({
+      where: {
+        academicSessionId: term.academicSessionId,
+        status: TermStatus.ACTIVE,
+      },
+      data: {
+        status: TermStatus.COMPLETED,
+      },
+    });
+
+    // Reactivate the term
+    const updatedTerm = await this.prisma.term.update({
+      where: { id: termId },
+      data: { status: TermStatus.ACTIVE },
+    });
+
+    // Ensure the session is active
+    await this.prisma.academicSession.update({
+      where: { id: term.academicSessionId },
+      data: { status: SessionStatus.ACTIVE },
+    });
+
+    this.logger.log(`Term ${term.name} reactivated for school ${school.id}`);
+
+    return {
+      term: this.mapToTermDto(updatedTerm),
+    };
+  }
+
+  /**
    * Get all sessions for a school (optionally filtered by school type)
    */
   async getSessions(schoolId: string, schoolType?: string): Promise<AcademicSessionDto[]> {

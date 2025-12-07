@@ -13,12 +13,13 @@
     --light-border: #1a3262; /* gray-100 - very light gray border */
     
     /* Dark Mode Colors - using hex for better compatibility */
-    --dark-bg: #020408; /* Very dark, almost black */
-    --dark-surface: #0b0e17; /* Deep greyish blue for cards */
-    --dark-border: #0b0e17; /* Border color */
+    --dark-bg: #000000; /* Very dark, almost black */
+    --dark-surface: #080a10; /* Deep greyish blue for cards */
+    --dark-border: #05070b; /* Border color */
     --dark-text-primary: #f1f5f9; /* Lighter text for better contrast */
     --dark-text-secondary: #cbd5e1; /* Secondary text */
     --dark-text-muted: #94a3b8; /* Muted text */
+    --dark-hover: #1e293b; /* Hover background - slate-800 for visibility */
   }
 
   /* Border colors are applied via Tailwind classes, not globally */

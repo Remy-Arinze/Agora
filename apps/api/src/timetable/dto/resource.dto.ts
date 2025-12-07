@@ -196,3 +196,21 @@ export class AssignTeacherToSubjectDto {
   teacherId: string;
 }
 
+export class AutoGenerateSubjectsDto {
+  @ApiProperty({ required: true, enum: ['PRIMARY', 'SECONDARY'] })
+  @IsEnum(['PRIMARY', 'SECONDARY'])
+  @IsNotEmpty()
+  schoolType: 'PRIMARY' | 'SECONDARY';
+}
+
+export class AutoGenerateSubjectsResponseDto {
+  @ApiProperty()
+  created: number;
+
+  @ApiProperty()
+  skipped: number;
+
+  @ApiProperty({ type: [SubjectDto] })
+  subjects: SubjectDto[];
+}
+

@@ -77,15 +77,41 @@ export function AnalyticsChart({
             color: colors[index % colors.length],
           }));
         }
+
+        // Calculate total for percentages
+        const pieTotal = pieData.reduce((sum, item) => sum + item.value, 0);
+
+        // Custom label to show percentage inside the chart
+        const renderCustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, index }: any) => {
+          if (percent < 0.05) return null; // Don't show label for very small slices
+          const RADIAN = Math.PI / 180;
+          const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+          const x = cx + radius * Math.cos(-midAngle * RADIAN);
+          const y = cy + radius * Math.sin(-midAngle * RADIAN);
+          
+          return (
+            <text
+              x={x}
+              y={y}
+              fill="white"
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize={11}
+              fontWeight="bold"
+            >
+              {`${(percent * 100).toFixed(0)}%`}
+            </text>
+          );
+        };
         
         return (
-          <PieChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+          <PieChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
             <Pie
               data={pieData}
               cx="50%"
               cy="50%"
               labelLine={false}
-              label={false}
+              label={renderCustomLabel}
               outerRadius={type === 'donut' ? 80 : 100}
               innerRadius={type === 'donut' ? 40 : 0}
               fill="#8884d8"
@@ -97,8 +123,7 @@ export function AnalyticsChart({
             </Pie>
             <Tooltip
               formatter={(value: number, name: string, props: any) => {
-                const total = pieData.reduce((sum, item) => sum + item.value, 0);
-                const percent = ((value / total) * 100).toFixed(1);
+                const percent = ((value / pieTotal) * 100).toFixed(1);
                 return [`${value} (${percent}%)`, props.payload.name];
               }}
               contentStyle={{
@@ -110,14 +135,11 @@ export function AnalyticsChart({
               }}
             />
             <Legend 
-              wrapperStyle={{ paddingTop: '10px' }}
-              iconSize={10}
-              fontSize={11}
+              wrapperStyle={{ paddingTop: '5px', fontSize: '9px' }}
+              iconSize={8}
               formatter={(value, entry: any) => {
-                const total = pieData.reduce((sum, item) => sum + item.value, 0);
-                const percent = ((entry.payload.value / total) * 100).toFixed(1);
-                const displayName = value.length > 15 ? `${value.substring(0, 15)}...` : value;
-                return `${displayName} (${percent}%)`;
+                const displayName = value.length > 10 ? `${value.substring(0, 10)}...` : value;
+                return <span style={{ fontSize: '12px', color: '#94a3b8' }}>{displayName}</span>;
               }}
             />
           </PieChart>

@@ -273,7 +273,7 @@ function UserProfileSection() {
         className={`flex items-center ${open ? 'gap-3' : 'justify-center'} p-3 rounded-lg transition-colors ${
           pathname === '/dashboard/profile'
             ? 'bg-blue-600 dark:bg-blue-500 text-white dark:text-white'
-            : 'hover:bg-gray-50 dark:hover:bg-dark-surface/50'
+            : 'hover:bg-gray-100 dark:hover:bg-[var(--dark-hover)]'
         }`}
       >
         {shouldShowImage ? (
@@ -324,7 +324,7 @@ function LogoutButton() {
       variant="ghost"
       size="sm"
       onClick={logout}
-      className="w-full justify-start gap-2 text-gray-700 dark:text-dark-text-secondary hover:bg-gray-50 dark:hover:bg-dark-surface/50"
+      className="w-full justify-start gap-2 text-gray-700 dark:text-dark-text-secondary hover:bg-gray-100 dark:hover:bg-[var(--dark-hover)]"
     >
       <LogOut className="h-5 w-5 flex-shrink-0" />
       <motion.span

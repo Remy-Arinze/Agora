@@ -860,6 +860,14 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
       },
       invalidatesTags: ['Session', 'School'],
     }),
+    reactivateTerm: builder.mutation<ResponseDto<{ term: Term }>, { schoolId: string; termId: string; schoolType?: string }>({
+      query: ({ schoolId, termId, schoolType }) => ({
+        url: `/schools/${schoolId}/sessions/reactivate-term`,
+        method: 'POST',
+        body: { termId, schoolType },
+      }),
+      invalidatesTags: ['Session', 'School'],
+    }),
     endSession: builder.mutation<ResponseDto<{ session: AcademicSession }>, { schoolId: string; schoolType?: string }>({
       query: ({ schoolId, schoolType }) => {
         const queryParams = new URLSearchParams();
@@ -1054,6 +1062,17 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
       query: ({ schoolId, subjectId, teacherId }) => ({
         url: `/schools/${schoolId}/timetable/subjects/${subjectId}/teachers/${teacherId}`,
         method: 'DELETE',
+      }),
+      invalidatesTags: ['Timetable', 'Subject'],
+    }),
+    autoGenerateSubjects: builder.mutation<
+      ResponseDto<{ created: number; skipped: number; subjects: Subject[] }>,
+      { schoolId: string; schoolType: 'PRIMARY' | 'SECONDARY' }
+    >({
+      query: ({ schoolId, schoolType }) => ({
+        url: `/schools/${schoolId}/timetable/subjects/auto-generate`,
+        method: 'POST',
+        body: { schoolType },
       }),
       invalidatesTags: ['Timetable', 'Subject'],
     }),
@@ -1877,6 +1896,7 @@ export const {
   useStartNewTermMutation,
   useMigrateStudentsMutation,
   useEndTermMutation,
+  useReactivateTermMutation,
   useEndSessionMutation,
   // Timetable hooks
   useGetTimetableForClassArmQuery,
@@ -1898,6 +1918,7 @@ export const {
   useDeleteSubjectMutation,
   useAssignTeacherToSubjectMutation,
   useRemoveTeacherFromSubjectMutation,
+  useAutoGenerateSubjectsMutation,
   useGetRoomsQuery,
   useCreateRoomMutation,
   useGetCoursesQuery,

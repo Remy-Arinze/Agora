@@ -142,5 +142,19 @@ export class SessionController {
     const data = await this.sessionService.endSession(schoolId, schoolType);
     return ResponseDto.ok(data, 'Session ended successfully');
   }
+
+  @Post('reactivate-term')
+  @ApiOperation({ summary: 'Reactivate a completed term (continue a term that was ended early)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Term reactivated successfully',
+  })
+  async reactivateTerm(
+    @Param('schoolId') schoolId: string,
+    @Body() body: { termId: string; schoolType?: string }
+  ): Promise<ResponseDto<{ term: TermDto }>> {
+    const data = await this.sessionService.reactivateTerm(schoolId, body.termId, body.schoolType);
+    return ResponseDto.ok(data, 'Term reactivated successfully');
+  }
 }
 

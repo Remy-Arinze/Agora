@@ -256,7 +256,7 @@ export default function StudentResourcesPage() {
                       key={resource.id}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="border border-light-border dark:border-dark-border rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-dark-surface/50 transition-colors"
+                      className="border border-light-border dark:border-dark-border rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-[var(--dark-hover)] transition-colors"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -298,7 +298,7 @@ export default function StudentResourcesPage() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDownload(resource)}
+                          onClick={() => handleDownload(resource, false)}
                         >
                           <Download className="h-4 w-4" />
                         </Button>
@@ -321,7 +321,7 @@ export default function StudentResourcesPage() {
                     key={resource.id}
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="border border-light-border dark:border-dark-border rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-dark-surface/50 transition-colors"
+                    className="border border-light-border dark:border-dark-border rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-[var(--dark-hover)] transition-colors"
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -448,7 +448,7 @@ export default function StudentResourcesPage() {
                         setSelectedFile(null);
                         setDescription('');
                       }}
-                      disabled={isUploading}
+                      disabled={isUploadingMutation}
                     >
                       Cancel
                     </Button>

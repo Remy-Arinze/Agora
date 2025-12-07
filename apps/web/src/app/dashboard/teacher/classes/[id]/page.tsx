@@ -509,7 +509,7 @@ export default function ClassDetailPage() {
                               initial={{ opacity: 0, x: -20 }}
                               animate={{ opacity: 1, x: 0 }}
                               transition={{ delay: index * 0.05 }}
-                              className="border-b border-light-border dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-surface/50 transition-colors"
+                              className="border-b border-light-border dark:border-dark-border hover:bg-gray-50 dark:hover:bg-[var(--dark-hover)] transition-colors"
                             >
                               <td className="py-4 px-4">
                                 <div>
@@ -675,7 +675,7 @@ export default function ClassDetailPage() {
                                 : 'Unknown';
 
                               return (
-                                <tr key={grade.id} className="hover:bg-light-surface dark:hover:bg-dark-surface">
+                                <tr key={grade.id} className="hover:bg-light-surface dark:hover:bg-[var(--dark-hover)]">
                                   <td className="px-4 py-3">
                                     <div>
                                       <p className="text-sm font-medium text-light-text-primary dark:text-dark-text-primary">

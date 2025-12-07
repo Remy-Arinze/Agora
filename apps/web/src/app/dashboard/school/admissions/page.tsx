@@ -654,7 +654,7 @@ function AdmissionsPageContent() {
                           initial={{ opacity: 0, x: -20 }}
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: index * 0.05 }}
-                          className="border-b border-light-border dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-surface/50 transition-colors cursor-pointer"
+                          className="border-b border-light-border dark:border-dark-border hover:bg-gray-50 dark:hover:bg-[var(--dark-hover)] transition-colors cursor-pointer"
                           onClick={() => router.push(`/dashboard/school/students/${student.id}`)}
                         >
                           <td className="py-4 px-4">

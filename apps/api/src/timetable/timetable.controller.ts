@@ -24,6 +24,8 @@ import {
   CreateSubjectDto,
   UpdateSubjectDto,
   AssignTeacherToSubjectDto,
+  AutoGenerateSubjectsDto,
+  AutoGenerateSubjectsResponseDto,
 } from './dto/resource.dto';
 import { ResponseDto } from '../common/dto/response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -333,6 +335,21 @@ export class TimetableController {
   ): Promise<ResponseDto<SubjectDto>> {
     const data = await this.resourcesService.removeTeacherFromSubject(schoolId, subjectId, teacherId);
     return ResponseDto.ok(data, 'Teacher removed successfully');
+  }
+
+  @Post('subjects/auto-generate')
+  @ApiOperation({ summary: 'Auto-generate standard subjects for a school type' })
+  @ApiResponse({
+    status: 201,
+    description: 'Subjects generated successfully',
+    type: AutoGenerateSubjectsResponseDto,
+  })
+  async autoGenerateSubjects(
+    @Param('schoolId') schoolId: string,
+    @Body() dto: AutoGenerateSubjectsDto
+  ): Promise<ResponseDto<AutoGenerateSubjectsResponseDto>> {
+    const data = await this.resourcesService.autoGenerateSubjects(schoolId, dto);
+    return ResponseDto.ok(data, `Generated ${data.created} subjects, ${data.skipped} already existed`);
   }
 
   @Get('rooms')
