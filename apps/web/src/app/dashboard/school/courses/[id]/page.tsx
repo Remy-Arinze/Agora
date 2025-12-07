@@ -1506,16 +1506,16 @@ function ClassTimetableTab({
 }) {
   const [selectedTermId, setSelectedTermId] = useState<string>('');
 
-  // Get active session
+  // Get active session filtered by school type
   const { data: activeSessionResponse } = useGetActiveSessionQuery(
-    { schoolId: schoolId! },
+    { schoolId: schoolId!, schoolType: currentType || undefined },
     { skip: !schoolId }
   );
   const activeSession = activeSessionResponse?.data;
 
-  // Get all sessions
+  // Get all sessions filtered by school type
   const { data: sessionsResponse } = useGetSessionsQuery(
-    { schoolId: schoolId! },
+    { schoolId: schoolId!, schoolType: currentType || undefined },
     { skip: !schoolId }
   );
 
@@ -1560,14 +1560,16 @@ function ClassTimetableTab({
     );
   }, [sessionsResponse]);
 
-  // Auto-select active term if available
+  // Auto-select active term if available, reset when school type changes
   useEffect(() => {
-    if (activeSession?.term?.id && !selectedTermId) {
+    if (activeSession?.term?.id) {
       setSelectedTermId(activeSession.term.id);
-    } else if (allTerms.length > 0 && !selectedTermId) {
+    } else if (allTerms.length > 0) {
       setSelectedTermId(allTerms[0].id);
+    } else {
+      setSelectedTermId('');
     }
-  }, [activeSession, allTerms, selectedTermId]);
+  }, [activeSession, allTerms, currentType]);
 
   const handlePeriodUpdate = async (
     slot: { dayOfWeek: DayOfWeek; period: { startTime: string; endTime: string; type: string }; periodData?: TimetablePeriod },

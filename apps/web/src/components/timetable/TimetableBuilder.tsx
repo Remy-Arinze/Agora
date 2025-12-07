@@ -137,7 +137,7 @@ function TimetableCell({
     <td
       ref={setNodeRef}
       onClick={readOnly ? undefined : onCellClick}
-      className={`py-2 px-3 min-w-[120px] ${readOnly ? '' : 'cursor-pointer'} transition-colors ${
+      className={`py-4 px-4 min-w-[140px] ${readOnly ? '' : 'cursor-pointer'} transition-colors ${
         isOver && !readOnly
           ? 'bg-blue-100 dark:bg-blue-900/30 border-2 border-blue-500 border-dashed'
           : periodData
@@ -150,12 +150,12 @@ function TimetableCell({
       }`}
     >
       {periodData ? (
-        <div className="space-y-1">
-          <p className="text-xs font-semibold text-light-text-primary dark:text-dark-text-primary">
+        <div className="space-y-1.5">
+          <p className="text-sm font-semibold text-light-text-primary dark:text-dark-text-primary">
             {periodData.subjectName || periodData.courseName || 'Free Period'}
           </p>
           {periodData.teacherName && (
-            <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">
+            <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
               {periodData.teacherName}
             </p>
           )}
@@ -166,7 +166,7 @@ function TimetableCell({
           )}
         </div>
       ) : (
-        <div className="text-xs text-light-text-muted dark:text-dark-text-muted text-center py-2">
+        <div className="text-sm text-light-text-muted dark:text-dark-text-muted text-center py-3">
           {readOnly ? '' : 'Drop here'}
         </div>
       )}
@@ -322,20 +322,20 @@ export function TimetableBuilder({
                 <table className="w-full">
                   <thead>
                     <tr>
-                      <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary border-b border-light-border dark:border-dark-border">
+                      <th className="text-left py-4 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary border-b-2 border-light-border dark:border-dark-border">
                         Time
                       </th>
                       {DAYS.map((day) => (
                         <th
                           key={day}
-                          className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary border-b border-light-border dark:border-dark-border"
+                          className="text-left py-4 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary border-b-2 border-light-border dark:border-dark-border"
                         >
                           {DAY_LABELS[day]}
                         </th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-light-border dark:divide-dark-border">
                     {allTimePeriods.map((timePeriod) => {
                       // Check if this is a break/lunch/assembly period (no lesson periods for this time)
                       const hasLessons = DAYS.some((day) => {
@@ -363,12 +363,12 @@ export function TimetableBuilder({
                       if (dbBreakPeriods.length > 0 && !hasLessons) {
                         return (
                           <tr key={`${timePeriod.startTime}-${breakType || 'break'}`}>
-                            <td className="py-2 px-4 text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
+                            <td className="py-4 px-4 text-sm font-medium text-light-text-primary dark:text-dark-text-primary whitespace-nowrap">
                               <span>{timePeriod.startTime} - {timePeriod.endTime}</span>
                             </td>
                             <td
                               colSpan={DAYS.length}
-                              className="py-2 px-4 text-center text-xs font-medium text-light-text-secondary dark:text-dark-text-secondary bg-gray-50 dark:bg-dark-surface/50"
+                              className="py-4 px-4 text-center text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary bg-gray-50 dark:bg-dark-surface/50"
                             >
                               {breakLabel}
                             </td>
@@ -379,7 +379,7 @@ export function TimetableBuilder({
                       // Handle lesson periods
                       return (
                         <tr key={timePeriod.startTime}>
-                          <td className="py-2 px-4 text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
+                          <td className="py-4 px-4 text-sm font-medium text-light-text-primary dark:text-dark-text-primary whitespace-nowrap">
                             <span>{timePeriod.startTime} - {timePeriod.endTime}</span>
                           </td>
                           {DAYS.map((day) => {
@@ -467,20 +467,20 @@ export function TimetableBuilder({
                   <table className="w-full">
                     <thead>
                       <tr>
-                        <th className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary border-b border-light-border dark:border-dark-border">
+                        <th className="text-left py-4 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary border-b-2 border-light-border dark:border-dark-border">
                           Time
                         </th>
                         {DAYS.map((day) => (
                           <th
                             key={day}
-                            className="text-left py-3 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary border-b border-light-border dark:border-dark-border"
+                            className="text-left py-4 px-4 text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary border-b-2 border-light-border dark:border-dark-border"
                           >
                             {DAY_LABELS[day]}
                           </th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-light-border dark:divide-dark-border">
                       {allTimePeriods.map((timePeriod) => {
                         // Check if this is a break/lunch/assembly period (no lesson periods for this time)
                         const hasLessons = DAYS.some((day) => {
@@ -508,12 +508,12 @@ export function TimetableBuilder({
                         if (dbBreakPeriods.length > 0 && !hasLessons) {
                           return (
                             <tr key={`${timePeriod.startTime}-${breakType || 'break'}`}>
-                              <td className="py-2 px-4 text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
+                              <td className="py-4 px-4 text-sm font-medium text-light-text-primary dark:text-dark-text-primary whitespace-nowrap">
                                 <span>{timePeriod.startTime} - {timePeriod.endTime}</span>
                               </td>
                               <td
                                 colSpan={DAYS.length}
-                                className="py-2 px-4 text-center text-xs font-medium text-light-text-secondary dark:text-dark-text-secondary bg-gray-50 dark:bg-dark-surface/50"
+                                className="py-4 px-4 text-center text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary bg-gray-50 dark:bg-dark-surface/50"
                               >
                                 {breakLabel}
                               </td>
@@ -524,7 +524,7 @@ export function TimetableBuilder({
                         // Handle lesson periods
                         return (
                           <tr key={timePeriod.startTime}>
-                            <td className="py-2 px-4 text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
+                            <td className="py-4 px-4 text-sm font-medium text-light-text-primary dark:text-dark-text-primary whitespace-nowrap">
                               <span>{timePeriod.startTime} - {timePeriod.endTime}</span>
                             </td>
                             {DAYS.map((day) => {

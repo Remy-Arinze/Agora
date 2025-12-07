@@ -14,6 +14,8 @@ import {
   Calendar,
   Edit,
   Trash2,
+  MousePointerClick,
+  GripVertical,
 } from 'lucide-react';
 import {
   useGetMySchoolQuery,
@@ -419,10 +421,14 @@ export default function TimetablesPage() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <div className="flex items-center text-sm text-light-text-secondary dark:text-dark-text-secondary">
                         <Clock className="h-4 w-4 mr-2" />
                         {classTimetable.length} periods
+                      </div>
+                      <div className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400">
+                        <MousePointerClick className="h-3.5 w-3.5" />
+                        <span>Click to expand timetable</span>
                       </div>
                       <div className="flex gap-2">
                         <Button
@@ -546,6 +552,13 @@ export default function TimetablesPage() {
                 </div>
               ) : (
                 <>
+                  {/* Drag and drop hint */}
+                  <div className="inline-flex items-center gap-2 mb-4 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <GripVertical className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                    <p className="text-sm text-blue-700 dark:text-blue-300">
+                      <span className="font-medium">Tip:</span> Drag subjects from the left panel and drop them onto the timetable slots to assign them.
+                    </p>
+                  </div>
                   <TimetableBuilder
                     schoolType={currentType}
                     subjects={subjects.map((s) => ({ id: s.id, name: s.name, code: s.code, type: 'subject' as const }))}
