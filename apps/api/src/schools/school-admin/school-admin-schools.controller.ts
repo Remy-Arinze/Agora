@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, UseGuards, UseInterceptors, UploadedFile, Request, Query, Body } from '@nestjs/common';
+import { Controller, Get, Post, Patch, UseGuards, UseInterceptors, UploadedFile, Request, Query, Body, Param } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiConsumes } from '@nestjs/swagger';
@@ -103,6 +103,7 @@ export class SchoolAdminSchoolsController {
 
   @Patch('school')
   @ApiOperation({ summary: 'Update school information' })
+  @ApiQuery({ name: 'token', required: false, type: String, description: 'Verification token for sensitive changes' })
   @ApiResponse({
     status: 200,
     description: 'School updated successfully',
@@ -110,10 +111,39 @@ export class SchoolAdminSchoolsController {
   })
   async updateSchool(
     @Request() req: any,
-    @Body() updateSchoolDto: UpdateSchoolDto
+    @Body() updateSchoolDto: UpdateSchoolDto,
+    @Query('token') token?: string
   ): Promise<ResponseDto<SchoolDto>> {
-    const data = await this.schoolAdminSchoolsService.updateSchool(req.user, updateSchoolDto);
+    const data = await this.schoolAdminSchoolsService.updateSchool(req.user, updateSchoolDto, token);
     return ResponseDto.ok(data, 'School updated successfully');
+  }
+
+  @Post('school/request-edit-token')
+  @ApiOperation({ summary: 'Request verification token for sensitive school profile changes' })
+  @ApiResponse({
+    status: 200,
+    description: 'Verification token requested successfully',
+  })
+  async requestEditToken(
+    @Request() req: any,
+    @Body() changes: UpdateSchoolDto
+  ): Promise<ResponseDto<{ message: string }>> {
+    const result = await this.schoolAdminSchoolsService.requestEditToken(req.user, changes);
+    return ResponseDto.ok({ message: result.message }, result.message);
+  }
+
+  @Get('school/verify-edit-token/:token')
+  @ApiOperation({ summary: 'Verify edit token and get proposed changes' })
+  @ApiResponse({
+    status: 200,
+    description: 'Token verified successfully',
+  })
+  async verifyEditToken(
+    @Request() req: any,
+    @Param('token') token: string
+  ): Promise<ResponseDto<{ changes: UpdateSchoolDto; school: SchoolDto }>> {
+    const data = await this.schoolAdminSchoolsService.verifyEditToken(token, req.user);
+    return ResponseDto.ok(data, 'Token verified successfully');
   }
 }
 

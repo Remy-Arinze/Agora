@@ -822,22 +822,29 @@ export class StudentsService {
       return [];
     }
 
+    // Get classIds and classArmIds from enrollments
     const classIds = student.enrollments
       .map((e) => e.classId)
       .filter((id): id is string => id !== null);
 
-    if (classIds.length === 0) {
+    const classArmIds = student.enrollments
+      .map((e) => e.classArmId)
+      .filter((id): id is string => id !== null);
+
+    if (classIds.length === 0 && classArmIds.length === 0) {
       return [];
     }
 
-    // Build where clause
+    // Build where clause - support both Classes and ClassArms
     const where: any = {
-      classId: { in: classIds },
-      isPublished: true, // Only published resources
+      OR: [
+        ...(classIds.length > 0 ? [{ classId: { in: classIds }, classArmId: null }] : []),
+        ...(classArmIds.length > 0 ? [{ classArmId: { in: classArmIds } }] : []),
+      ],
     };
 
     if (filters?.resourceType) {
-      where.type = filters.resourceType;
+      where.fileType = filters.resourceType;
     }
 
     // Get resources
@@ -850,6 +857,16 @@ export class StudentsService {
             name: true,
           },
         },
+        classArm: {
+          include: {
+            classLevel: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -857,15 +874,18 @@ export class StudentsService {
     return resources.map((r) => ({
       id: r.id,
       classId: r.classId,
-      title: r.title || r.name,
+      classArmId: r.classArmId,
       name: r.name,
-      description: r.description,
-      type: r.type,
-      fileType: r.fileType,
-      url: r.url,
+      fileName: r.fileName,
+      filePath: r.filePath,
       fileSize: r.fileSize,
-      isPublished: r.isPublished,
+      mimeType: r.mimeType,
+      fileType: r.fileType,
+      description: r.description,
       createdAt: r.createdAt.toISOString(),
+      className: r.classArm 
+        ? `${r.classArm.classLevel.name} ${r.classArm.name}` 
+        : r.class?.name || 'Unknown',
       class: r.class,
     }));
   }
@@ -1578,6 +1598,11 @@ export class StudentsService {
               },
             },
             class: true,
+            classArm: {
+              include: {
+                classLevel: true,
+              },
+            },
           },
         },
       },
@@ -1590,23 +1615,110 @@ export class StudentsService {
     const classes: any[] = [];
 
     for (const enrollment of student.enrollments) {
+      // For PRIMARY/SECONDARY: Check if enrollment has ClassArm (schools using ClassArms)
+      if (enrollment.classArmId && enrollment.classArm) {
+        const classArm = enrollment.classArm;
+        const classLevel = classArm.classLevel;
+
+        // Get ClassArm teachers (from ClassTeacher with classArmId)
+        const classArmTeachers = await this.prisma.classTeacher.findMany({
+          where: {
+            classArmId: classArm.id,
+          },
+          include: {
+            teacher: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+                subject: true,
+              },
+            },
+          },
+        });
+
+        // Get ClassArm resources (or ClassLevel resources if shared)
+        const classArmResources = await this.prisma.classResource.findMany({
+          where: {
+            OR: [
+              { classArmId: classArm.id },
+              // Could also include ClassLevel resources if shared
+            ],
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        });
+
+        // Count students in this ClassArm
+        const studentsCount = await this.prisma.enrollment.count({
+          where: {
+            classArmId: classArm.id,
+            isActive: true,
+          },
+        });
+
+        classes.push({
+          id: classArm.id,
+          name: `${classLevel.name} ${classArm.name}`, // e.g., "JSS 1 Gold"
+          code: null,
+          classLevel: classLevel.name,
+          classLevelId: classLevel.id,
+          type: classLevel.type,
+          academicYear: classArm.academicYear,
+          description: null,
+          teachers: classArmTeachers.map((ct) => ({
+            id: ct.teacher.id,
+            firstName: ct.teacher.firstName,
+            lastName: ct.teacher.lastName,
+            email: ct.teacher.email,
+            phone: ct.teacher.phone,
+            subject: ct.subject || ct.teacher.subject,
+            isPrimary: ct.isPrimary,
+          })),
+          resources: classArmResources.map((r) => ({
+            id: r.id,
+            name: r.name,
+            fileName: r.fileName,
+            fileType: r.fileType,
+            mimeType: r.mimeType,
+            description: r.description,
+            createdAt: r.createdAt.toISOString(),
+          })),
+          enrollment: {
+            id: enrollment.id,
+            enrollmentDate: enrollment.enrollmentDate.toISOString(),
+            school: enrollment.school,
+            classArmId: enrollment.classArmId,
+          },
+          classArmId: enrollment.classArmId,
+          classArm: {
+            id: classArm.id,
+            name: classArm.name,
+            capacity: classArm.capacity,
+          },
+        });
+        continue;
+      }
+
+      // Fallback to Class (for schools without ClassArms or TERTIARY - backward compatibility)
       let classData = enrollment.class;
 
       // If no classId, try to find class by classLevel/name
-      // Match by both name/classLevel AND academicYear to ensure we get the correct class
       if (!classData && enrollment.classLevel) {
         classData = await this.prisma.class.findFirst({
           where: {
             schoolId: enrollment.schoolId,
             isActive: true,
-            academicYear: enrollment.academicYear, // Match academic year too
+            academicYear: enrollment.academicYear,
             OR: [
               { name: enrollment.classLevel },
               { classLevel: enrollment.classLevel },
             ],
           },
           orderBy: {
-            createdAt: 'desc', // Get the most recently created if multiple matches
+            createdAt: 'desc',
           },
         });
       }
@@ -1650,7 +1762,7 @@ export class StudentsService {
           },
           resources: {
             orderBy: { createdAt: 'desc' },
-            take: 10, // Limit to recent resources
+            take: 10,
           },
         },
       });
@@ -1686,9 +1798,8 @@ export class StudentsService {
             id: enrollment.id,
             enrollmentDate: enrollment.enrollmentDate.toISOString(),
             school: enrollment.school,
-            classArmId: enrollment.classArmId, // Include classArmId in enrollment for easier access
+            classArmId: enrollment.classArmId,
           },
-          // Also include classArmId at top level for timetable queries
           classArmId: enrollment.classArmId,
         });
       }
@@ -1726,6 +1837,11 @@ export class StudentsService {
           take: 1,
           include: {
             class: true,
+            classArm: {
+              include: {
+                classLevel: true,
+              },
+            },
           },
         },
       },
@@ -1741,32 +1857,31 @@ export class StudentsService {
     const academicYear = enrollment.academicYear;
     const classLevel = enrollment.classLevel;
 
-    if (!targetClassId && !classLevel) {
+    // Build where clause based on ClassArm availability
+    const where: any = {
+      schoolId,
+      isActive: true,
+      academicYear,
+      studentId: { not: student.id },
+    };
+
+    // For PRIMARY/SECONDARY: Filter by ClassArm if available (schools using ClassArms)
+    if (enrollment.classArmId) {
+      // Filter by ClassArm - only students in the same arm
+      where.classArmId = enrollment.classArmId;
+    } else if (targetClassId) {
+      // Fallback to Class (for schools without ClassArms or TERTIARY - backward compatibility)
+      where.classId = targetClassId;
+    } else if (classLevel) {
+      // Fallback: Filter by ClassLevel (backward compatibility - shows all in level)
+      where.classLevel = classLevel;
+    } else {
       return [];
     }
 
-    // Get all students in the same class
+    // Get all students in the same class/arm
     const enrollments = await this.prisma.enrollment.findMany({
-      where: {
-        schoolId,
-        isActive: true,
-        academicYear,
-        // Exclude current student
-        studentId: { not: student.id },
-        OR: [
-          // Match by classId if available
-          ...(targetClassId ? [{ classId: targetClassId }] : []),
-          // Or match by classLevel if no classId
-          ...(classLevel ? [
-            {
-              AND: [
-                { classLevel },
-                { classId: null },
-              ],
-            },
-          ] : []),
-        ],
-      },
+      where,
       include: {
         student: {
           include: {

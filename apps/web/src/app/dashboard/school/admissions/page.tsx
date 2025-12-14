@@ -7,8 +7,9 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { SearchInput } from '@/components/ui/SearchInput';
 import { motion } from 'framer-motion';
-import { UserPlus, Search, CheckCircle2, XCircle, Clock, Eye, Calendar, User, Phone, Mail, MapPin, Heart, AlertCircle, GraduationCap, Loader2 } from 'lucide-react';
+import { UserPlus, CheckCircle2, XCircle, Clock, Eye, Calendar, User, Phone, Mail, MapPin, Heart, AlertCircle, GraduationCap, Loader2 } from 'lucide-react';
 import { useGetMySchoolQuery, useAdmitStudentMutation, useGetClassesQuery, useGetStudentsQuery, useUploadStudentImageMutation, type AddStudentDto, type Class, type StudentWithEnrollment } from '@/lib/store/api/schoolAdminApi';
 import { studentAdmissionFormSchema } from '@/lib/validations/school-forms';
 import { useSchoolType } from '@/hooks/useSchoolType';
@@ -526,15 +527,13 @@ function AdmissionsPageContent() {
                 Admitted Students ({filteredAdmissions.length})
               </CardTitle>
               <div className="flex items-center gap-3 flex-1 justify-end">
-                <div className="relative w-64">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-light-text-muted dark:text-dark-text-muted" />
-                  <Input
-                    placeholder="Search by name, ID, or class..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 h-9 text-sm"
-                  />
-                </div>
+                <SearchInput
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  placeholder="Search by name, ID, or class..."
+                  containerClassName="w-64"
+                  size="md"
+                />
                 {/* Filters */}
                 <div className="w-36">
                   <select

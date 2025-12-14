@@ -13,7 +13,6 @@ import {
   Phone, 
   MapPin, 
   User,
-  ArrowLeft,
   Edit,
   FileText,
   Heart,
@@ -28,6 +27,7 @@ import {
   useResendPasswordResetForStudentMutation
 } from '@/lib/store/api/schoolAdminApi';
 import { EditStudentProfileModal } from '@/components/modals/EditStudentProfileModal';
+import { BackButton } from '@/components/ui/BackButton';
 import toast from 'react-hot-toast';
 
 type TabType = 'profile' | 'health' | 'grades' | 'transcript';
@@ -185,12 +185,7 @@ export default function StudentDetailPage() {
     return (
       <ProtectedRoute roles={['SCHOOL_ADMIN']}>
         <div className="w-full">
-          <Link href="/dashboard/school/students">
-            <Button variant="ghost" size="sm" className="mb-4">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Students
-            </Button>
-          </Link>
+          <BackButton fallbackUrl="/dashboard/school/students" className="mb-4" />
           <div className="text-center py-12">
             <GraduationCap className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
             <p className="text-light-text-secondary dark:text-dark-text-secondary">
@@ -211,12 +206,7 @@ export default function StudentDetailPage() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <Link href="/dashboard/school/students">
-            <Button variant="ghost" size="sm" className="mb-4">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Students
-            </Button>
-          </Link>
+          <BackButton fallbackUrl="/dashboard/school/students" className="mb-4" />
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               {/* Circular Avatar */}

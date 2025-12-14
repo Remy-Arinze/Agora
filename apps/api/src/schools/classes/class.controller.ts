@@ -9,7 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ClassService } from './class.service';
 import { CreateClassDto } from '../dto/create-class.dto';
 import { AssignTeacherToClassDto } from '../dto/assign-teacher-to-class.dto';
@@ -100,16 +100,25 @@ export class ClassController {
 
   @Delete(':classId')
   @ApiOperation({ summary: 'Delete a class/course' })
+  @ApiQuery({
+    name: 'force',
+    required: false,
+    type: Boolean,
+    description: 'Force delete even if students are enrolled (will unenroll all students)',
+  })
   @ApiResponse({
     status: 200,
     description: 'Class deleted successfully',
   })
   @ApiResponse({ status: 404, description: 'Class not found' })
+  @ApiResponse({ status: 400, description: 'Cannot delete class with enrolled students (use force=true to override)' })
   async deleteClass(
     @Param('schoolId') schoolId: string,
-    @Param('classId') classId: string
+    @Param('classId') classId: string,
+    @Query('force') force?: string
   ): Promise<ResponseDto<void>> {
-    await this.classService.deleteClass(schoolId, classId);
+    const forceDelete = force === 'true';
+    await this.classService.deleteClass(schoolId, classId, forceDelete);
     return ResponseDto.ok(undefined, 'Class deleted successfully');
   }
 

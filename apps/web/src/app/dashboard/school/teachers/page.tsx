@@ -6,10 +6,10 @@ import Link from 'next/link';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { SearchInput } from '@/components/ui/SearchInput';
 import { Alert } from '@/components/ui/Alert';
 import { motion } from 'framer-motion';
-import { Users, Plus, Search, FileSpreadsheet, ChevronLeft, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
+import { Users, Plus, FileSpreadsheet, ChevronLeft, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
 import { useGetStaffListQuery } from '@/lib/store/api/schoolAdminApi';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useSchoolType } from '@/hooks/useSchoolType';
@@ -182,15 +182,13 @@ export default function StaffPage() {
               </CardTitle>
               {/* Search and Filters */}
               <div className="flex items-center gap-3">
-                <div className="relative w-64">
-                  <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-light-text-muted dark:text-dark-text-muted" />
-                  <Input
-                    placeholder="Search by name, email, or subject..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-8 h-9 text-sm"
-                  />
-                </div>
+                <SearchInput
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  placeholder="Search by name, email, or subject..."
+                  containerClassName="w-64"
+                  size="md"
+                />
                 <div className="w-40">
                   <select
                     value={roleFilter}

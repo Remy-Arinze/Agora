@@ -39,16 +39,37 @@ export class ClassResourceService {
       throw new BadRequestException('School not found');
     }
 
-    // Validate class exists and belongs to school
-    const classData = await this.classModel.findFirst({
-      where: {
-        id: classId,
-        schoolId: school.id,
+    // Check if classId is a ClassArm (for PRIMARY/SECONDARY schools using ClassArms)
+    const classArm = await (this.prisma as any).classArm.findUnique({
+      where: { id: classId },
+      include: {
+        classLevel: true,
       },
     });
 
-    if (!classData) {
-      throw new NotFoundException('Class not found');
+    let targetClassId: string | null = null;
+    let targetClassArmId: string | null = null;
+    let resourceFolder: string;
+
+    if (classArm && classArm.classLevel.schoolId === school.id) {
+      // It's a ClassArm
+      targetClassArmId = classArm.id;
+      resourceFolder = `schools/${school.id}/class-arms/${classArm.id}/resources`;
+    } else {
+      // It's a Class - validate it exists
+      const classData = await this.classModel.findFirst({
+        where: {
+          id: classId,
+          schoolId: school.id,
+        },
+      });
+
+      if (!classData) {
+        throw new NotFoundException('Class or ClassArm not found');
+      }
+
+      targetClassId = classData.id;
+      resourceFolder = `schools/${school.id}/classes/${classId}/resources`;
     }
 
     // Validate file
@@ -67,12 +88,11 @@ export class ClassResourceService {
     const uniqueFileName = `${uuidv4()}${fileExtension}`;
     
     // Upload to Cloudinary
-    const folder = `schools/${school.id}/classes/${classId}/resources`;
     const publicId = `resource-${uuidv4()}`;
     
     const { url: fileUrl, publicId: cloudinaryPublicId } = await this.cloudinaryService.uploadRawFile(
       file,
-      folder,
+      resourceFolder,
       publicId
     );
 
@@ -86,7 +106,8 @@ export class ClassResourceService {
         mimeType: file.mimetype,
         fileType: fileType,
         description: dto?.description || null,
-        classId: classId,
+        classId: targetClassId,
+        classArmId: targetClassArmId,
         uploadedBy: userId,
       },
       include: {
@@ -98,7 +119,9 @@ export class ClassResourceService {
   }
 
   /**
-   * Get all resources for a class
+   * Get all resources for a class or ClassArm
+   * For PRIMARY/SECONDARY: If classId is ClassArm, get ClassArm resources + ClassLevel shared resources
+   * For TERTIARY: Get Class resources (backward compatibility)
    */
   async getClassResources(schoolId: string, classId: string): Promise<ClassResourceDto[]> {
     // Validate school exists
@@ -107,23 +130,46 @@ export class ClassResourceService {
       throw new BadRequestException('School not found');
     }
 
-    // Validate class exists and belongs to school
-    const classData = await this.classModel.findFirst({
-      where: {
-        id: classId,
-        schoolId: school.id,
+    // Check if classId is a ClassArm (for PRIMARY/SECONDARY schools using ClassArms)
+    const classArm = await (this.prisma as any).classArm.findUnique({
+      where: { id: classId },
+      include: {
+        classLevel: true,
       },
     });
 
-    if (!classData) {
-      throw new NotFoundException('Class not found');
+    let whereClause: any;
+
+    if (classArm && classArm.classLevel.schoolId === school.id) {
+      // It's a ClassArm - get ClassArm-specific resources + ClassLevel shared resources
+      whereClause = {
+        OR: [
+          { classArmId: classArm.id },
+          // Could also include ClassLevel resources if shared (would need classLevelId in ClassResource)
+        ],
+      };
+    } else {
+      // It's a Class - validate it exists
+      const classData = await this.classModel.findFirst({
+        where: {
+          id: classId,
+          schoolId: school.id,
+        },
+      });
+
+      if (!classData) {
+        throw new NotFoundException('Class or ClassArm not found');
+      }
+
+      whereClause = {
+        classId: classId,
+        classArmId: null, // Only Class resources, not ClassArm-specific
+      };
     }
 
     // Get resources with uploader information
     const resources = await this.classResourceModel.findMany({
-      where: {
-        classId: classId,
-      },
+      where: whereClause,
       orderBy: {
         createdAt: 'desc',
       },

@@ -6,8 +6,12 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ImageUpload } from '@/components/ui/ImageUpload';
 import { useUpdateTeacherMutation, useUpdateAdminMutation, useUploadTeacherImageMutation, useUploadAdminImageMutation } from '@/lib/store/api/schoolsApi';
+import { useTeacherSubjects } from '@/hooks/useTeacherSubjects';
+import { SubjectMultiSelect } from '@/components/teachers/SubjectMultiSelect';
 import toast from 'react-hot-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, User, BookOpen } from 'lucide-react';
+
+type TabType = 'profile' | 'subjects';
 
 interface EditTeacherProfileModalProps {
   isOpen: boolean;
@@ -24,6 +28,7 @@ interface EditTeacherProfileModalProps {
   };
   schoolId: string;
   staffType?: 'teacher' | 'admin';
+  schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY';
   onSuccess?: () => void;
 }
 
@@ -33,8 +38,10 @@ export function EditTeacherProfileModal({
   teacher,
   schoolId,
   staffType = 'teacher',
+  schoolType,
   onSuccess,
 }: EditTeacherProfileModalProps) {
+  const [activeTab, setActiveTab] = useState<TabType>('profile');
   const [formData, setFormData] = useState({
     firstName: teacher.firstName,
     lastName: teacher.lastName,
@@ -44,13 +51,29 @@ export function EditTeacherProfileModal({
     profileImage: teacher.profileImage || null,
   });
 
+  // State for subject management (SECONDARY schools)
+  const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>([]);
+
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [updateTeacher, { isLoading: isUpdatingTeacher }] = useUpdateTeacherMutation();
   const [updateAdmin, { isLoading: isUpdatingAdmin }] = useUpdateAdminMutation();
   const [uploadTeacherImage, { isLoading: isUploadingTeacherImage }] = useUploadTeacherImageMutation();
   const [uploadAdminImage, { isLoading: isUploadingAdminImage }] = useUploadAdminImageMutation();
 
-  const isLoading = isUpdatingTeacher || isUpdatingAdmin || isUploadingTeacherImage || isUploadingAdminImage;
+  // Teacher subjects hook (only for teachers in SECONDARY schools)
+  const {
+    subjects: teacherSubjects,
+    isLoading: isLoadingSubjects,
+    updateSubjects,
+    isUpdating: isUpdatingSubjects,
+  } = useTeacherSubjects({
+    schoolId,
+    teacherId: teacher.id,
+    skip: staffType !== 'teacher' || schoolType !== 'SECONDARY',
+  });
+
+  const isLoading = isUpdatingTeacher || isUpdatingAdmin || isUploadingTeacherImage || isUploadingAdminImage || isUpdatingSubjects;
+  const showSubjectsTab = staffType === 'teacher' && schoolType === 'SECONDARY';
 
   useEffect(() => {
     if (isOpen && teacher) {
@@ -63,8 +86,16 @@ export function EditTeacherProfileModal({
         profileImage: teacher.profileImage || null,
       });
       setSelectedImageFile(null);
+      setActiveTab('profile');
     }
   }, [isOpen, teacher]);
+
+  // Sync selectedSubjectIds with teacherSubjects when loaded
+  useEffect(() => {
+    if (teacherSubjects.length > 0) {
+      setSelectedSubjectIds(teacherSubjects.map((s) => s.id));
+    }
+  }, [teacherSubjects]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,74 +159,121 @@ export function EditTeacherProfileModal({
     }
   };
 
+  // Handle saving subjects
+  const handleSaveSubjects = async () => {
+    try {
+      await updateSubjects(selectedSubjectIds);
+      onSuccess?.();
+    } catch (error) {
+      // Error is handled in the hook
+    }
+  };
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`Edit ${staffType === 'teacher' ? 'Teacher' : 'Admin'} Profile`}>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Profile Image Upload */}
-        <div>
-          <ImageUpload
-            value={formData.profileImage}
-            onChange={(url) => {
-              setFormData({ ...formData, profileImage: url });
-            }}
-            onUpload={async (file) => {
-              setSelectedImageFile(file);
-              // Return a temporary URL for preview
-              return URL.createObjectURL(file);
-            }}
-            label="Profile Image"
-            helperText="Upload a passport-sized profile image (optional). Image will be cropped to square format."
-            maxSizeMB={5}
-            disabled={isLoading}
-          />
+    <Modal isOpen={isOpen} onClose={onClose} title={`Edit ${staffType === 'teacher' ? 'Teacher' : 'Admin'} Profile`} size="lg">
+      {/* Tabs for Profile and Subjects (SECONDARY teachers only) */}
+      {showSubjectsTab && (
+        <div className="mb-4 border-b border-light-border dark:border-dark-border">
+          <div className="flex space-x-1">
+            <button
+              type="button"
+              onClick={() => setActiveTab('profile')}
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === 'profile'
+                  ? 'border-b-2 border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400'
+                  : 'text-light-text-secondary dark:text-dark-text-secondary hover:text-light-text-primary dark:hover:text-dark-text-primary'
+              }`}
+            >
+              <User className="h-4 w-4" />
+              Profile
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('subjects')}
+              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === 'subjects'
+                  ? 'border-b-2 border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400'
+                  : 'text-light-text-secondary dark:text-dark-text-secondary hover:text-light-text-primary dark:hover:text-dark-text-primary'
+              }`}
+            >
+              <BookOpen className="h-4 w-4" />
+              Subjects ({teacherSubjects.length})
+            </button>
+          </div>
         </div>
+      )}
 
-        <div>
-          <Input
-            label="First Name"
-            id="firstName"
-            value={formData.firstName}
-            onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-            required
-            disabled={isLoading}
-          />
-        </div>
+      {/* Profile Tab */}
+      {activeTab === 'profile' && (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Profile Image Upload */}
+          <div>
+            <ImageUpload
+              value={formData.profileImage}
+              onChange={(url) => {
+                setFormData({ ...formData, profileImage: url });
+              }}
+              onUpload={async (file) => {
+                setSelectedImageFile(file);
+                // Return a temporary URL for preview
+                return URL.createObjectURL(file);
+              }}
+              label="Profile Image"
+              helperText="Upload a passport-sized profile image (optional). Image will be cropped to square format."
+              maxSizeMB={5}
+              disabled={isLoading}
+            />
+          </div>
 
-        <div>
-          <Input
-            label="Last Name"
-            id="lastName"
-            value={formData.lastName}
-            onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-            required
-            disabled={isLoading}
-          />
-        </div>
+          <div>
+            <Input
+              label="First Name"
+              id="firstName"
+              value={formData.firstName}
+              onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+              required
+              disabled={isLoading}
+            />
+          </div>
 
-        <div>
-          <Input
-            label="Phone Number"
-            id="phone"
-            value={formData.phone}
-            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            required
-            disabled={isLoading}
-          />
-        </div>
+          <div>
+            <Input
+              label="Last Name"
+              id="lastName"
+              value={formData.lastName}
+              onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+              required
+              disabled={isLoading}
+            />
+          </div>
 
-        {staffType === 'teacher' && (
-          <>
-            <div>
-              <Input
-                label="Subject (Optional)"
-                id="subject"
-                value={formData.subject}
-                onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                placeholder="e.g., Mathematics, English"
-                disabled={isLoading}
-              />
-            </div>
+          <div>
+            <Input
+              label="Phone Number"
+              id="phone"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              required
+              disabled={isLoading}
+            />
+          </div>
 
+          {staffType === 'teacher' && schoolType !== 'SECONDARY' && (
+            <>
+              <div>
+                <Input
+                  label="Subject (Optional)"
+                  id="subject"
+                  value={formData.subject}
+                  onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                  placeholder="e.g., Mathematics, English"
+                  disabled={isLoading}
+                />
+              </div>
+            </>
+          )}
+
+          {staffType === 'teacher' && (
             <div className="flex items-center gap-3">
               <input
                 type="checkbox"
@@ -211,25 +289,72 @@ export function EditTeacherProfileModal({
                 Temporary Employee
               </label>
             </div>
-          </>
-        )}
+          )}
 
-        <div className="flex justify-end gap-2 pt-4">
-          <Button type="button" variant="ghost" onClick={onClose} disabled={isLoading}>
-            Cancel
-          </Button>
-          <Button type="submit" variant="primary" disabled={isLoading}>
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Updating...
-              </>
-            ) : (
-              'Update Profile'
-            )}
-          </Button>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button type="button" variant="ghost" onClick={onClose} disabled={isLoading}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                'Update Profile'
+              )}
+            </Button>
+          </div>
+        </form>
+      )}
+
+      {/* Subjects Tab (SECONDARY teachers only) */}
+      {activeTab === 'subjects' && showSubjectsTab && (
+        <div className="space-y-4">
+          <div className="relative">
+            <SubjectMultiSelect
+              schoolId={schoolId}
+              selectedSubjectIds={selectedSubjectIds}
+              onChange={setSelectedSubjectIds}
+              schoolType="SECONDARY"
+              label="Subjects Teacher Can Teach"
+              helperText="Select all subjects this teacher is qualified to teach. They can be assigned to different classes for these subjects."
+              disabled={isLoading || isLoadingSubjects}
+            />
+          </div>
+
+          {/* Info about subject changes */}
+          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-sm text-blue-800 dark:text-blue-200">
+            <p className="font-medium mb-1">Note:</p>
+            <p>
+              Subjects with active class assignments cannot be removed. 
+              To remove a subject, first unassign the teacher from any classes where they teach that subject.
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button type="button" variant="ghost" onClick={onClose} disabled={isLoading}>
+              Cancel
+            </Button>
+            <Button 
+              type="button" 
+              variant="primary" 
+              onClick={handleSaveSubjects}
+              disabled={isLoading || isLoadingSubjects}
+            >
+              {isUpdatingSubjects ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                'Save Subjects'
+              )}
+            </Button>
+          </div>
         </div>
-      </form>
+      )}
     </Modal>
   );
 }

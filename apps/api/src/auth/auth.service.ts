@@ -345,6 +345,47 @@ export class AuthService {
     };
   }
 
+  /**
+   * Refresh access token using refresh token
+   */
+  async refreshToken(refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
+    try {
+      // Verify refresh token
+      const payload = this.jwtService.verify(refreshToken);
+      
+      // Validate user still exists and is active
+      const user = await this.validateUser(payload.sub);
+      if (!user) {
+        throw new UnauthorizedException('User not found');
+      }
+
+      // Check if user account is active
+      if (user.accountStatus !== 'ACTIVE' && user.accountStatus !== 'SHADOW') {
+        throw new UnauthorizedException('Account is not active');
+      }
+
+      // Generate new tokens (preserve school context from original token)
+      const newPayload: JwtPayload = {
+        sub: user.id,
+        role: user.role,
+        ...(payload.schoolId && { schoolId: payload.schoolId }),
+        ...(payload.publicId && { publicId: payload.publicId }),
+        ...(payload.profileId && { profileId: payload.profileId }),
+      };
+
+      return {
+        accessToken: this.jwtService.sign(newPayload),
+        refreshToken: this.jwtService.sign(newPayload, { expiresIn: '7d' }),
+      };
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      // Token verification failed (expired, invalid, etc.)
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+  }
+
   async validateUser(userId: string) {
     return this.prisma.user.findUnique({
       where: { id: userId },

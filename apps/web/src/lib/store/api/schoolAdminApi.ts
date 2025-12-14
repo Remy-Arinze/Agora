@@ -82,6 +82,40 @@ export interface StaffListResponse {
   availableRoles: string[];
 }
 
+// Teacher Subject Types
+export interface TeacherSubject {
+  id: string;
+  name: string;
+  code?: string | null;
+  schoolType?: string | null;
+  classLevelId?: string | null;
+  classLevelName?: string | null;
+  assignedClassCount: number;
+}
+
+export interface TeacherWithSubjects {
+  id: string;
+  firstName: string;
+  lastName: string;
+  subjects: TeacherSubject[];
+  totalAssignments: number;
+}
+
+export interface AssignableSubject {
+  id: string;
+  name: string;
+  code?: string | null;
+  alreadyAssigned: boolean;
+}
+
+export interface UpdateTeacherSubjectsDto {
+  subjectIds: string[];
+}
+
+export interface AddTeacherSubjectDto {
+  subjectId: string;
+}
+
 export enum PermissionResource {
   OVERVIEW = 'OVERVIEW',
   ANALYTICS = 'ANALYTICS',
@@ -171,6 +205,9 @@ export interface Class {
   createdAt: string;
   teachers: ClassTeacher[];
   studentsCount: number;
+  // Optional: Only present for ClassArm-based classes (PRIMARY/SECONDARY)
+  classArmId?: string;
+  classLevelId?: string;
 }
 
 export interface CreateClassDto {
@@ -210,45 +247,181 @@ export interface CreateClassResourceDto {
   description?: string;
 }
 
+// ============================================
+// NERDC Curriculum Types
+// ============================================
+
+export interface NerdcSubject {
+  id: string;
+  name: string;
+  code: string;
+  category: string | null;
+  schoolTypes: string[];
+  description: string | null;
+  isActive: boolean;
+}
+
+export interface NerdcCurriculumWeek {
+  id: string;
+  weekNumber: number;
+  topic: string;
+  subTopics: string[];
+  objectives: string[];
+  activities: string[];
+  resources: string[];
+  assessment: string | null;
+  duration: string | null;
+}
+
+export interface NerdcCurriculum {
+  id: string;
+  classLevel: string;
+  term: number;
+  description: string | null;
+  subject: NerdcSubject;
+  weeks: NerdcCurriculumWeek[];
+}
+
+// ============================================
+// Curriculum Item Types (Enhanced)
+// ============================================
+
+export type CurriculumStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'ACTIVE' | 'COMPLETED' | 'REJECTED';
+export type WeekStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'SKIPPED';
+
 export interface CurriculumItem {
   id: string;
   curriculumId: string;
-  week: number;
+  weekNumber: number;
   topic: string;
+  subTopics: string[];
   objectives: string[];
+  activities: string[];
   resources: string[];
+  assessment: string | null;
   order: number;
+  // Customization tracking
+  isCustomized: boolean;
+  originalTopic: string | null;
+  // Progress tracking
+  status: WeekStatus;
+  taughtAt: string | null;
+  teacherNotes: string | null;
+  completedBy: string | null;
   createdAt: string;
   updatedAt: string;
+  // Legacy
+  week?: number;
 }
+
+// ============================================
+// Curriculum Types (Enhanced)
+// ============================================
 
 export interface Curriculum {
   id: string;
-  classId: string;
+  schoolId: string | null;
+  classId: string | null;
+  classLevelId: string | null;
+  subjectId: string | null;
   subject: string | null;
   teacherId: string;
+  teacherName?: string;
   academicYear: string;
   termId: string | null;
+  termName?: string;
+  // NERDC Integration
+  nerdcCurriculumId: string | null;
+  isNerdcBased: boolean;
+  customizations: number;
+  // Status & Approval
+  status: CurriculumStatus;
+  submittedAt: string | null;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  rejectionReason: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
   items: CurriculumItem[];
+  // Computed stats
+  totalWeeks?: number;
+  completedWeeks?: number;
+  progressPercentage?: number;
 }
 
+// ============================================
+// Curriculum Summary Types
+// ============================================
+
+export interface CurriculumSummary {
+  subjectId: string;
+  subjectName: string;
+  subjectCode: string | null;
+  isRequired: boolean;
+  curriculumId: string | null;
+  status: CurriculumStatus | null;
+  teacherId: string | null;
+  teacherName: string | null;
+  weeksTotal: number;
+  weeksCompleted: number;
+  isNerdcBased: boolean;
+  periodsPerWeek: number;
+  teachers?: { id: string; name: string }[];
+}
+
+export interface TimetableSubject {
+  subjectId: string;
+  subjectName: string;
+  subjectCode: string | null;
+  periodsPerWeek: number;
+  teachers: { id: string; name: string }[];
+}
+
+// ============================================
+// Curriculum DTOs
+// ============================================
+
 export interface CreateCurriculumItemDto {
-  week: number;
+  weekNumber: number;
   topic: string;
+  subTopics?: string[];
   objectives: string[];
+  activities?: string[];
   resources: string[];
+  assessment?: string;
   order?: number;
+  week?: number; // Legacy
 }
 
 export interface CreateCurriculumDto {
   classId: string;
+  subjectId?: string;
   subject?: string;
   academicYear: string;
-  termId?: string;
+  termId: string;
+  nerdcCurriculumId?: string;
   items: CreateCurriculumItemDto[];
+}
+
+export interface GenerateCurriculumDto {
+  classLevelId: string;
+  subjectId: string;
+  termId: string;
+  teacherId?: string;
+}
+
+export interface BulkGenerateCurriculumDto {
+  classLevelId: string;
+  termId: string;
+  subjectIds: string[];
+  teacherId: string;
+}
+
+export interface UpdateCurriculumDto {
+  academicYear?: string;
+  termId?: string;
+  items?: CreateCurriculumItemDto[];
 }
 
 export type GradeType = 'CA' | 'ASSIGNMENT' | 'EXAM';
@@ -344,7 +517,8 @@ export interface AddStudentDto {
   email?: string;
   phone: string;
   address?: string;
-  classLevel: string;
+  classLevel?: string; // Optional if classArmId is provided
+  classArmId?: string; // Optional for PRIMARY/SECONDARY schools using ClassArms
   academicYear?: string;
   parentName: string;
   parentPhone: string;
@@ -569,6 +743,10 @@ export interface Subject {
   schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY';
   classLevelId?: string;
   classLevelName?: string;
+  classLevel?: {
+    id: string;
+    name: string;
+  } | null;
   description?: string;
   isActive: boolean;
   teachers?: Array<{
@@ -603,6 +781,154 @@ export interface Room {
   roomType?: string;
   schoolId: string;
   isActive: boolean;
+}
+
+// Faculty & Department types (Tertiary)
+export interface Faculty {
+  id: string;
+  name: string;
+  code: string;
+  description?: string;
+  imageUrl?: string;
+  schoolId: string;
+  deanId?: string;
+  deanName?: string;
+  isActive: boolean;
+  departmentsCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateFacultyDto {
+  name: string;
+  code: string;
+  description?: string;
+  imageUrl?: string;
+  deanId?: string;
+}
+
+export interface UpdateFacultyDto {
+  name?: string;
+  code?: string;
+  description?: string;
+  imageUrl?: string;
+  deanId?: string;
+  isActive?: boolean;
+}
+
+export interface Department {
+  id: string;
+  name: string;
+  code: string;
+  description?: string;
+  imageUrl?: string;
+  schoolId: string;
+  facultyId?: string;
+  facultyName?: string;
+  isActive: boolean;
+  levelsCount: number;
+  studentsCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateDepartmentDto {
+  name: string;
+  code: string;
+  description?: string;
+  imageUrl?: string;
+  facultyId: string;
+}
+
+export interface UpdateDepartmentDto {
+  name?: string;
+  code?: string;
+  description?: string;
+  imageUrl?: string;
+  facultyId?: string;
+  isActive?: boolean;
+}
+
+export interface GenerateLevelsDto {
+  levelCount?: number;
+}
+
+export interface DepartmentLevel {
+  id: string;
+  name: string;
+  academicYear?: string;
+  studentsCount: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+// Level Detail Types (Tertiary)
+export interface LevelDetail {
+  id: string;
+  name: string;
+  academicYear: string;
+  isActive: boolean;
+  departmentId: string;
+  departmentName: string;
+  departmentCode: string;
+  facultyId?: string;
+  facultyName?: string;
+  studentsCount: number;
+  coursesCount: number;
+  createdAt: string;
+}
+
+export interface LevelStudent {
+  id: string;
+  uid: string;
+  firstName: string;
+  lastName: string;
+  middleName?: string;
+  profileImage?: string;
+  enrollmentId: string;
+  enrollmentDate: string;
+  classLevel: string;
+  academicYear: string;
+  user?: {
+    id: string;
+    email?: string;
+    phone?: string;
+    accountStatus: string;
+  };
+}
+
+export interface LevelCourse {
+  id: string;
+  name: string;
+  code?: string;
+  description?: string;
+  creditUnits?: number;
+  isCore?: boolean;
+  teachers: Array<{ id: string; name: string }>;
+}
+
+export interface LevelCurriculum {
+  id: string;
+  subject?: string;
+  academicYear: string;
+  teacher?: string;
+  teacherId?: string;
+  itemsCount: number;
+  items: any[];
+  createdAt: string;
+}
+
+export interface LevelResource {
+  id: string;
+  name: string;
+  fileName: string;
+  filePath: string;
+  fileSize: number;
+  mimeType: string;
+  fileType: string;
+  description?: string;
+  uploadedBy?: string;
+  createdAt: string;
 }
 
 export interface CreateClassArmDto {
@@ -700,6 +1026,32 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
       },
       invalidatesTags: ['School'],
     }),
+    // Update school information
+    updateSchool: builder.mutation<ResponseDto<School>, { data: Partial<School>; token?: string }>({
+      query: ({ data, token }) => {
+        const queryParams = new URLSearchParams();
+        if (token) queryParams.append('token', token);
+        const queryString = queryParams.toString();
+        return {
+          url: `/school-admin/school${queryString ? `?${queryString}` : ''}`,
+          method: 'PATCH',
+          body: data,
+        };
+      },
+      invalidatesTags: ['School'],
+    }),
+    // Request edit token for sensitive changes
+    requestEditToken: builder.mutation<ResponseDto<{ message: string }>, Partial<School>>({
+      query: (changes) => ({
+        url: '/school-admin/school/request-edit-token',
+        method: 'POST',
+        body: changes,
+      }),
+    }),
+    // Verify edit token
+    verifyEditToken: builder.query<ResponseDto<{ changes: Partial<School>; school: School }>, string>({
+      query: (token) => `/school-admin/school/verify-edit-token/${token}`,
+    }),
     // Get school admin dashboard
     getSchoolAdminDashboard: builder.query<ResponseDto<SchoolDashboard>, string | undefined>({
       query: (schoolType) => {
@@ -729,6 +1081,80 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
       query: ({ schoolId, staffId }) => `/schools/${schoolId}/staff/${staffId}`,
       providesTags: (result, error, { staffId }) => [{ type: 'School' as const, id: staffId }],
     }),
+
+    // =====================
+    // Teacher Subject Competencies
+    // =====================
+
+    // Get subjects a teacher is qualified to teach
+    getTeacherSubjects: builder.query<ResponseDto<TeacherSubject[]>, { schoolId: string; teacherId: string }>({
+      query: ({ schoolId, teacherId }) => `/schools/${schoolId}/teachers/${teacherId}/subjects`,
+      providesTags: (result, error, { teacherId }) => [
+        { type: 'TeacherSubject' as const, id: teacherId },
+        'School',
+      ],
+    }),
+
+    // Get teacher with all subjects and assignment totals
+    getTeacherWithSubjects: builder.query<ResponseDto<TeacherWithSubjects>, { schoolId: string; teacherId: string }>({
+      query: ({ schoolId, teacherId }) => `/schools/${schoolId}/teachers/${teacherId}/subjects/details`,
+      providesTags: (result, error, { teacherId }) => [
+        { type: 'TeacherSubject' as const, id: teacherId },
+        'School',
+      ],
+    }),
+
+    // Update all subjects a teacher can teach (replaces existing)
+    updateTeacherSubjects: builder.mutation<ResponseDto<TeacherSubject[]>, { schoolId: string; teacherId: string; subjectIds: string[] }>({
+      query: ({ schoolId, teacherId, subjectIds }) => ({
+        url: `/schools/${schoolId}/teachers/${teacherId}/subjects`,
+        method: 'PUT',
+        body: { subjectIds },
+      }),
+      invalidatesTags: (result, error, { teacherId }) => [
+        { type: 'TeacherSubject' as const, id: teacherId },
+        { type: 'School' as const, id: teacherId },
+        'School',
+      ],
+    }),
+
+    // Add a single subject to teacher's competencies
+    addTeacherSubject: builder.mutation<ResponseDto<TeacherSubject>, { schoolId: string; teacherId: string; subjectId: string }>({
+      query: ({ schoolId, teacherId, subjectId }) => ({
+        url: `/schools/${schoolId}/teachers/${teacherId}/subjects`,
+        method: 'POST',
+        body: { subjectId },
+      }),
+      invalidatesTags: (result, error, { teacherId }) => [
+        { type: 'TeacherSubject' as const, id: teacherId },
+        { type: 'School' as const, id: teacherId },
+        'School',
+      ],
+    }),
+
+    // Remove a subject from teacher's competencies
+    removeTeacherSubject: builder.mutation<ResponseDto<void>, { schoolId: string; teacherId: string; subjectId: string }>({
+      query: ({ schoolId, teacherId, subjectId }) => ({
+        url: `/schools/${schoolId}/teachers/${teacherId}/subjects/${subjectId}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: (result, error, { teacherId }) => [
+        { type: 'TeacherSubject' as const, id: teacherId },
+        { type: 'School' as const, id: teacherId },
+        'School',
+      ],
+    }),
+
+    // Get subjects a teacher can be assigned to for a specific class
+    getAssignableSubjects: builder.query<ResponseDto<AssignableSubject[]>, { schoolId: string; teacherId: string; classId: string }>({
+      query: ({ schoolId, teacherId, classId }) => 
+        `/schools/${schoolId}/teachers/${teacherId}/assignable-subjects?classId=${classId}`,
+      providesTags: (result, error, { teacherId, classId }) => [
+        { type: 'TeacherSubject' as const, id: teacherId },
+        { type: 'Class' as const, id: classId },
+      ],
+    }),
+
     // Get all classes/courses for a school
     getClasses: builder.query<
       ResponseDto<Class[]>,
@@ -742,7 +1168,14 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
         const queryString = queryParams.toString();
         return `/schools/${schoolId}/classes${queryString ? `?${queryString}` : ''}`;
       },
-      providesTags: ['School'],
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.data.map(({ id }) => ({ type: 'Class' as const, id })),
+              { type: 'Class', id: 'LIST' },
+              'School',
+            ]
+          : [{ type: 'Class', id: 'LIST' }, 'School'],
     }),
     // Get a single class by ID
     getClassById: builder.query<ResponseDto<Class>, { schoolId: string; classId: string }>({
@@ -756,7 +1189,7 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
         method: 'POST',
         body: classData,
       }),
-      invalidatesTags: ['School'],
+      invalidatesTags: [{ type: 'Class', id: 'LIST' }, 'School'],
     }),
     // Update a class
     updateClass: builder.mutation<ResponseDto<Class>, { schoolId: string; classId: string; classData: Partial<CreateClassDto> }>({
@@ -765,15 +1198,23 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
         method: 'PATCH',
         body: classData,
       }),
-      invalidatesTags: (result, error, { classId }) => [{ type: 'Class', id: classId }, 'School'],
+      invalidatesTags: (result, error, { classId }) => [
+        { type: 'Class', id: classId },
+        { type: 'Class', id: 'LIST' },
+        'School',
+      ],
     }),
     // Delete a class
-    deleteClass: builder.mutation<ResponseDto<void>, { schoolId: string; classId: string }>({
-      query: ({ schoolId, classId }) => ({
-        url: `/schools/${schoolId}/classes/${classId}`,
+    deleteClass: builder.mutation<ResponseDto<void>, { schoolId: string; classId: string; forceDelete?: boolean }>({
+      query: ({ schoolId, classId, forceDelete }) => ({
+        url: `/schools/${schoolId}/classes/${classId}${forceDelete ? '?force=true' : ''}`,
         method: 'DELETE',
       }),
-      invalidatesTags: ['School'],
+      invalidatesTags: [
+        { type: 'Class', id: 'LIST' },
+        'School',
+        'Student', // Also invalidate students since their enrollment may have changed
+      ],
     }),
     // Assign a teacher to a class
     assignTeacherToClass: builder.mutation<ResponseDto<Class>, { schoolId: string; classId: string; assignment: AssignTeacherToClassDto }>({
@@ -1015,8 +1456,159 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
         method: 'POST',
         body: data,
       }),
-      invalidatesTags: ['Timetable'],
+      invalidatesTags: [
+        { type: 'Class', id: 'LIST' },
+        'Timetable',
+        'School',
+      ],
     }),
+    // Generate default classes for a school type (Primary 1-6, JSS1-SS3, Year 1-4)
+    generateDefaultClasses: builder.mutation<
+      ResponseDto<{ created: number; message: string }>,
+      { schoolId: string; schoolType: 'PRIMARY' | 'SECONDARY' | 'TERTIARY' }
+    >({
+      query: ({ schoolId, schoolType }) => ({
+        url: `/schools/${schoolId}/timetable/generate-default-classes`,
+        method: 'POST',
+        body: { schoolType },
+      }),
+      invalidatesTags: [
+        { type: 'Class', id: 'LIST' },
+        'Timetable',
+        'School',
+      ],
+    }),
+
+    // ============ FACULTY ENDPOINTS (Tertiary) ============
+    getFaculties: builder.query<ResponseDto<Faculty[]>, { schoolId: string }>({
+      query: ({ schoolId }) => `/schools/${schoolId}/faculties`,
+      providesTags: ['Faculty'],
+    }),
+    getFaculty: builder.query<ResponseDto<Faculty>, { schoolId: string; facultyId: string }>({
+      query: ({ schoolId, facultyId }) => `/schools/${schoolId}/faculties/${facultyId}`,
+      providesTags: (result, error, { facultyId }) => [{ type: 'Faculty', id: facultyId }],
+    }),
+    createFaculty: builder.mutation<ResponseDto<Faculty>, { schoolId: string; data: CreateFacultyDto }>({
+      query: ({ schoolId, data }) => ({
+        url: `/schools/${schoolId}/faculties`,
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['Faculty'],
+    }),
+    updateFaculty: builder.mutation<ResponseDto<Faculty>, { schoolId: string; facultyId: string; data: UpdateFacultyDto }>({
+      query: ({ schoolId, facultyId, data }) => ({
+        url: `/schools/${schoolId}/faculties/${facultyId}`,
+        method: 'PATCH',
+        body: data,
+      }),
+      invalidatesTags: (result, error, { facultyId }) => ['Faculty', { type: 'Faculty', id: facultyId }],
+    }),
+    deleteFaculty: builder.mutation<ResponseDto<void>, { schoolId: string; facultyId: string; force?: boolean }>({
+      query: ({ schoolId, facultyId, force }) => ({
+        url: `/schools/${schoolId}/faculties/${facultyId}${force ? '?force=true' : ''}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Faculty', 'Department'],
+    }),
+    generateDefaultFaculties: builder.mutation<
+      ResponseDto<{ created: number; skipped: number; message: string }>,
+      { schoolId: string }
+    >({
+      query: ({ schoolId }) => ({
+        url: `/schools/${schoolId}/faculties/generate-defaults`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['Faculty'],
+    }),
+    generateDepartmentsForFaculty: builder.mutation<
+      ResponseDto<{ created: number; skipped: number; message: string }>,
+      { schoolId: string; facultyId: string }
+    >({
+      query: ({ schoolId, facultyId }) => ({
+        url: `/schools/${schoolId}/faculties/${facultyId}/generate-departments`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['Faculty', 'Department'],
+    }),
+
+    // ============ DEPARTMENT ENDPOINTS (Tertiary) ============
+    getDepartments: builder.query<ResponseDto<Department[]>, { schoolId: string; facultyId?: string }>({
+      query: ({ schoolId, facultyId }) => {
+        const url = `/schools/${schoolId}/departments`;
+        return facultyId ? `${url}?facultyId=${facultyId}` : url;
+      },
+      providesTags: ['Department'],
+    }),
+    getDepartment: builder.query<ResponseDto<Department>, { schoolId: string; departmentId: string }>({
+      query: ({ schoolId, departmentId }) => `/schools/${schoolId}/departments/${departmentId}`,
+      providesTags: (result, error, { departmentId }) => [{ type: 'Department', id: departmentId }],
+    }),
+    createDepartment: builder.mutation<ResponseDto<Department>, { schoolId: string; data: CreateDepartmentDto }>({
+      query: ({ schoolId, data }) => ({
+        url: `/schools/${schoolId}/departments`,
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['Department', 'Faculty'],
+    }),
+    updateDepartment: builder.mutation<ResponseDto<Department>, { schoolId: string; departmentId: string; data: UpdateDepartmentDto }>({
+      query: ({ schoolId, departmentId, data }) => ({
+        url: `/schools/${schoolId}/departments/${departmentId}`,
+        method: 'PATCH',
+        body: data,
+      }),
+      invalidatesTags: (result, error, { departmentId }) => ['Department', 'Faculty', { type: 'Department', id: departmentId }],
+    }),
+    deleteDepartment: builder.mutation<ResponseDto<void>, { schoolId: string; departmentId: string; force?: boolean }>({
+      query: ({ schoolId, departmentId, force }) => ({
+        url: `/schools/${schoolId}/departments/${departmentId}${force ? '?force=true' : ''}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Department', 'Faculty'],
+    }),
+    getDepartmentLevels: builder.query<ResponseDto<DepartmentLevel[]>, { schoolId: string; departmentId: string }>({
+      query: ({ schoolId, departmentId }) => `/schools/${schoolId}/departments/${departmentId}/levels`,
+      providesTags: (result, error, { departmentId }) => [
+        { type: 'Department', id: departmentId },
+        { type: 'Class', id: 'LIST' },
+      ],
+    }),
+    generateDepartmentLevels: builder.mutation<ResponseDto<{ created: number; message: string }>, { schoolId: string; departmentId: string; data?: GenerateLevelsDto }>({
+      query: ({ schoolId, departmentId, data }) => ({
+        url: `/schools/${schoolId}/departments/${departmentId}/generate-levels`,
+        method: 'POST',
+        body: data || {},
+      }),
+      invalidatesTags: (result, error, { departmentId }) => ['Department', { type: 'Department', id: departmentId }, { type: 'Class', id: 'LIST' }],
+    }),
+
+    // ============ LEVEL ENDPOINTS (Tertiary) ============
+    getLevel: builder.query<ResponseDto<LevelDetail>, { schoolId: string; levelId: string }>({
+      query: ({ schoolId, levelId }) => `/schools/${schoolId}/levels/${levelId}`,
+      providesTags: (result, error, { levelId }) => [{ type: 'Class', id: levelId }],
+    }),
+    getLevelStudents: builder.query<ResponseDto<LevelStudent[]>, { schoolId: string; levelId: string }>({
+      query: ({ schoolId, levelId }) => `/schools/${schoolId}/levels/${levelId}/students`,
+      providesTags: (result, error, { levelId }) => [{ type: 'Class', id: levelId }, 'Student'],
+    }),
+    getLevelCourses: builder.query<ResponseDto<LevelCourse[]>, { schoolId: string; levelId: string }>({
+      query: ({ schoolId, levelId }) => `/schools/${schoolId}/levels/${levelId}/courses`,
+      providesTags: (result, error, { levelId }) => [{ type: 'Class', id: levelId }, 'Subject'],
+    }),
+    getLevelTimetable: builder.query<ResponseDto<TimetablePeriod[]>, { schoolId: string; levelId: string; termId: string }>({
+      query: ({ schoolId, levelId, termId }) => `/schools/${schoolId}/levels/${levelId}/timetable?termId=${termId}`,
+      providesTags: (result, error, { levelId }) => [{ type: 'Timetable', id: levelId }],
+    }),
+    getLevelCurriculum: builder.query<ResponseDto<LevelCurriculum[]>, { schoolId: string; levelId: string }>({
+      query: ({ schoolId, levelId }) => `/schools/${schoolId}/levels/${levelId}/curriculum`,
+      providesTags: (result, error, { levelId }) => [{ type: 'Class', id: levelId }, 'Curriculum'],
+    }),
+    getLevelResources: builder.query<ResponseDto<LevelResource[]>, { schoolId: string; levelId: string }>({
+      query: ({ schoolId, levelId }) => `/schools/${schoolId}/levels/${levelId}/resources`,
+      providesTags: (result, error, { levelId }) => [{ type: 'Class', id: levelId }, 'ClassResource'],
+    }),
+
     getSubjects: builder.query<ResponseDto<Subject[]>, { schoolId: string; schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY'; classLevelId?: string }>({
       query: ({ schoolId, schoolType, classLevelId }) => {
         const queryParams = new URLSearchParams();
@@ -1422,7 +2014,69 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
       },
       providesTags: ['Student'],
     }),
-    // Curriculum
+    // ============================================
+    // NERDC Curriculum Endpoints
+    // ============================================
+    
+    getNerdcSubjects: builder.query<
+      ResponseDto<NerdcSubject[]>,
+      { schoolId: string; schoolType?: string; category?: string }
+    >({
+      query: ({ schoolId, schoolType, category }) => {
+        const queryParams = new URLSearchParams();
+        if (schoolType) queryParams.append('schoolType', schoolType);
+        if (category) queryParams.append('category', category);
+        const queryString = queryParams.toString();
+        return `/schools/${schoolId}/curriculum/nerdc/subjects${queryString ? `?${queryString}` : ''}`;
+      },
+    }),
+    
+    getNerdcTemplate: builder.query<
+      ResponseDto<NerdcCurriculum | null>,
+      { schoolId: string; subjectCode: string; classLevel: string; schoolType: string; term: number }
+    >({
+      query: ({ schoolId, subjectCode, classLevel, schoolType, term }) => {
+        const queryParams = new URLSearchParams();
+        queryParams.append('subjectCode', subjectCode);
+        queryParams.append('classLevel', classLevel);
+        queryParams.append('schoolType', schoolType);
+        queryParams.append('term', term.toString());
+        return `/schools/${schoolId}/curriculum/nerdc/template?${queryParams.toString()}`;
+      },
+    }),
+    
+    // ============================================
+    // Timetable-Driven Curriculum Endpoints
+    // ============================================
+    
+    getSubjectsFromTimetable: builder.query<
+      ResponseDto<TimetableSubject[]>,
+      { schoolId: string; classLevelId: string; termId: string }
+    >({
+      query: ({ schoolId, classLevelId, termId }) =>
+        `/schools/${schoolId}/curriculum/class-level/${classLevelId}/subjects?termId=${termId}`,
+      providesTags: (result, error, { classLevelId }) => [
+        { type: 'Curriculum' as const, id: `subjects-${classLevelId}` },
+        'Timetable',
+      ],
+    }),
+    
+    getCurriculaSummary: builder.query<
+      ResponseDto<CurriculumSummary[]>,
+      { schoolId: string; classLevelId: string; termId: string }
+    >({
+      query: ({ schoolId, classLevelId, termId }) =>
+        `/schools/${schoolId}/curriculum/class-level/${classLevelId}/summary?termId=${termId}`,
+      providesTags: (result, error, { classLevelId }) => [
+        { type: 'Curriculum' as const, id: `summary-${classLevelId}` },
+        'Curriculum',
+      ],
+    }),
+    
+    // ============================================
+    // Curriculum CRUD Endpoints
+    // ============================================
+    
     getCurriculumForClass: builder.query<
       ResponseDto<Curriculum | null>,
       { schoolId: string; classId: string; subject?: string; academicYear?: string; termId?: string }
@@ -1437,6 +2091,15 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
       },
       providesTags: (result, error, { classId }) => [{ type: 'Curriculum' as const, id: classId }],
     }),
+    
+    getCurriculumById: builder.query<
+      ResponseDto<Curriculum>,
+      { schoolId: string; curriculumId: string }
+    >({
+      query: ({ schoolId, curriculumId }) => `/schools/${schoolId}/curriculum/${curriculumId}`,
+      providesTags: (result, error, { curriculumId }) => [{ type: 'Curriculum' as const, id: curriculumId }],
+    }),
+    
     createCurriculum: builder.mutation<ResponseDto<Curriculum>, { schoolId: string; curriculumData: CreateCurriculumDto }>({
       query: ({ schoolId, curriculumData }) => ({
         url: `/schools/${schoolId}/curriculum`,
@@ -1445,26 +2108,174 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: (result, error, { curriculumData }) => [
         { type: 'Curriculum' as const, id: curriculumData.classId },
+        'Curriculum',
         'Class',
       ],
     }),
+    
+    generateCurriculum: builder.mutation<
+      ResponseDto<Curriculum>,
+      { schoolId: string; data: GenerateCurriculumDto }
+    >({
+      query: ({ schoolId, data }) => ({
+        url: `/schools/${schoolId}/curriculum/generate`,
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: (result, error, { data }) => [
+        { type: 'Curriculum' as const, id: `summary-${data.classLevelId}` },
+        'Curriculum',
+      ],
+    }),
+    
+    bulkGenerateCurriculum: builder.mutation<
+      ResponseDto<{ created: string[]; failed: { subjectId: string; error: string }[] }>,
+      { schoolId: string; data: BulkGenerateCurriculumDto }
+    >({
+      query: ({ schoolId, data }) => ({
+        url: `/schools/${schoolId}/curriculum/generate-bulk`,
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: (result, error, { data }) => [
+        { type: 'Curriculum' as const, id: `summary-${data.classLevelId}` },
+        'Curriculum',
+      ],
+    }),
+    
     updateCurriculum: builder.mutation<
       ResponseDto<Curriculum>,
-      { schoolId: string; curriculumId: string; curriculumData: Partial<CreateCurriculumDto> }
+      { schoolId: string; curriculumId: string; data: UpdateCurriculumDto }
     >({
-      query: ({ schoolId, curriculumId, curriculumData }) => ({
+      query: ({ schoolId, curriculumId, data }) => ({
         url: `/schools/${schoolId}/curriculum/${curriculumId}`,
         method: 'PATCH',
-        body: curriculumData,
+        body: data,
       }),
-      invalidatesTags: (result, error, { curriculumId }) => [{ type: 'Curriculum' as const, id: curriculumId }],
+      invalidatesTags: (result, error, { curriculumId }) => [
+        { type: 'Curriculum' as const, id: curriculumId },
+        'Curriculum',
+      ],
     }),
+    
     deleteCurriculum: builder.mutation<ResponseDto<void>, { schoolId: string; curriculumId: string }>({
       query: ({ schoolId, curriculumId }) => ({
         url: `/schools/${schoolId}/curriculum/${curriculumId}`,
         method: 'DELETE',
       }),
-      invalidatesTags: (result, error, { curriculumId }) => [{ type: 'Curriculum' as const, id: curriculumId }],
+      invalidatesTags: (result, error, { curriculumId }) => [
+        { type: 'Curriculum' as const, id: curriculumId },
+        'Curriculum',
+      ],
+    }),
+    
+    // ============================================
+    // Curriculum Status Endpoints
+    // ============================================
+    
+    submitCurriculumForApproval: builder.mutation<
+      ResponseDto<Curriculum>,
+      { schoolId: string; curriculumId: string }
+    >({
+      query: ({ schoolId, curriculumId }) => ({
+        url: `/schools/${schoolId}/curriculum/${curriculumId}/submit`,
+        method: 'POST',
+      }),
+      invalidatesTags: (result, error, { curriculumId }) => [
+        { type: 'Curriculum' as const, id: curriculumId },
+        'Curriculum',
+      ],
+    }),
+    
+    approveCurriculum: builder.mutation<
+      ResponseDto<Curriculum>,
+      { schoolId: string; curriculumId: string }
+    >({
+      query: ({ schoolId, curriculumId }) => ({
+        url: `/schools/${schoolId}/curriculum/${curriculumId}/approve`,
+        method: 'POST',
+      }),
+      invalidatesTags: (result, error, { curriculumId }) => [
+        { type: 'Curriculum' as const, id: curriculumId },
+        'Curriculum',
+      ],
+    }),
+    
+    rejectCurriculum: builder.mutation<
+      ResponseDto<Curriculum>,
+      { schoolId: string; curriculumId: string; reason: string }
+    >({
+      query: ({ schoolId, curriculumId, reason }) => ({
+        url: `/schools/${schoolId}/curriculum/${curriculumId}/reject`,
+        method: 'POST',
+        body: { reason },
+      }),
+      invalidatesTags: (result, error, { curriculumId }) => [
+        { type: 'Curriculum' as const, id: curriculumId },
+        'Curriculum',
+      ],
+    }),
+    
+    activateCurriculum: builder.mutation<
+      ResponseDto<Curriculum>,
+      { schoolId: string; curriculumId: string }
+    >({
+      query: ({ schoolId, curriculumId }) => ({
+        url: `/schools/${schoolId}/curriculum/${curriculumId}/activate`,
+        method: 'POST',
+      }),
+      invalidatesTags: (result, error, { curriculumId }) => [
+        { type: 'Curriculum' as const, id: curriculumId },
+        'Curriculum',
+      ],
+    }),
+    
+    // ============================================
+    // Curriculum Progress Endpoints
+    // ============================================
+    
+    markWeekComplete: builder.mutation<
+      ResponseDto<CurriculumItem>,
+      { schoolId: string; curriculumId: string; weekNumber: number; notes?: string }
+    >({
+      query: ({ schoolId, curriculumId, weekNumber, notes }) => ({
+        url: `/schools/${schoolId}/curriculum/${curriculumId}/weeks/${weekNumber}/complete`,
+        method: 'POST',
+        body: { notes },
+      }),
+      invalidatesTags: (result, error, { curriculumId }) => [
+        { type: 'Curriculum' as const, id: curriculumId },
+        'Curriculum',
+      ],
+    }),
+    
+    markWeekInProgress: builder.mutation<
+      ResponseDto<CurriculumItem>,
+      { schoolId: string; curriculumId: string; weekNumber: number }
+    >({
+      query: ({ schoolId, curriculumId, weekNumber }) => ({
+        url: `/schools/${schoolId}/curriculum/${curriculumId}/weeks/${weekNumber}/in-progress`,
+        method: 'POST',
+      }),
+      invalidatesTags: (result, error, { curriculumId }) => [
+        { type: 'Curriculum' as const, id: curriculumId },
+        'Curriculum',
+      ],
+    }),
+    
+    skipWeek: builder.mutation<
+      ResponseDto<CurriculumItem>,
+      { schoolId: string; curriculumId: string; weekNumber: number; reason: string }
+    >({
+      query: ({ schoolId, curriculumId, weekNumber, reason }) => ({
+        url: `/schools/${schoolId}/curriculum/${curriculumId}/weeks/${weekNumber}/skip`,
+        method: 'POST',
+        body: { reason },
+      }),
+      invalidatesTags: (result, error, { curriculumId }) => [
+        { type: 'Curriculum' as const, id: curriculumId },
+        'Curriculum',
+      ],
     }),
     // Grades
     createGrade: builder.mutation<ResponseDto<Grade>, { schoolId: string; gradeData: CreateGradeDto }>({
@@ -1878,9 +2689,19 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
 export const { 
   useGetMySchoolQuery,
   useUploadSchoolLogoMutation,
+  useUpdateSchoolMutation,
+  useRequestEditTokenMutation,
+  useVerifyEditTokenQuery,
   useGetSchoolAdminDashboardQuery, 
   useGetStaffListQuery,
   useGetStaffMemberQuery,
+  // Teacher Subject hooks
+  useGetTeacherSubjectsQuery,
+  useGetTeacherWithSubjectsQuery,
+  useUpdateTeacherSubjectsMutation,
+  useAddTeacherSubjectMutation,
+  useRemoveTeacherSubjectMutation,
+  useGetAssignableSubjectsQuery,
   useGetClassesQuery,
   useGetClassByIdQuery,
   useCreateClassMutation,
@@ -1912,6 +2733,31 @@ export const {
   useGetClassLevelsQuery,
   useGetClassArmsQuery,
   useCreateClassArmMutation,
+  useGenerateDefaultClassesMutation,
+  // Faculty endpoints
+  useGetFacultiesQuery,
+  useGetFacultyQuery,
+  useCreateFacultyMutation,
+  useUpdateFacultyMutation,
+  useDeleteFacultyMutation,
+  useGenerateDefaultFacultiesMutation,
+  useGenerateDepartmentsForFacultyMutation,
+  // Department endpoints
+  useGetDepartmentsQuery,
+  useGetDepartmentQuery,
+  useCreateDepartmentMutation,
+  useUpdateDepartmentMutation,
+  useDeleteDepartmentMutation,
+  useGetDepartmentLevelsQuery,
+  useGenerateDepartmentLevelsMutation,
+  // Level endpoints (Tertiary)
+  useGetLevelQuery,
+  useGetLevelStudentsQuery,
+  useGetLevelCoursesQuery,
+  useGetLevelTimetableQuery,
+  useGetLevelCurriculumQuery,
+  useGetLevelResourcesQuery,
+  // Subject endpoints
   useGetSubjectsQuery,
   useCreateSubjectMutation,
   useUpdateSubjectMutation,
@@ -1935,11 +2781,29 @@ export const {
   useGetClassResourcesQuery,
   useUploadClassResourceMutation,
   useDeleteClassResourceMutation,
-  // Curriculum hooks
+  // NERDC Curriculum hooks
+  useGetNerdcSubjectsQuery,
+  useGetNerdcTemplateQuery,
+  // Timetable-Driven Curriculum hooks
+  useGetSubjectsFromTimetableQuery,
+  useGetCurriculaSummaryQuery,
+  // Curriculum CRUD hooks
   useGetCurriculumForClassQuery,
+  useGetCurriculumByIdQuery,
   useCreateCurriculumMutation,
+  useGenerateCurriculumMutation,
+  useBulkGenerateCurriculumMutation,
   useUpdateCurriculumMutation,
   useDeleteCurriculumMutation,
+  // Curriculum Status hooks
+  useSubmitCurriculumForApprovalMutation,
+  useApproveCurriculumMutation,
+  useRejectCurriculumMutation,
+  useActivateCurriculumMutation,
+  // Curriculum Progress hooks
+  useMarkWeekCompleteMutation,
+  useMarkWeekInProgressMutation,
+  useSkipWeekMutation,
   // Grade hooks
   useCreateGradeMutation,
   useBulkCreateGradesMutation,

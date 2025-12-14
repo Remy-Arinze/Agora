@@ -143,5 +143,177 @@ export class StaffRepository {
       where: { phone, schoolId },
     });
   }
+
+  // =====================
+  // Teacher Subject Methods
+  // =====================
+
+  /**
+   * Get all subjects a teacher is qualified to teach
+   */
+  async getTeacherSubjects(teacherId: string): Promise<any[]> {
+    return this.prisma.subjectTeacher.findMany({
+      where: { teacherId },
+      include: {
+        subject: {
+          include: {
+            classLevel: true,
+          },
+        },
+      },
+      orderBy: {
+        subject: {
+          name: 'asc',
+        },
+      },
+    });
+  }
+
+  /**
+   * Get teacher with subjects and assignment counts
+   */
+  async getTeacherWithSubjects(teacherId: string): Promise<any> {
+    const teacher = await this.prisma.teacher.findUnique({
+      where: { id: teacherId },
+      include: {
+        subjectTeachers: {
+          include: {
+            subject: {
+              include: {
+                classLevel: true,
+              },
+            },
+          },
+        },
+        classTeachers: true,
+      },
+    });
+
+    return teacher;
+  }
+
+  /**
+   * Add a subject to a teacher's competencies
+   */
+  async addTeacherSubject(teacherId: string, subjectId: string): Promise<any> {
+    return this.prisma.subjectTeacher.create({
+      data: {
+        teacherId,
+        subjectId,
+      },
+      include: {
+        subject: {
+          include: {
+            classLevel: true,
+          },
+        },
+      },
+    });
+  }
+
+  /**
+   * Remove a subject from a teacher's competencies
+   */
+  async removeTeacherSubject(teacherId: string, subjectId: string): Promise<void> {
+    await this.prisma.subjectTeacher.deleteMany({
+      where: {
+        teacherId,
+        subjectId,
+      },
+    });
+  }
+
+  /**
+   * Set all subjects for a teacher (replaces existing)
+   */
+  async setTeacherSubjects(teacherId: string, subjectIds: string[]): Promise<void> {
+    // Use transaction to ensure atomicity
+    await this.prisma.$transaction(async (tx) => {
+      // Remove all existing subject assignments
+      await tx.subjectTeacher.deleteMany({
+        where: { teacherId },
+      });
+
+      // Add new subjects if any
+      if (subjectIds.length > 0) {
+        await tx.subjectTeacher.createMany({
+          data: subjectIds.map((subjectId) => ({
+            teacherId,
+            subjectId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+    });
+  }
+
+  /**
+   * Check if a teacher has a specific subject competency
+   */
+  async hasSubjectCompetency(teacherId: string, subjectId: string): Promise<boolean> {
+    const count = await this.prisma.subjectTeacher.count({
+      where: {
+        teacherId,
+        subjectId,
+      },
+    });
+    return count > 0;
+  }
+
+  /**
+   * Get count of class assignments for a teacher-subject combination
+   */
+  async getTeacherSubjectAssignmentCount(teacherId: string, subjectName: string): Promise<number> {
+    return this.prisma.classTeacher.count({
+      where: {
+        teacherId,
+        subject: subjectName,
+      },
+    });
+  }
+
+  /**
+   * Check if subject exists and belongs to school
+   */
+  async findSubjectById(subjectId: string, schoolId: string): Promise<any | null> {
+    return this.prisma.subject.findFirst({
+      where: {
+        id: subjectId,
+        schoolId,
+        isActive: true,
+      },
+      include: {
+        classLevel: true,
+      },
+    });
+  }
+
+  /**
+   * Get all subjects for a school, optionally filtered by type
+   */
+  async getSchoolSubjects(schoolId: string, schoolType?: string): Promise<any[]> {
+    const where: any = {
+      schoolId,
+      isActive: true,
+    };
+
+    if (schoolType) {
+      where.OR = [
+        { schoolType },
+        { schoolType: null }, // Include subjects that apply to all types
+      ];
+    }
+
+    return this.prisma.subject.findMany({
+      where,
+      include: {
+        classLevel: true,
+      },
+      orderBy: [
+        { schoolType: 'asc' },
+        { name: 'asc' },
+      ],
+    });
+  }
 }
 

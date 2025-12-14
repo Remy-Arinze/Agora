@@ -8,8 +8,15 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { motion } from 'framer-motion';
-import { ArrowLeft, UserPlus } from 'lucide-react';
-import { useGetMySchoolQuery, useAdmitStudentMutation, useGetClassesQuery } from '@/lib/store/api/schoolAdminApi';
+import { UserPlus } from 'lucide-react';
+import { BackButton } from '@/components/ui/BackButton';
+import { 
+  useGetMySchoolQuery, 
+  useAdmitStudentMutation, 
+  useGetClassesQuery,
+  useGetClassArmsQuery,
+  useGetClassLevelsQuery,
+} from '@/lib/store/api/schoolAdminApi';
 import { studentAdmissionFormSchema } from '@/lib/validations/school-forms';
 import { useSchoolType } from '@/hooks/useSchoolType';
 import { z } from 'zod';
@@ -33,6 +40,28 @@ export default function AddStudentPage() {
   );
   const classes = classesResponse?.data || [];
 
+  // Get ClassArms for PRIMARY/SECONDARY schools
+  const isPrimaryOrSecondary = currentType === 'PRIMARY' || currentType === 'SECONDARY';
+  const { data: classArmsResponse } = useGetClassArmsQuery(
+    { schoolId: schoolId!, schoolType: currentType || undefined },
+    { skip: !schoolId || !isPrimaryOrSecondary }
+  );
+  const classArms = classArmsResponse?.data || [];
+  const schoolUsesClassArms = classArms.length > 0;
+
+  // Get ClassLevels for grouping ClassArms
+  const { data: classLevelsResponse } = useGetClassLevelsQuery(
+    { schoolId: schoolId!, schoolType: currentType || undefined },
+    { skip: !schoolId || !isPrimaryOrSecondary }
+  );
+  const classLevels = classLevelsResponse?.data || [];
+
+  // Group ClassArms by ClassLevel
+  const classArmsByLevel = classLevels.reduce((acc, level) => {
+    acc[level.id] = classArms.filter(arm => arm.classLevelId === level.id);
+    return acc;
+  }, {} as Record<string, typeof classArms>);
+
   // Student admission mutation
   const [admitStudent] = useAdmitStudentMutation();
 
@@ -45,6 +74,7 @@ export default function AddStudentPage() {
     phone: '',
     address: '',
     classLevel: '',
+    classArmId: '',
     parentName: '',
     parentPhone: '',
     parentEmail: '',
@@ -122,7 +152,8 @@ export default function AddStudentPage() {
         email: formData.email?.trim() || undefined,
         phone: formData.phone.trim(),
         address: formData.address?.trim() || undefined,
-        classLevel: formData.classLevel,
+        classLevel: formData.classArmId ? undefined : formData.classLevel, // Only send if no ClassArm
+        classArmId: formData.classArmId || undefined,
         academicYear: undefined, // Will be auto-determined by backend
         parentName: formData.parentName.trim(),
         parentPhone: formData.parentPhone.trim(),
@@ -235,12 +266,7 @@ export default function AddStudentPage() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <Link href="/dashboard/school/students">
-            <Button variant="ghost" size="sm" className="mb-4">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Students
-            </Button>
-          </Link>
+          <BackButton fallbackUrl="/dashboard/school/students" className="mb-4" />
           <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
             Add New Student
           </h1>
@@ -347,35 +373,87 @@ export default function AddStudentPage() {
                   Academic Information
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
-                      Class Level *
-                    </label>
-                    <select
-                      name="classLevel"
-                      value={formData.classLevel}
-                      onChange={(e) => {
-                        setFormData({ ...formData, classLevel: e.target.value });
-                        if (errors.classLevel) setErrors({ ...errors, classLevel: '' });
-                      }}
-                      className={`w-full px-4 py-2 border rounded-lg bg-light-card dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 ${
-                        errors.classLevel
-                          ? 'border-red-500 dark:border-red-500'
-                          : 'border-light-border dark:border-dark-border'
-                      }`}
-                      required
-                    >
-                      <option value="">Select class level</option>
-                      {classes.map((cls) => (
-                        <option key={cls.id} value={cls.name}>
-                          {cls.name}
-                        </option>
-                      ))}
-                    </select>
-                    {errors.classLevel && (
-                      <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.classLevel}</p>
-                    )}
-                  </div>
+                  {schoolUsesClassArms && isPrimaryOrSecondary ? (
+                    // ClassArm selector for PRIMARY/SECONDARY schools using ClassArms
+                    <div>
+                      <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
+                        ClassArm *
+                      </label>
+                      <select
+                        name="classArmId"
+                        value={formData.classArmId}
+                        onChange={(e) => {
+                          const selectedArmId = e.target.value;
+                          const selectedArm = classArms.find(arm => arm.id === selectedArmId);
+                          setFormData({ 
+                            ...formData, 
+                            classArmId: selectedArmId,
+                            classLevel: selectedArm ? selectedArm.classLevelName : '', // Auto-populate classLevel
+                          });
+                          if (errors.classArmId) setErrors({ ...errors, classArmId: '' });
+                        }}
+                        className={`w-full px-4 py-2 border rounded-lg bg-light-card dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 ${
+                          errors.classArmId
+                            ? 'border-red-500 dark:border-red-500'
+                            : 'border-light-border dark:border-dark-border'
+                        }`}
+                        required
+                      >
+                        <option value="">Select ClassArm</option>
+                        {classLevels.map((level) => {
+                          const armsForLevel = classArmsByLevel[level.id] || [];
+                          if (armsForLevel.length === 0) return null;
+                          return (
+                            <optgroup key={level.id} label={level.name}>
+                              {armsForLevel.map((arm) => (
+                                <option key={arm.id} value={arm.id}>
+                                  {level.name} {arm.name}
+                                  {arm.capacity && ` (${arm.capacity} max)`}
+                                </option>
+                              ))}
+                            </optgroup>
+                          );
+                        })}
+                      </select>
+                      {errors.classArmId && (
+                        <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.classArmId}</p>
+                      )}
+                      <p className="mt-1 text-xs text-light-text-secondary dark:text-dark-text-secondary">
+                        Select the specific ClassArm (e.g., JSS 1 Gold, JSS 1 Blue)
+                      </p>
+                    </div>
+                  ) : (
+                    // Class selector for TERTIARY or schools without ClassArms (backward compatibility)
+                    <div>
+                      <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
+                        Class Level *
+                      </label>
+                      <select
+                        name="classLevel"
+                        value={formData.classLevel}
+                        onChange={(e) => {
+                          setFormData({ ...formData, classLevel: e.target.value });
+                          if (errors.classLevel) setErrors({ ...errors, classLevel: '' });
+                        }}
+                        className={`w-full px-4 py-2 border rounded-lg bg-light-card dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 ${
+                          errors.classLevel
+                            ? 'border-red-500 dark:border-red-500'
+                            : 'border-light-border dark:border-dark-border'
+                        }`}
+                        required
+                      >
+                        <option value="">Select class level</option>
+                        {classes.map((cls) => (
+                          <option key={cls.id} value={cls.name}>
+                            {cls.name}
+                          </option>
+                        ))}
+                      </select>
+                      {errors.classLevel && (
+                        <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.classLevel}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 

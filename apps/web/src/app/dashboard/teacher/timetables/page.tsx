@@ -66,11 +66,26 @@ export default function TeacherTimetablesPage() {
 
   const timetable = timetableResponse?.data || [];
 
-  // Get all terms from sessions for term selector
+  // Get all terms from sessions for term selector - filtered by school type and deduplicated
   const allTerms = useMemo(() => {
     if (!sessionsResponse?.data) return [];
+    
+    // Filter sessions by current school type to avoid duplicates
+    const filteredSessions = sessionsResponse.data.filter((session) => {
+      if (!currentType) return !session.schoolType;
+      return session.schoolType === currentType;
+    });
+    
+    // Deduplicate sessions by name (keep first/latest)
+    const uniqueSessionsMap = new Map<string, typeof filteredSessions[0]>();
+    filteredSessions.forEach((session) => {
+      if (!uniqueSessionsMap.has(session.name)) {
+        uniqueSessionsMap.set(session.name, session);
+      }
+    });
+    
     const terms: Array<{ id: string; name: string; sessionName: string }> = [];
-    sessionsResponse.data.forEach((session) => {
+    Array.from(uniqueSessionsMap.values()).forEach((session) => {
       if (session.terms) {
         session.terms.forEach((term) => {
           terms.push({
@@ -81,8 +96,14 @@ export default function TeacherTimetablesPage() {
         });
       }
     });
-    return terms.sort((a, b) => b.name.localeCompare(a.name)); // Most recent first
-  }, [sessionsResponse]);
+    
+    // Sort by session name (desc) then term number
+    return terms.sort((a, b) => {
+      const sessionCompare = b.sessionName.localeCompare(a.sessionName);
+      if (sessionCompare !== 0) return sessionCompare;
+      return a.name.localeCompare(b.name);
+    });
+  }, [sessionsResponse, currentType]);
 
   // Set default term to active term when available
   useMemo(() => {

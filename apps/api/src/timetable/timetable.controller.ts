@@ -198,6 +198,21 @@ export class TimetableController {
   }
 
   // Resource endpoints (ClassArms, Subjects, Rooms)
+  @Post('generate-default-classes')
+  @ApiOperation({ summary: 'Generate default classes for a school type (Primary 1-6, JSS1-SS3, Year 1-4)' })
+  @ApiResponse({
+    status: 201,
+    description: 'Classes generated successfully',
+  })
+  @ApiResponse({ status: 409, description: 'Classes already exist for this type' })
+  async generateDefaultClasses(
+    @Param('schoolId') schoolId: string,
+    @Body() dto: { schoolType: 'PRIMARY' | 'SECONDARY' | 'TERTIARY' }
+  ): Promise<ResponseDto<{ created: number; message: string }>> {
+    const data = await this.resourcesService.generateDefaultClasses(schoolId, dto.schoolType);
+    return ResponseDto.ok(data, data.message);
+  }
+
   @Get('class-levels')
   @ApiOperation({ summary: 'Get all class levels for a school, optionally filtered by school type' })
   @ApiResponse({

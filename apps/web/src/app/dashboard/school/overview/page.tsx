@@ -191,11 +191,9 @@ export default function AdminOverviewPage() {
           <div className="flex items-start justify-between">
             <div>
               <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
-                School Overview
+                Overview
               </h1>
-              <p className="text-light-text-secondary dark:text-dark-text-secondary">
-                Manage your school, students, teachers, and academic activities
-              </p>
+              
             </div>
             <div className="flex items-center gap-3">
               {/* School Logo Upload - Passport Size */}
@@ -329,6 +327,51 @@ export default function AdminOverviewPage() {
               </Button>
             </div>
           </div>
+          
+          {/* Term End Date Display - Only show if there's an active term */}
+          {hasActiveTerm && activeSession?.term?.endDate && (() => {
+            const endDate = new Date(activeSession.term.endDate);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            endDate.setHours(0, 0, 0, 0);
+            const daysRemaining = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+            const isPastDue = daysRemaining < 0;
+            const isDueSoon = daysRemaining <= 7 && daysRemaining >= 0;
+            
+            return (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-4 flex items-center gap-2 text-sm"
+              >
+                <Calendar className="h-4 w-4 text-light-text-secondary dark:text-dark-text-secondary flex-shrink-0" />
+                <span className="text-light-text-secondary dark:text-dark-text-secondary">
+                  Current {terminology.periodSingular} ends on{' '}
+                  <span className="font-semibold text-light-text-primary dark:text-dark-text-primary">
+                    {endDate.toLocaleDateString('en-US', {
+                      weekday: 'long',
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                    })}
+                  </span>
+                  {isPastDue ? (
+                    <span className="ml-2 text-red-600 dark:text-red-400 font-semibold">
+                      (Overdue by {Math.abs(daysRemaining)} {Math.abs(daysRemaining) === 1 ? 'day' : 'days'})
+                    </span>
+                  ) : isDueSoon ? (
+                    <span className="ml-2 text-orange-600 dark:text-orange-400 font-semibold">
+                      ({daysRemaining} {daysRemaining === 1 ? 'day' : 'days'} remaining)
+                    </span>
+                  ) : (
+                    <span className="ml-2 text-blue-600 dark:text-blue-400 font-semibold">
+                      ({daysRemaining} {daysRemaining === 1 ? 'day' : 'days'} remaining)
+                    </span>
+                  )}
+                </span>
+              </motion.div>
+            );
+          })()}
         </motion.div>
 
         {/* Error State */}

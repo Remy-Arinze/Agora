@@ -128,6 +128,40 @@ export class TeacherService {
       console.error('Failed to send password reset email to teacher:', error);
     }
 
+    // If subjectIds provided, create SubjectTeacher records
+    if (teacherData.subjectIds && teacherData.subjectIds.length > 0) {
+      try {
+        // Validate all subject IDs belong to this school
+        for (const subjectId of teacherData.subjectIds) {
+          const subject = await this.prisma.subject.findFirst({
+            where: {
+              id: subjectId,
+              schoolId: school.id,
+              isActive: true,
+            },
+          });
+          if (!subject) {
+            console.warn(`Subject ${subjectId} not found or doesn't belong to school, skipping`);
+            continue;
+          }
+          
+          // Create SubjectTeacher record
+          await this.prisma.subjectTeacher.create({
+            data: {
+              teacherId: result.teacher.id,
+              subjectId,
+            },
+          }).catch((e) => {
+            // Skip if duplicate (already exists)
+            if (e.code !== 'P2002') throw e;
+          });
+        }
+      } catch (error) {
+        console.error('Failed to assign subjects to teacher:', error);
+        // Don't fail the whole operation, subjects can be added later
+      }
+    }
+
     return this.staffMapper.toTeacherDto(result.teacher);
   }
 

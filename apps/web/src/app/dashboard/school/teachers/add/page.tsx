@@ -11,7 +11,8 @@ import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { ImageUpload } from '@/components/ui/ImageUpload';
 import { motion } from 'framer-motion';
-import { ArrowLeft, UserPlus, Users } from 'lucide-react';
+import { UserPlus, Users } from 'lucide-react';
+import { BackButton } from '@/components/ui/BackButton';
 import { useAddTeacher, useAddAdmin } from '@/hooks/useSchools';
 import { addTeacherFormSchema, addAdminFormSchema } from '@/lib/validations/school-forms';
 import { z } from 'zod';
@@ -20,6 +21,7 @@ import { useApi } from '@/hooks/useApi';
 import { useSchoolType } from '@/hooks/useSchoolType';
 import { getTerminology } from '@/lib/utils/terminology';
 import { useUploadTeacherImageMutation, useUploadAdminImageMutation } from '@/lib/store/api/schoolsApi';
+import { SubjectMultiSelect } from '@/components/teachers/SubjectMultiSelect';
 import toast from 'react-hot-toast';
 
 type StaffType = 'teacher' | 'admin';
@@ -59,6 +61,7 @@ export default function AddStaffPage() {
     email: '',
     phone: '',
     subject: '',
+    subjectIds: [] as string[], // For SECONDARY schools - multiple subjects
     employeeId: '',
     isTemporary: false,
     profileImage: null as string | null,
@@ -190,16 +193,33 @@ export default function AddStaffPage() {
       }
 
       if (staffType === 'teacher') {
-        const teacherData = {
+        const teacherData: {
+          firstName: string;
+          lastName: string;
+          email: string;
+          phone: string;
+          subject?: string;
+          subjectIds?: string[];
+          isTemporary: boolean;
+          employeeId?: string;
+          profileImage?: string;
+        } = {
           firstName: capitalizeWords(formData.firstName),
           lastName: capitalizeWords(formData.lastName),
           email: formData.email.trim().toLowerCase(),
           phone: formData.phone.trim(),
-          subject: formData.subject.trim() ? capitalizeWords(formData.subject) : undefined,
           isTemporary: formData.isTemporary,
           employeeId: formData.employeeId.trim() || undefined,
           profileImage: profileImageUrl,
         };
+
+        // For SECONDARY schools, use subjectIds for multi-subject support
+        if (currentType === 'SECONDARY' && formData.subjectIds.length > 0) {
+          teacherData.subjectIds = formData.subjectIds;
+        } else if (formData.subject.trim()) {
+          // For PRIMARY/TERTIARY or if no subjectIds, use single subject
+          teacherData.subject = capitalizeWords(formData.subject);
+        }
 
         const result = await addTeacher(teacherData);
         
@@ -270,12 +290,7 @@ export default function AddStaffPage() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <Link href="/dashboard/school/teachers">
-            <Button variant="ghost" size="sm" className="mb-4">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Staff
-            </Button>
-          </Link>
+          <BackButton fallbackUrl="/dashboard/school/teachers" className="mb-4" />
           <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
             Add New {terminology.staffSingular}
           </h1>
@@ -522,43 +537,65 @@ export default function AddStaffPage() {
                   <h3 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary mb-4">
                     Teaching Information
                   </h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Input
-                      label="Subject"
-                      name="subject"
-                      value={formData.subject}
-                      onChange={(e) => {
-                        setFormData({ ...formData, subject: e.target.value });
-                        if (errors.subject) {
-                          setErrors({ ...errors, subject: undefined });
-                        }
-                      }}
-                      onBlur={(e) => {
-                        const capitalized = capitalizeWords(e.target.value);
-                        if (capitalized !== e.target.value) {
-                          setFormData({ ...formData, subject: capitalized });
-                        }
-                      }}
-                      placeholder="e.g., Mathematics, English"
-                      error={errors.subject}
-                    />
-                    <div className="flex items-center gap-3 pt-6">
-                      <input
-                        type="checkbox"
-                        id="isTemporary"
-                        checked={formData.isTemporary}
-                        onChange={(e) =>
-                          setFormData({ ...formData, isTemporary: e.target.checked })
-                        }
-                        className="w-4 h-4 text-blue-600 border-light-border dark:border-dark-border rounded focus:ring-blue-500"
+                  
+                  {/* For SECONDARY schools - Multi-subject selection */}
+                  {currentType === 'SECONDARY' && schoolId && (
+                    <div className="mb-4 relative">
+                      <SubjectMultiSelect
+                        schoolId={schoolId}
+                        selectedSubjectIds={formData.subjectIds}
+                        onChange={(ids) => setFormData({ ...formData, subjectIds: ids })}
+                        schoolType="SECONDARY"
+                        label="Subjects Teacher Can Teach *"
+                        helperText="Select all subjects this teacher is qualified to teach. They can be assigned to different classes for these subjects."
+                        error={errors.subject}
+                        disabled={isLoadingState}
                       />
-                      <label
-                        htmlFor="isTemporary"
-                        className="text-sm text-light-text-primary dark:text-dark-text-primary cursor-pointer"
-                      >
-                        Temporary Staff
-                      </label>
                     </div>
+                  )}
+
+                  {/* For PRIMARY/TERTIARY - Single subject input */}
+                  {currentType !== 'SECONDARY' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <Input
+                        label="Subject"
+                        name="subject"
+                        value={formData.subject}
+                        onChange={(e) => {
+                          setFormData({ ...formData, subject: e.target.value });
+                          if (errors.subject) {
+                            setErrors({ ...errors, subject: undefined });
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const capitalized = capitalizeWords(e.target.value);
+                          if (capitalized !== e.target.value) {
+                            setFormData({ ...formData, subject: capitalized });
+                          }
+                        }}
+                        placeholder="e.g., Mathematics, English"
+                        error={errors.subject}
+                      />
+                    </div>
+                  )}
+
+                  {/* Temporary staff checkbox - applies to all school types */}
+                  <div className="flex items-center gap-3 mt-4">
+                    <input
+                      type="checkbox"
+                      id="isTemporary"
+                      checked={formData.isTemporary}
+                      onChange={(e) =>
+                        setFormData({ ...formData, isTemporary: e.target.checked })
+                      }
+                      className="w-4 h-4 text-blue-600 border-light-border dark:border-dark-border rounded focus:ring-blue-500"
+                    />
+                    <label
+                      htmlFor="isTemporary"
+                      className="text-sm text-light-text-primary dark:text-dark-text-primary cursor-pointer"
+                    >
+                      Temporary Staff
+                    </label>
                   </div>
                 </div>
               )}

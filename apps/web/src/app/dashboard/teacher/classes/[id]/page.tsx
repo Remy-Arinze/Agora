@@ -161,12 +161,26 @@ export default function ClassDetailPage() {
     return Array.from(new Set(sequences));
   }, [allGrades]);
 
-  // Extract all terms from sessions for timetable term selector
+  // Extract all terms from sessions for timetable term selector - filtered by school type and deduplicated
   const timetableTerms = useMemo(() => {
     if (!sessionsResponse?.data) return [];
     
+    // Filter sessions by current school type to avoid duplicates
+    const filteredSessions = sessionsResponse.data.filter((session: any) => {
+      if (!currentType) return !session.schoolType;
+      return session.schoolType === currentType;
+    });
+    
+    // Deduplicate sessions by name (keep first/latest)
+    const uniqueSessionsMap = new Map<string, any>();
+    filteredSessions.forEach((session: any) => {
+      if (!uniqueSessionsMap.has(session.name)) {
+        uniqueSessionsMap.set(session.name, session);
+      }
+    });
+    
     const terms: Array<{ id: string; name: string; sessionName: string }> = [];
-    sessionsResponse.data.forEach((session: any) => {
+    Array.from(uniqueSessionsMap.values()).forEach((session: any) => {
       if (session.terms && Array.isArray(session.terms)) {
         session.terms.forEach((term: any) => {
           terms.push({
@@ -178,7 +192,7 @@ export default function ClassDetailPage() {
       }
     });
     return terms;
-  }, [sessionsResponse]);
+  }, [sessionsResponse, currentType]);
 
   // Determine which term to use for timetable
   const timetableTermId = selectedTimetableTermId || activeSession?.term?.id || '';

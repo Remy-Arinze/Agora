@@ -135,16 +135,43 @@ export default function TimetablesPage() {
   const timetable = timetableResponse?.data || [];
   const timetablesByClass = timetablesResponse?.data || {};
 
-  // Get all terms from sessions
+  // Get all terms from sessions - filtered by current school type and deduplicated
   const allTerms = useMemo(() => {
     if (!sessionsResponse?.data) return [];
-    return sessionsResponse.data.flatMap((session) =>
+    
+    // IMPORTANT: Only show sessions that match the current school type
+    // Each school type (PRIMARY, SECONDARY, TERTIARY) has its own independent sessions
+    const filteredSessions = sessionsResponse.data.filter((session) => {
+      // If no current type selected, show sessions without a school type (legacy)
+      if (!currentType) return !session.schoolType;
+      // Otherwise, only show sessions for the current school type
+      return session.schoolType === currentType;
+    });
+    
+    // Deduplicate sessions by name (keep first/latest)
+    const uniqueSessionsMap = new Map<string, typeof filteredSessions[0]>();
+    filteredSessions.forEach((session) => {
+      // Use session name as key - if duplicate exists, keep the first one (latest by startDate)
+      if (!uniqueSessionsMap.has(session.name)) {
+        uniqueSessionsMap.set(session.name, session);
+      }
+    });
+    const uniqueSessions = Array.from(uniqueSessionsMap.values());
+    
+    // Map terms with session info
+    return uniqueSessions.flatMap((session) =>
       session.terms.map((term) => ({
         ...term,
         sessionName: session.name,
+        schoolType: session.schoolType,
       }))
-    );
-  }, [sessionsResponse]);
+    ).sort((a, b) => {
+      // Sort by session name (desc) then term number (asc)
+      const sessionCompare = b.sessionName.localeCompare(a.sessionName);
+      if (sessionCompare !== 0) return sessionCompare;
+      return a.number - b.number;
+    });
+  }, [sessionsResponse, currentType]);
 
   // Auto-select active term if available, reset when school type changes
   useEffect(() => {
@@ -180,6 +207,12 @@ export default function TimetablesPage() {
         }))
       );
 
+    // Check if the selected class has a classArmId (it's a ClassArm-based class)
+    // The class list returns classArmId for ClassArm records (PRIMARY/SECONDARY with arms)
+    // Legacy Class records (auto-generated before ClassArm system) don't have classArmId
+    const selectedClass = classes.find((c) => c.id === newTimetableClassId);
+    const hasClassArmId = selectedClass?.classArmId;
+
     try {
       // Create master schedule for the selected class
       // Note: We'll need to update createMasterSchedule to support classId
@@ -189,7 +222,11 @@ export default function TimetablesPage() {
           schoolId,
           data: {
             ...periodDef,
-            classId: newTimetableClassId,
+            // Use classArmId if the class has one (ClassArm-based), otherwise use classId
+            ...(hasClassArmId 
+              ? { classArmId: newTimetableClassId }
+              : { classId: newTimetableClassId }
+            ),
             termId: newTimetableTermId,
           },
         }).unwrap();
@@ -238,6 +275,9 @@ export default function TimetablesPage() {
         }).unwrap();
         toast.success('Period updated successfully');
       } else {
+        // Check if the selected class has a classArmId (ClassArm-based class)
+        const hasClassArmId = selectedClass?.classArmId;
+        
         await createPeriod({
           schoolId,
           data: {
@@ -247,7 +287,11 @@ export default function TimetablesPage() {
             type: slot.period.type as PeriodType,
             subjectId: currentType !== 'TERTIARY' ? subjectId : undefined,
             courseId: currentType === 'TERTIARY' ? courseId : undefined,
-            classId: selectedClassId,
+            // Use classArmId if the class has one, otherwise use classId
+            ...(hasClassArmId 
+              ? { classArmId: selectedClassId }
+              : { classId: selectedClassId }
+            ),
             termId: selectedTermId,
           },
         }).unwrap();
@@ -325,6 +369,9 @@ export default function TimetablesPage() {
           }
         } else {
           // Period doesn't exist - create new one
+          // Check if the selected class has a classArmId (ClassArm-based class)
+          const hasClassArmId = selectedClass?.classArmId;
+          
           await createPeriod({
             schoolId,
             data: {
@@ -334,7 +381,11 @@ export default function TimetablesPage() {
               type: period.type as PeriodType,
               subjectId: currentType !== 'TERTIARY' ? period.subjectId : undefined,
               courseId: currentType === 'TERTIARY' ? period.courseId : undefined,
-              classId: selectedClassId,
+              // Use classArmId if the class has one, otherwise use classId
+              ...(hasClassArmId 
+                ? { classArmId: selectedClassId }
+                : { classId: selectedClassId }
+              ),
               termId: selectedTermId,
             },
           }).unwrap();
@@ -416,6 +467,9 @@ export default function TimetablesPage() {
           }).unwrap();
         } else {
           // Create new period
+          // Check if the selected class has a classArmId (ClassArm-based class)
+          const hasClassArmId = selectedClass?.classArmId;
+          
           await createPeriod({
             schoolId,
             data: {
@@ -425,7 +479,11 @@ export default function TimetablesPage() {
               type: period.type as PeriodType,
               subjectId: currentType !== 'TERTIARY' ? period.subjectId : undefined,
               courseId: currentType === 'TERTIARY' ? period.courseId : undefined,
-              classId: selectedClassId,
+              // Use classArmId if the class has one, otherwise use classId
+              ...(hasClassArmId 
+                ? { classArmId: selectedClassId }
+                : { classId: selectedClassId }
+              ),
               termId: selectedTermId,
             },
           }).unwrap();

@@ -4,13 +4,16 @@ import {
   Post,
   Delete,
   Patch,
+  Put,
   Body,
   Param,
+  Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { AdminService } from './admins/admin.service';
 import { TeacherService } from './teachers/teacher.service';
+import { TeacherSubjectsService } from './teachers/teacher-subjects.service';
 import { AddAdminDto } from '../dto/add-admin.dto';
 import { AddTeacherDto } from '../dto/add-teacher.dto';
 import { UpdateAdminDto } from '../dto/update-admin.dto';
@@ -18,6 +21,13 @@ import { UpdateTeacherDto } from '../dto/update-teacher.dto';
 import { UpdatePrincipalDto } from '../dto/update-principal.dto';
 import { ConvertTeacherToAdminDto } from '../dto/convert-teacher-to-admin.dto';
 import { AssignPermissionsDto } from '../dto/permission.dto';
+import { 
+  UpdateTeacherSubjectsDto, 
+  AddTeacherSubjectDto,
+  TeacherSubjectDto,
+  TeacherWithSubjectsDto,
+  AssignableSubjectDto,
+} from '../dto/teacher-subjects.dto';
 import { ResponseDto } from '../../common/dto/response.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { SchoolDataAccessGuard } from '../../common/guards/school-data-access.guard';
@@ -38,6 +48,7 @@ export class StaffController {
   constructor(
     private readonly adminService: AdminService,
     private readonly teacherService: TeacherService,
+    private readonly teacherSubjectsService: TeacherSubjectsService,
     private readonly permissionService: PermissionService,
     private readonly staffImportService: StaffImportService,
     private readonly authService: AuthService
@@ -187,6 +198,131 @@ export class StaffController {
   ): Promise<ResponseDto<void>> {
     await this.teacherService.deleteTeacher(schoolId, teacherId);
     return ResponseDto.ok(undefined, 'Teacher deleted successfully');
+  }
+
+  // =====================
+  // Teacher Subject Competencies
+  // =====================
+
+  @Get('teachers/:teacherId/subjects')
+  @ApiOperation({ 
+    summary: 'Get subjects a teacher is qualified to teach',
+    description: 'Returns all subjects the teacher can teach along with assignment counts'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Teacher subjects retrieved successfully',
+    type: [TeacherSubjectDto],
+  })
+  @ApiResponse({ status: 404, description: 'Teacher not found' })
+  async getTeacherSubjects(
+    @Param('schoolId') schoolId: string,
+    @Param('teacherId') teacherId: string
+  ): Promise<ResponseDto<TeacherSubjectDto[]>> {
+    const data = await this.teacherSubjectsService.getTeacherSubjects(schoolId, teacherId);
+    return ResponseDto.ok(data, 'Teacher subjects retrieved successfully');
+  }
+
+  @Get('teachers/:teacherId/subjects/details')
+  @ApiOperation({ 
+    summary: 'Get teacher with all subject competencies and assignment totals',
+    description: 'Returns teacher info with subjects and total class assignments'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Teacher with subjects retrieved successfully',
+    type: TeacherWithSubjectsDto,
+  })
+  @ApiResponse({ status: 404, description: 'Teacher not found' })
+  async getTeacherWithSubjects(
+    @Param('schoolId') schoolId: string,
+    @Param('teacherId') teacherId: string
+  ): Promise<ResponseDto<TeacherWithSubjectsDto>> {
+    const data = await this.teacherSubjectsService.getTeacherWithSubjects(schoolId, teacherId);
+    return ResponseDto.ok(data, 'Teacher with subjects retrieved successfully');
+  }
+
+  @Put('teachers/:teacherId/subjects')
+  @ApiOperation({ 
+    summary: 'Update all subjects a teacher can teach',
+    description: 'Replaces all existing subject competencies with the provided list'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Teacher subjects updated successfully',
+    type: [TeacherSubjectDto],
+  })
+  @ApiResponse({ status: 404, description: 'Teacher or subject not found' })
+  @ApiResponse({ status: 400, description: 'Invalid subject IDs' })
+  async updateTeacherSubjects(
+    @Param('schoolId') schoolId: string,
+    @Param('teacherId') teacherId: string,
+    @Body() dto: UpdateTeacherSubjectsDto
+  ): Promise<ResponseDto<TeacherSubjectDto[]>> {
+    const data = await this.teacherSubjectsService.updateTeacherSubjects(schoolId, teacherId, dto);
+    return ResponseDto.ok(data, 'Teacher subjects updated successfully');
+  }
+
+  @Post('teachers/:teacherId/subjects')
+  @ApiOperation({ 
+    summary: 'Add a subject to teacher competencies',
+    description: 'Adds a single subject the teacher can teach'
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Subject added to teacher successfully',
+    type: TeacherSubjectDto,
+  })
+  @ApiResponse({ status: 404, description: 'Teacher or subject not found' })
+  @ApiResponse({ status: 409, description: 'Teacher already has this subject' })
+  async addTeacherSubject(
+    @Param('schoolId') schoolId: string,
+    @Param('teacherId') teacherId: string,
+    @Body() dto: AddTeacherSubjectDto
+  ): Promise<ResponseDto<TeacherSubjectDto>> {
+    const data = await this.teacherSubjectsService.addTeacherSubject(schoolId, teacherId, dto.subjectId);
+    return ResponseDto.ok(data, 'Subject added to teacher successfully');
+  }
+
+  @Delete('teachers/:teacherId/subjects/:subjectId')
+  @ApiOperation({ 
+    summary: 'Remove a subject from teacher competencies',
+    description: 'Removes a subject from teacher. Will fail if teacher is currently teaching this subject in any class.'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Subject removed from teacher successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Teacher or subject not found' })
+  @ApiResponse({ status: 409, description: 'Cannot remove subject - teacher is currently teaching it' })
+  async removeTeacherSubject(
+    @Param('schoolId') schoolId: string,
+    @Param('teacherId') teacherId: string,
+    @Param('subjectId') subjectId: string
+  ): Promise<ResponseDto<void>> {
+    await this.teacherSubjectsService.removeTeacherSubject(schoolId, teacherId, subjectId);
+    return ResponseDto.ok(undefined, 'Subject removed from teacher successfully');
+  }
+
+  @Get('teachers/:teacherId/assignable-subjects')
+  @ApiOperation({ 
+    summary: 'Get subjects a teacher can be assigned to for a specific class',
+    description: 'Returns subjects from teacher competencies, indicating which are already assigned to the class'
+  })
+  @ApiQuery({ name: 'classId', required: true, description: 'Class or ClassArm ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Assignable subjects retrieved successfully',
+    type: [AssignableSubjectDto],
+  })
+  @ApiResponse({ status: 404, description: 'Teacher not found' })
+  async getAssignableSubjects(
+    @Param('schoolId') schoolId: string,
+    @Param('teacherId') teacherId: string,
+    @Query('classId') classId: string
+  ): Promise<ResponseDto<AssignableSubjectDto[]>> {
+    const data = await this.teacherSubjectsService.getAssignableSubjects(schoolId, teacherId, classId);
+    return ResponseDto.ok(data, 'Assignable subjects retrieved successfully');
   }
 
   // Principal endpoints

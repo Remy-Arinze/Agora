@@ -34,7 +34,14 @@ export class TenantMiddleware implements NestMiddleware {
       url.startsWith('/swagger') ||
       url.startsWith('/api/swagger');
 
-    if (isAuthRoute || isSuperAdminRoute || isSwaggerRoute) {
+    // Skip tenant validation for public routes (landing page data)
+    const isPublicRoute = 
+      path.startsWith('/public') || 
+      path.startsWith('/api/public') ||
+      url.startsWith('/public') ||
+      url.startsWith('/api/public');
+
+    if (isAuthRoute || isSuperAdminRoute || isSwaggerRoute || isPublicRoute) {
       // Allow these routes to proceed without tenant validation
       return next();
     }

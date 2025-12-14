@@ -20,6 +20,10 @@ import { EventsModule } from './events/events.module';
 import { GradesModule } from './grades/grades.module';
 import { GoogleCalendarModule } from './integrations/google-calendar/google-calendar.module';
 import { CloudinaryModule } from './storage/cloudinary/cloudinary.module';
+import { PublicModule } from './public/public.module';
+import { SubscriptionsModule } from './subscriptions/subscriptions.module';
+import { AiModule } from './ai/ai.module';
+import { PaymentsModule } from './payments/payments.module';
 
 @Module({
   imports: [
@@ -49,6 +53,10 @@ import { CloudinaryModule } from './storage/cloudinary/cloudinary.module';
     GradesModule,
     GoogleCalendarModule,
     CloudinaryModule,
+    PublicModule,
+    SubscriptionsModule,
+    AiModule,
+    PaymentsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

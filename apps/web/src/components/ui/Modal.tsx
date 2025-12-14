@@ -55,7 +55,7 @@ export function Modal({ isOpen, onClose, title, children, size = 'md' }: ModalPr
                 </button>
               </div>
               {/* Content */}
-              <div className="flex-1 overflow-y-auto p-6">{children}</div>
+              <div className="flex-1 overflow-y-auto p-6 scrollbar-hide">{children}</div>
             </motion.div>
           </div>
         </>

@@ -33,9 +33,15 @@ export class AddStudentDto {
   @IsString()
   address?: string;
 
-  @ApiProperty({ description: 'Class level (e.g., JSS1, SS1, Class 1)' })
+  @ApiPropertyOptional({ description: 'Class level (e.g., JSS1, SS1, Class 1) - Required if classArmId not provided' })
+  @IsOptional()
   @IsString()
-  classLevel: string;
+  classLevel?: string;
+
+  @ApiPropertyOptional({ description: 'ClassArm ID (for PRIMARY/SECONDARY schools using ClassArms) - Preferred over classLevel' })
+  @IsOptional()
+  @IsString()
+  classArmId?: string;
 
   @ApiPropertyOptional({ description: 'Academic year (e.g., 2024/2025)' })
   @IsOptional()

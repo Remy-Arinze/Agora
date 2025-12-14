@@ -63,5 +63,11 @@ export class ClassDto {
 
   @ApiProperty()
   studentsCount: number;
+
+  @ApiProperty({ required: false, description: 'Only present for ClassArm-based classes' })
+  classArmId?: string;
+
+  @ApiProperty({ required: false, description: 'Only present for ClassArm-based classes' })
+  classLevelId?: string;
 }
 

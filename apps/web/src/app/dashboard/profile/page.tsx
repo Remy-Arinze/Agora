@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, Suspense } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useSelector } from 'react-redux';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
@@ -130,6 +130,7 @@ const teachingHistory = [
 function ProfilePageContent() {
   const user = useSelector((state: RootState) => state.auth.user);
   const pathname = usePathname();
+  const router = useRouter();
   const [expandedSchool, setExpandedSchool] = useState<string | null>(null);
   const [expandedYear, setExpandedYear] = useState<string | null>(null);
 
@@ -182,10 +183,18 @@ function ProfilePageContent() {
                   : 'View and manage your profile information'}
               </p>
             </div>
-            <Button variant="ghost" size="sm">
-              <Edit className="h-4 w-4 mr-2" />
-              Edit Profile
-            </Button>
+            {user?.role === 'SCHOOL_ADMIN' && (
+              <Button 
+                variant="ghost" 
+                size="sm"
+                onClick={() => {
+                  router.push('/dashboard/school/settings/profile');
+                }}
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Edit School Profile
+              </Button>
+            )}
           </div>
         </motion.div>
 

@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service';
 import { AuthService } from '../../../auth/auth.service';
 import { SchoolRepository } from '../../domain/repositories/school.repository';
@@ -6,6 +6,7 @@ import { StaffRepository } from '../../domain/repositories/staff.repository';
 import { StaffMapper } from '../../domain/mappers/staff.mapper';
 import { IdGeneratorService } from '../../shared/id-generator.service';
 import { StaffValidatorService } from '../../shared/staff-validator.service';
+import { SubscriptionsService } from '../../../subscriptions/subscriptions.service';
 import { AddAdminDto } from '../../dto/add-admin.dto';
 import { UpdateAdminDto } from '../../dto/update-admin.dto';
 import { CloudinaryService } from '../../../storage/cloudinary/cloudinary.service';
@@ -25,7 +26,8 @@ export class AdminService {
     private readonly staffMapper: StaffMapper,
     private readonly idGenerator: IdGeneratorService,
     private readonly staffValidator: StaffValidatorService,
-    private readonly cloudinaryService: CloudinaryService
+    private readonly cloudinaryService: CloudinaryService,
+    private readonly subscriptionsService: SubscriptionsService
   ) {}
 
   /**
@@ -36,6 +38,12 @@ export class AdminService {
     const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
     if (!school) {
       throw new BadRequestException('School not found');
+    }
+
+    // Check admin limit based on subscription tier
+    const adminLimit = await this.subscriptionsService.checkAdminLimit(school.id);
+    if (!adminLimit.canAdd) {
+      throw new ForbiddenException(adminLimit.message);
     }
 
     // Validate staff data
@@ -410,6 +418,12 @@ export class AdminService {
     const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
     if (!school) {
       throw new BadRequestException('School not found');
+    }
+
+    // Check admin limit based on subscription tier
+    const adminLimit = await this.subscriptionsService.checkAdminLimit(school.id);
+    if (!adminLimit.canAdd) {
+      throw new ForbiddenException(adminLimit.message);
     }
 
     // Validate teacher exists

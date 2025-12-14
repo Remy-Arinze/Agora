@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { DatabaseModule } from '../database/database.module';
 import { AuthModule } from '../auth/auth.module';
 import { EmailModule } from '../email/email.module';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 
 // Legacy controller and service - DEPRECATED: Will be removed after migration verification
 // import { SchoolsController } from './schools.controller';
@@ -19,6 +20,7 @@ import { SchoolAdminSchoolsService } from './school-admin/school-admin-schools.s
 import { StaffController } from './staff/staff.controller';
 import { AdminService } from './staff/admins/admin.service';
 import { TeacherService } from './staff/teachers/teacher.service';
+import { TeacherSubjectsService } from './staff/teachers/teacher-subjects.service';
 import { TeacherController } from './staff/teachers/teacher.controller';
 import { TeacherCurrentSchoolService } from './staff/teachers/teacher-current-school.service';
 import { PermissionService } from './staff/permissions/permission.service';
@@ -29,6 +31,10 @@ import { ClassController } from './classes/class.controller';
 import { ClassService } from './classes/class.service';
 import { ClassResourceController } from './classes/class-resource.controller';
 import { ClassResourceService } from './classes/class-resource.service';
+
+// Faculties & Departments (Tertiary)
+import { FacultyController, DepartmentController, LevelController } from './faculties/faculty.controller';
+import { FacultyService } from './faculties/faculty.service';
 
 // Curriculum
 import { CurriculumModule } from './curriculum/curriculum.module';
@@ -49,7 +55,7 @@ import { StaffValidatorService } from './shared/staff-validator.service';
 import { CloudinaryModule } from '../storage/cloudinary/cloudinary.module';
 
 @Module({
-  imports: [DatabaseModule, forwardRef(() => AuthModule), EmailModule, CurriculumModule, CloudinaryModule],
+  imports: [DatabaseModule, forwardRef(() => AuthModule), EmailModule, CurriculumModule, CloudinaryModule, SubscriptionsModule],
   controllers: [
     // New architecture controllers
     SuperAdminSchoolsController,
@@ -58,6 +64,9 @@ import { CloudinaryModule } from '../storage/cloudinary/cloudinary.module';
     TeacherController,
     ClassController,
     ClassResourceController,
+    FacultyController,
+    DepartmentController,
+    LevelController,
     // Legacy controller - DEPRECATED: Commented out, remove after verification
     // SchoolsController,
   ],
@@ -67,11 +76,13 @@ import { CloudinaryModule } from '../storage/cloudinary/cloudinary.module';
     SchoolAdminSchoolsService,
     AdminService,
     TeacherService,
+    TeacherSubjectsService,
     TeacherCurrentSchoolService,
     PermissionService,
     StaffImportService,
     ClassService,
     ClassResourceService,
+    FacultyService,
     // Repositories
     SchoolRepository,
     StaffRepository,
@@ -91,8 +102,10 @@ import { CloudinaryModule } from '../storage/cloudinary/cloudinary.module';
     SchoolAdminSchoolsService,
     AdminService,
     TeacherService,
+    TeacherSubjectsService,
     ClassService,
     ClassResourceService,
+    FacultyService,
     SchoolRepository,
     StaffRepository,
     SchoolScopedRepository,

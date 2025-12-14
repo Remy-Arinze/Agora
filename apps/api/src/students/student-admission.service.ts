@@ -140,12 +140,72 @@ export class StudentAdmissionService {
           },
         });
 
+        // Handle ClassArm enrollment (for PRIMARY/SECONDARY schools using ClassArms)
+        let enrollmentClassLevel = studentData.classLevel;
+        let enrollmentClassArmId: string | null = null;
+        let enrollmentClassId: string | null = null;
+
+        if (studentData.classArmId) {
+          // Validate ClassArm exists and belongs to school
+          const classArm = await tx.classArm.findUnique({
+            where: { id: studentData.classArmId },
+            include: {
+              classLevel: true,
+            },
+          });
+
+          if (!classArm || classArm.classLevel.schoolId !== school.id) {
+            throw new BadRequestException('ClassArm not found or does not belong to this school');
+          }
+
+          // Validate capacity if set
+          if (classArm.capacity !== null) {
+            const currentEnrollments = await tx.enrollment.count({
+              where: {
+                classArmId: classArm.id,
+                isActive: true,
+                academicYear,
+              },
+            });
+
+            if (currentEnrollments >= classArm.capacity) {
+              throw new BadRequestException(`ClassArm "${classArm.name}" is at full capacity (${classArm.capacity} students)`);
+            }
+          }
+
+          enrollmentClassArmId = classArm.id;
+          enrollmentClassLevel = classArm.classLevel.name; // Auto-populate from ClassArm's ClassLevel
+        } else if (studentData.classLevel) {
+          // Fallback to Class (for schools without ClassArms or TERTIARY - backward compatibility)
+          // Try to find a matching Class
+          const matchingClass = await tx.class.findFirst({
+            where: {
+              schoolId: school.id,
+              academicYear: academicYear,
+              OR: [
+                { name: studentData.classLevel },
+                { classLevel: studentData.classLevel },
+              ],
+              isActive: true,
+            },
+          });
+
+          if (matchingClass) {
+            enrollmentClassId = matchingClass.id;
+          }
+          // If no matching class found, enrollment will be created with just classLevel (backward compatibility)
+        } else {
+          throw new BadRequestException('Either classArmId or classLevel must be provided');
+        }
+
         // Create enrollment with term link
         await tx.enrollment.create({
           data: {
             studentId: newStudent.id,
             schoolId: school.id,
-            classLevel: studentData.classLevel,
+            classArmId: enrollmentClassArmId,
+            classId: enrollmentClassId,
+            classLevel: enrollmentClassLevel,
             academicYear: academicYear,
             isActive: true,
             termId: activeTerm?.id || null, // Link to active term if exists

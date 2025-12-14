@@ -4,9 +4,9 @@ import { useState } from 'react';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Alert } from '@/components/ui/Alert';
+import { SearchInput } from '@/components/ui/SearchInput';
 import { motion } from 'framer-motion';
 import { 
   Puzzle,
@@ -14,7 +14,6 @@ import {
   Smartphone,
   CreditCard,
   BookOpen,
-  Search,
   CheckCircle2,
   XCircle,
   Star,
@@ -177,17 +176,13 @@ export default function MarketplacePage() {
         <Card className="mb-6">
           <CardContent className="pt-6">
             <div className="flex flex-col md:flex-row items-stretch md:items-center gap-4">
-              <div className="flex-1">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-light-text-muted dark:text-dark-text-muted" />
-                  <Input
-                    placeholder="Search plugins..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-              </div>
+              <SearchInput
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="Search plugins..."
+                containerClassName="flex-1"
+                size="lg"
+              />
               <div className="flex items-center gap-2 flex-wrap">
                 {categories.map((category) => (
                   <Button

@@ -1045,5 +1045,113 @@ export class EmailService {
     this.logger.log(`Bulk ${emailType} emails completed: ${sent} sent, ${failed} failed`);
     return { sent, failed };
   }
+
+  /**
+   * Send school profile edit verification email
+   */
+  async sendSchoolProfileEditVerificationEmail(
+    email: string,
+    name: string,
+    schoolName: string,
+    token: string,
+    verificationUrl: string,
+    changes: any
+  ): Promise<void> {
+    const fromEmail = this.configService.get<string>('MAIL_FROM') || 
+                      this.configService.get<string>('SMTP_FROM') || 
+                      this.configService.get<string>('MAIL_USER') || 
+                      this.configService.get<string>('SMTP_USER');
+    
+    if (!fromEmail) {
+      this.logger.error('No FROM email address configured. Check MAIL_FROM or SMTP_FROM environment variable.');
+      throw new Error('Email configuration error: No FROM address');
+    }
+
+    // Format changes for display
+    const changesList: string[] = [];
+    if (changes.levels) {
+      if (changes.levels.primary !== undefined) {
+        changesList.push(`Primary School: ${changes.levels.primary ? 'Enable' : 'Disable'}`);
+      }
+      if (changes.levels.secondary !== undefined) {
+        changesList.push(`Secondary School: ${changes.levels.secondary ? 'Enable' : 'Disable'}`);
+      }
+      if (changes.levels.tertiary !== undefined) {
+        changesList.push(`Tertiary/University: ${changes.levels.tertiary ? 'Enable' : 'Disable'}`);
+      }
+    }
+    if (changes.name) changesList.push(`School Name: ${changes.name}`);
+    if (changes.address) changesList.push(`Address: ${changes.address}`);
+    if (changes.city) changesList.push(`City: ${changes.city}`);
+    if (changes.state) changesList.push(`State: ${changes.state}`);
+    if (changes.phone) changesList.push(`Phone: ${changes.phone}`);
+    if (changes.email) changesList.push(`Email: ${changes.email}`);
+
+    const mailOptions = {
+      from: fromEmail,
+      to: email,
+      subject: `Verify School Profile Changes - ${schoolName}`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Verify School Profile Changes</title>
+        </head>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background-color: #3b82f6; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+            <h1 style="color: white; margin: 0;">Agora Education Platform</h1>
+          </div>
+          <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
+            <h2 style="color: #1f2937; margin-top: 0;">Verify School Profile Changes</h2>
+            <p>Hello ${name},</p>
+            <p>A request has been made to update the profile information for <strong>${schoolName}</strong>.</p>
+            
+            <div style="background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px;">
+              <h3 style="margin-top: 0; color: #1e40af;">Proposed Changes:</h3>
+              <ul style="margin: 0; padding-left: 20px; color: #1e40af;">
+                ${changesList.map(change => `<li>${change}</li>`).join('')}
+              </ul>
+            </div>
+
+            <p>To verify and apply these changes, please click the button below:</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${verificationUrl}" style="background-color: #3b82f6; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">Verify Changes</a>
+            </div>
+            
+            <div style="background-color: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 4px;">
+              <p style="margin: 0; color: #92400e; font-size: 14px;">
+                <strong>Security Token:</strong><br>
+                <code style="background-color: white; padding: 8px; border-radius: 4px; font-size: 12px; word-break: break-all; display: inline-block; margin-top: 8px;">${token}</code>
+              </p>
+            </div>
+
+            <p style="color: #6b7280; font-size: 14px;">Or copy and paste this link into your browser:</p>
+            <p style="color: #6b7280; font-size: 12px; word-break: break-all;">${verificationUrl}</p>
+            
+            <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+              <strong>Note:</strong> This verification link will expire in 24 hours. If you didn't request these changes, please ignore this email or contact support immediately.
+            </p>
+            
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+            <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
+              © ${new Date().getFullYear()} Agora Education Platform. All rights reserved.
+            </p>
+          </div>
+        </body>
+        </html>
+      `,
+    };
+
+    try {
+      this.logger.log(`Attempting to send school profile edit verification email to ${email}`);
+      const result = await this.transporter.sendMail(mailOptions);
+      this.logger.log(`School profile edit verification email sent successfully to ${email}. MessageId: ${result.messageId}`);
+    } catch (error: any) {
+      this.logger.error(`Failed to send email to ${email}:`, error);
+      throw error;
+    }
+  }
 }
 

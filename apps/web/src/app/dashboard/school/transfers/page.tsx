@@ -8,9 +8,9 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { Modal } from '@/components/ui/Modal';
+import { SearchInput } from '@/components/ui/SearchInput';
 import { motion } from 'framer-motion';
 import {
-  Search,
   CheckCircle2,
   XCircle,
   Clock,
@@ -797,17 +797,13 @@ export default function TransfersPage() {
                     <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
                       Incoming Transfer Requests ({filteredIncoming.length})
                     </CardTitle>
-                    <div className="flex-1 max-w-md ml-4">
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-light-text-muted dark:text-dark-text-muted" />
-                        <Input
-                          placeholder="Search by student name or ID..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="pl-10"
-                        />
-                      </div>
-                    </div>
+                    <SearchInput
+                      value={searchQuery}
+                      onChange={setSearchQuery}
+                      placeholder="Search by student name or ID..."
+                      containerClassName="flex-1 max-w-md ml-4"
+                      size="lg"
+                    />
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -919,17 +915,13 @@ export default function TransfersPage() {
                       Outgoing Transfers ({filteredOutgoing.length})
                     </CardTitle>
                     <div className="flex items-center gap-3">
-                      <div className="flex-1 max-w-md">
-                        <div className="relative">
-                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-light-text-muted dark:text-dark-text-muted" />
-                          <Input
-                            placeholder="Search by student name or ID..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="pl-10"
-                          />
-                        </div>
-                      </div>
+                      <SearchInput
+                        value={searchQuery}
+                        onChange={setSearchQuery}
+                        placeholder="Search by student name or ID..."
+                        containerClassName="flex-1 max-w-md"
+                        size="lg"
+                      />
                       <Button
                         variant="primary"
                         size="sm"
@@ -1106,18 +1098,15 @@ export default function TransfersPage() {
                 <label className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2 block">
                   Search Student
                 </label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-light-text-muted dark:text-dark-text-muted" />
-                  <Input
-                    placeholder="Search by name or student ID..."
-                    value={studentSearchQuery}
-                    onChange={(e) => {
-                      setStudentSearchQuery(e.target.value);
-                      setSelectedStudentId(''); // Clear selection when searching
-                    }}
-                    className="pl-10"
-                  />
-                </div>
+                <SearchInput
+                  value={studentSearchQuery}
+                  onChange={(value) => {
+                    setStudentSearchQuery(value);
+                    setSelectedStudentId(''); // Clear selection when searching
+                  }}
+                  placeholder="Search by name or student ID..."
+                  size="md"
+                />
               </div>
               {studentSearchQuery && !selectedStudentId && (
                 <div className="max-h-60 overflow-y-auto border border-light-border dark:border-dark-border rounded-lg">

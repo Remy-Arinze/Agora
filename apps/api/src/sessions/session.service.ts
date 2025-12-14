@@ -905,20 +905,54 @@ export class SessionService {
         continue;
       }
 
-      // Find class arm for next level
-      const nextClassArm = await this.prisma.classArm.findFirst({
+      // Find class arm for next level (for PRIMARY/SECONDARY schools using ClassArms)
+      // Get current academic year
+      const now = new Date();
+      const year = now.getFullYear();
+      const academicYear = now.getMonth() >= 8 ? `${year}/${year + 1}` : `${year - 1}/${year}`;
+
+      let nextClassArmId: string | null = null;
+      let nextClassId: string | null = null;
+
+      // Check if next level has ClassArms
+      const nextLevelArms = await this.prisma.classArm.findMany({
         where: {
           classLevelId: nextLevel.id,
+          academicYear: academicYear,
           isActive: true,
         },
+        orderBy: { name: 'asc' },
       });
+
+      if (nextLevelArms.length > 0) {
+        // School uses ClassArms - distribute students evenly across arms
+        // Simple round-robin distribution
+        const armIndex = promotedCount % nextLevelArms.length;
+        nextClassArmId = nextLevelArms[armIndex].id;
+      } else {
+        // No ClassArms - try to find a Class for this level
+        const nextClass = await this.prisma.class.findFirst({
+          where: {
+            schoolId: schoolId,
+            OR: [
+              { name: nextLevel.name },
+              { classLevel: nextLevel.name },
+            ],
+            isActive: true,
+          },
+        });
+        if (nextClass) {
+          nextClassId = nextClass.id;
+        }
+      }
 
       // Create new enrollment
       await this.prisma.enrollment.create({
         data: {
           studentId: enrollment.studentId,
           schoolId: schoolId,
-          classArmId: nextClassArm?.id || null,
+          classArmId: nextClassArmId,
+          classId: nextClassId,
           termId: termId,
           classLevel: nextLevel.name,
           academicYear: enrollment.academicYear,

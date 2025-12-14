@@ -6,9 +6,9 @@ import Link from 'next/link';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
+import { SearchInput } from '@/components/ui/SearchInput';
 import { motion } from 'framer-motion';
-import { GraduationCap, Plus, Search, FileSpreadsheet, Loader2 } from 'lucide-react';
+import { GraduationCap, Plus, FileSpreadsheet, Loader2 } from 'lucide-react';
 import { useGetStudentsQuery, useGetMySchoolQuery } from '@/lib/store/api/schoolAdminApi';
 import { useSchoolType } from '@/hooks/useSchoolType';
 import { StudentImportModal } from '@/components/modals/StudentImportModal';
@@ -123,17 +123,13 @@ export default function StudentsPage() {
               <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
                 All Students ({filteredStudents.length})
               </CardTitle>
-              <div className="w-[40%]">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-light-text-muted dark:text-dark-text-muted" />
-                  <Input
-                    placeholder="Search by name, student ID..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-              </div>
+              <SearchInput
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder="Search by name, student ID..."
+                containerClassName="w-[40%]"
+                size="lg"
+              />
             </div>
           </CardHeader>
           <CardContent>

@@ -313,6 +313,144 @@ async function main() {
     },
   });
 
+  // ============================================
+  // SEED TOOLS
+  // ============================================
+  console.log('\n🔧 Seeding Tools...');
+
+  const tools = [
+    {
+      slug: 'prepmaster',
+      name: 'PrepMaster',
+      description: 'AI-powered study companion for students. Generate flashcards, summaries, and quizzes from curriculum.',
+      icon: '🧠',
+      monthlyPrice: 0, // Included in Starter+
+      yearlyPrice: 0,
+      isCore: false,
+      features: [
+        { name: 'AI Flashcards', description: 'Generate flashcards from curriculum topics' },
+        { name: 'Study Summaries', description: 'AI-generated topic summaries' },
+        { name: 'Quick Quizzes', description: 'Self-assessment quizzes' },
+        { name: 'Spaced Repetition', description: 'Smart review scheduling' },
+        { name: 'Progress Tracking', description: 'Track study progress' },
+      ],
+      targetRoles: ['STUDENT'],
+      sortOrder: 1,
+    },
+    {
+      slug: 'socrates',
+      name: 'Socrates',
+      description: "The Teacher's Copilot. AI-powered lesson planning, assessment creation, and grading assistance.",
+      icon: '🤖',
+      monthlyPrice: 0, // Included in Professional+
+      yearlyPrice: 0,
+      isCore: false,
+      features: [
+        { name: 'Lesson Plans', description: 'AI-generated NERDC-aligned lesson plans' },
+        { name: 'Assessment Builder', description: 'Create tests, assignments, exams' },
+        { name: 'AI Question Generation', description: 'Generate questions from curriculum' },
+        { name: 'AI Grading', description: 'AI-assisted essay and short answer grading' },
+        { name: 'Question Bank', description: 'Reusable question library' },
+        { name: 'Rubrics', description: 'Create and manage grading rubrics' },
+      ],
+      targetRoles: ['TEACHER', 'SCHOOL_ADMIN'],
+      sortOrder: 2,
+    },
+    {
+      slug: 'bursary',
+      name: 'Bursary Pro',
+      description: 'Comprehensive financial management. Track fees, generate invoices, manage payments and expenses.',
+      icon: '💸',
+      monthlyPrice: 0, // Basic in FREE, full in Starter+
+      yearlyPrice: 0,
+      isCore: true, // Basic version always available
+      features: [
+        { name: 'Fee Structures', description: 'Define fees by class and term' },
+        { name: 'Invoice Generation', description: 'Auto-generate student invoices' },
+        { name: 'Payment Tracking', description: 'Track cash, transfer, and online payments' },
+        { name: 'Online Payments', description: 'Paystack integration' },
+        { name: 'Expense Tracking', description: 'Track school expenses' },
+        { name: 'Financial Reports', description: 'Income, expense, and cash flow reports' },
+      ],
+      targetRoles: ['SCHOOL_ADMIN'],
+      sortOrder: 3,
+    },
+    {
+      slug: 'rollcall',
+      name: 'RollCall',
+      description: 'Biometric attendance system. Student check-in/out with instant parent SMS notifications.',
+      icon: '📍',
+      monthlyPrice: 0, // Enterprise only
+      yearlyPrice: 0,
+      isCore: false,
+      features: [
+        { name: 'Biometric Registration', description: 'Fingerprint and face registration' },
+        { name: 'Gate Attendance', description: 'Clock in/out at school gates' },
+        { name: 'Instant SMS', description: 'Notify parents on arrival/departure' },
+        { name: 'Late Tracking', description: 'Track late arrivals' },
+        { name: 'Absence Alerts', description: 'Alert parents of unexplained absences' },
+        { name: 'Reports', description: 'Daily, weekly, monthly attendance reports' },
+      ],
+      targetRoles: ['SCHOOL_ADMIN'],
+      sortOrder: 4,
+    },
+  ];
+
+  for (const tool of tools) {
+    await prisma.tool.upsert({
+      where: { slug: tool.slug },
+      update: {
+        name: tool.name,
+        description: tool.description,
+        icon: tool.icon,
+        features: tool.features,
+        targetRoles: tool.targetRoles,
+        sortOrder: tool.sortOrder,
+      },
+      create: tool,
+    });
+    console.log(`  ✅ Tool: ${tool.name}`);
+  }
+
+  // Create FREE subscription for test school with basic bursary access
+  console.log('\n📦 Setting up subscription for test school...');
+  
+  const subscription = await prisma.subscription.upsert({
+    where: { schoolId: school.id },
+    update: {},
+    create: {
+      schoolId: school.id,
+      tier: 'FREE',
+      maxStudents: -1,  // Unlimited
+      maxTeachers: -1,  // Unlimited
+      maxAdmins: 10,    // FREE tier allows 10 admins
+      aiCredits: 0,
+      aiCreditsUsed: 0,
+    },
+  });
+
+  // Grant basic bursary access to FREE tier
+  const bursaryTool = await prisma.tool.findUnique({ where: { slug: 'bursary' } });
+  if (bursaryTool) {
+    await prisma.schoolToolAccess.upsert({
+      where: {
+        schoolId_toolId: {
+          schoolId: school.id,
+          toolId: bursaryTool.id,
+        },
+      },
+      update: {},
+      create: {
+        schoolId: school.id,
+        toolId: bursaryTool.id,
+        subscriptionId: subscription.id,
+        status: 'ACTIVE',
+        activatedAt: new Date(),
+      },
+    });
+    console.log('  ✅ Granted Bursary Pro access to test school');
+  }
+
   console.log('\n🎉 Seeding completed!\n');
   console.log('📋 Test Login Credentials:\n');
   console.log('Super Admin:');

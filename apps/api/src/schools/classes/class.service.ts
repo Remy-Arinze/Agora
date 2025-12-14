@@ -28,6 +28,44 @@ export class ClassService {
     return (this.prisma as any)['classTeacher'];
   }
 
+  private get classArmModel() {
+    return (this.prisma as any)['classArm'];
+  }
+
+  private get classLevelModel() {
+    return (this.prisma as any)['classLevel'];
+  }
+
+  /**
+   * Check if school uses ClassArms (has any ClassArms for PRIMARY/SECONDARY)
+   */
+  private async schoolUsesClassArms(schoolId: string, academicYear: string, typeFilter?: ClassType): Promise<boolean> {
+    const where: any = {
+      classLevel: {
+        schoolId,
+      },
+      academicYear,
+      isActive: true,
+    };
+
+    // Filter by type if provided
+    if (typeFilter && typeFilter !== ClassType.TERTIARY) {
+      where.classLevel = {
+        ...where.classLevel,
+        type: typeFilter,
+      };
+    } else {
+      // For PRIMARY/SECONDARY only (TERTIARY doesn't use ClassArms)
+      where.classLevel = {
+        ...where.classLevel,
+        type: { in: ['PRIMARY', 'SECONDARY'] },
+      };
+    }
+
+    const classArmCount = await this.classArmModel.count({ where });
+    return classArmCount > 0;
+  }
+
   /**
    * Create a new class/course
    */
@@ -84,83 +122,27 @@ export class ClassService {
 
   /**
    * Initialize default classes for a school based on school type
-   * @param typeFilter - Optional filter to only initialize classes for a specific type
+   * 
+   * NOTE: This function is now a no-op. Legacy auto-creation of Class records has been
+   * disabled to prevent duplication with the ClassArm system. Schools should use:
+   * - ClassLevel + ClassArm for PRIMARY/SECONDARY (auto-created when needed)
+   * - Manual course creation for TERTIARY
    */
   private async initializeDefaultClasses(
-    school: any,
-    academicYear: string,
-    typeFilter?: ClassType
+    _school: any,
+    _academicYear: string,
+    _typeFilter?: ClassType
   ): Promise<void> {
-    const defaultClasses: Array<{ name: string; classLevel: string; type: ClassType }> = [];
-
-    // Primary classes - only if typeFilter is PRIMARY or undefined
-    if (school.hasPrimary && (!typeFilter || typeFilter === ClassType.PRIMARY)) {
-      for (let i = 1; i <= 6; i++) {
-        defaultClasses.push({
-          name: `Class ${i}`,
-          classLevel: `Class ${i}`,
-          type: ClassType.PRIMARY,
-        });
-      }
-    }
-
-    // Secondary classes - only if typeFilter is SECONDARY or undefined
-    if (school.hasSecondary && (!typeFilter || typeFilter === ClassType.SECONDARY)) {
-      // JSS classes
-      for (let i = 1; i <= 3; i++) {
-        defaultClasses.push({
-          name: `JSS${i}`,
-          classLevel: `JSS${i}`,
-          type: ClassType.SECONDARY,
-        });
-      }
-      // SS classes
-      for (let i = 1; i <= 3; i++) {
-        defaultClasses.push({
-          name: `SS${i}`,
-          classLevel: `SS${i}`,
-          type: ClassType.SECONDARY,
-        });
-      }
-    }
-
-    // Check which classes already exist
-    const existingClasses = await this.classModel.findMany({
-      where: {
-        schoolId: school.id,
-        academicYear: academicYear,
-      },
-      select: {
-        name: true,
-        type: true,
-      },
-    });
-
-    const existingClassKeys = new Set(
-      existingClasses.map((c: any) => `${c.type}-${c.name}`)
-    );
-
-    // Create missing default classes
-    const classesToCreate = defaultClasses.filter(
-      (cls) => !existingClassKeys.has(`${cls.type}-${cls.name}`)
-    );
-
-    if (classesToCreate.length > 0) {
-      await this.classModel.createMany({
-        data: classesToCreate.map((cls) => ({
-          name: cls.name,
-          classLevel: cls.classLevel,
-          type: cls.type,
-          academicYear: academicYear,
-          schoolId: school.id,
-          isActive: true,
-        })),
-      });
-    }
+    // No-op: Auto-creation of legacy Class records is disabled
+    // PRIMARY/SECONDARY schools use the ClassLevel + ClassArm system
+    // TERTIARY schools create courses manually
+    return;
   }
 
   /**
    * Get classes assigned to a teacher
+   * For PRIMARY/SECONDARY: Returns ClassArms if school uses ClassArms
+   * For TERTIARY: Returns Classes (backward compatibility)
    */
   async getTeacherClasses(schoolId: string, teacherId: string): Promise<ClassDto[]> {
     // Validate school exists
@@ -175,14 +157,101 @@ export class ClassService {
       throw new NotFoundException('Teacher not found in this school');
     }
 
-    // Get all class assignments for this teacher
-    // Filter by active classes in the same school
+    // Get current academic year
+    const academicYear = this.getCurrentAcademicYear();
+
+    // Check if school uses ClassArms (for PRIMARY/SECONDARY)
+    const usesClassArms = await this.schoolUsesClassArms(school.id, academicYear);
+
+    if (usesClassArms) {
+      // School uses ClassArms - return ClassArms assigned to teacher
+      const classArmAssignments = await (this.prisma as any).classTeacher.findMany({
+        where: {
+          teacherId: teacherId,
+          classArmId: { not: null },
+          classArm: {
+            isActive: true,
+            classLevel: {
+              schoolId: school.id,
+              type: { in: ['PRIMARY', 'SECONDARY'] },
+            },
+          },
+        },
+        include: {
+          classArm: {
+            include: {
+              classLevel: true,
+              classTeachers: {
+                include: {
+                  teacher: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      // Get unique ClassArms and map to DTOs
+      const classArmMap = new Map<string, any>();
+      classArmAssignments.forEach((assignment: any) => {
+        const classArm = assignment.classArm;
+        if (classArm && !classArmMap.has(classArm.id)) {
+          classArmMap.set(classArm.id, classArm);
+        }
+      });
+
+      const classArms = Array.from(classArmMap.values());
+      const classArmsWithCounts = await Promise.all(
+        classArms.map(async (arm: any) => {
+          const studentsCount = await this.prisma.enrollment.count({
+            where: {
+              schoolId: school.id,
+              classArmId: arm.id,
+              isActive: true,
+              academicYear,
+            },
+          });
+
+          return {
+            id: arm.id,
+            name: `${arm.classLevel.name} ${arm.name}`, // e.g., "JSS 1 Gold"
+            code: null,
+            classLevel: arm.classLevel.name,
+            type: arm.classLevel.type,
+            academicYear: arm.academicYear,
+            description: null,
+            isActive: arm.isActive,
+            createdAt: arm.createdAt,
+            updatedAt: arm.updatedAt,
+            schoolId: school.id,
+            studentsCount,
+            teachers: arm.classTeachers.map((ct: any) => ({
+              id: ct.id,
+              teacherId: ct.teacher.id,
+              firstName: ct.teacher.firstName,
+              lastName: ct.teacher.lastName,
+              email: ct.teacher.email,
+              subject: ct.subject || ct.teacher.subject,
+              isPrimary: ct.isPrimary,
+              createdAt: ct.createdAt,
+            })),
+            classArmId: arm.id,
+            classLevelId: arm.classLevelId,
+          };
+        })
+      );
+
+      return classArmsWithCounts.map((arm: any) => this.mapToClassDto(arm));
+    }
+
+    // Fallback to Classes (for schools without ClassArms or TERTIARY - backward compatibility)
     const assignments = await this.classTeacherModel.findMany({
       where: {
-        teacherId: teacherId, // This should be Teacher.id (database ID)
+        teacherId: teacherId,
+        classId: { not: null },
         class: {
           schoolId: school.id,
-          isActive: true, // Only get active classes
+          isActive: true,
         },
       },
       include: {
@@ -202,7 +271,7 @@ export class ClassService {
     const classMap = new Map<string, any>();
     assignments.forEach((assignment: any) => {
       const classData = assignment.class;
-      if (!classMap.has(classData.id)) {
+      if (classData && !classMap.has(classData.id)) {
         classMap.set(classData.id, classData);
       }
     });
@@ -234,6 +303,96 @@ export class ClassService {
   }
 
   /**
+   * Get classes as ClassArms (for schools using ClassArms)
+   */
+  private async getClassesAsClassArms(
+    school: any,
+    academicYear: string,
+    typeFilter?: ClassType
+  ): Promise<ClassDto[]> {
+    const where: any = {
+      classLevel: {
+        schoolId: school.id,
+      },
+      academicYear,
+      isActive: true,
+    };
+
+    // Filter by type if provided (only PRIMARY/SECONDARY)
+    if (typeFilter && typeFilter !== ClassType.TERTIARY) {
+      where.classLevel = {
+        ...where.classLevel,
+        type: typeFilter,
+      };
+    } else {
+      // For PRIMARY/SECONDARY only
+      where.classLevel = {
+        ...where.classLevel,
+        type: { in: ['PRIMARY', 'SECONDARY'] },
+      };
+    }
+
+    const classArms = await this.classArmModel.findMany({
+      where,
+      include: {
+        classLevel: true,
+        classTeachers: {
+          include: {
+            teacher: true,
+          },
+        },
+      },
+      orderBy: [
+        { classLevel: { level: 'asc' } },
+        { name: 'asc' },
+      ],
+    });
+
+    // Get student counts for all ClassArms
+    const classArmsWithCounts = await Promise.all(
+      classArms.map(async (arm: any) => {
+        const studentsCount = await this.prisma.enrollment.count({
+          where: {
+            schoolId: school.id,
+            classArmId: arm.id,
+            isActive: true,
+            academicYear,
+          },
+        });
+
+        return {
+          id: arm.id,
+          name: `${arm.classLevel.name} ${arm.name}`, // e.g., "JSS 1 Gold"
+          code: null,
+          classLevel: arm.classLevel.name,
+          type: arm.classLevel.type,
+          academicYear: arm.academicYear,
+          description: null,
+          isActive: arm.isActive,
+          createdAt: arm.createdAt,
+          updatedAt: arm.updatedAt,
+          schoolId: school.id,
+          studentsCount,
+          teachers: (arm.classTeachers || []).map((ct: any) => ({
+            id: ct.id,
+            teacherId: ct.teacher.id,
+            firstName: ct.teacher.firstName,
+            lastName: ct.teacher.lastName,
+            email: ct.teacher.email,
+            subject: ct.subject || ct.teacher.subject,
+            isPrimary: ct.isPrimary,
+            createdAt: ct.createdAt,
+          })),
+          classArmId: arm.id,
+          classLevelId: arm.classLevelId,
+        };
+      })
+    );
+
+    return classArmsWithCounts.map((arm: any) => this.mapToClassDto(arm));
+  }
+
+  /**
    * Get all classes for a school
    * @param typeFilter - Optional filter to only get classes of a specific type (PRIMARY, SECONDARY, TERTIARY)
    */
@@ -250,9 +409,10 @@ export class ClassService {
     // Use provided academic year or default to current
     const targetAcademicYear = academicYear || this.getCurrentAcademicYear();
 
-    // Initialize default classes if they don't exist (only for the filtered type if provided)
+    // Always initialize default Classes first (for PRIMARY/SECONDARY/TERTIARY)
     await this.initializeDefaultClasses(school, targetAcademicYear, typeFilter);
 
+    // Get all Classes
     const where: any = {
       schoolId: school.id,
       academicYear: targetAcademicYear,
@@ -276,6 +436,46 @@ export class ClassService {
         name: 'asc',
       },
     });
+
+    // For PRIMARY/SECONDARY: Also get ClassArms and include them in the response
+    let classArms: any[] = [];
+    if (typeFilter !== ClassType.TERTIARY && (typeFilter === ClassType.PRIMARY || typeFilter === ClassType.SECONDARY || !typeFilter)) {
+      const classArmWhere: any = {
+        classLevel: {
+          schoolId: school.id,
+        },
+        academicYear: targetAcademicYear,
+        isActive: true,
+      };
+
+      if (typeFilter) {
+        classArmWhere.classLevel = {
+          ...classArmWhere.classLevel,
+          type: typeFilter,
+        };
+      } else {
+        classArmWhere.classLevel = {
+          ...classArmWhere.classLevel,
+          type: { in: ['PRIMARY', 'SECONDARY'] },
+        };
+      }
+
+      classArms = await this.classArmModel.findMany({
+        where: classArmWhere,
+        include: {
+          classLevel: true,
+          classTeachers: {
+            include: {
+              teacher: true,
+            },
+          },
+        },
+        orderBy: [
+          { classLevel: { level: 'asc' } },
+          { name: 'asc' },
+        ],
+      });
+    }
 
     // Get student counts for all classes
     const classesWithCounts = await Promise.all(
@@ -305,11 +505,61 @@ export class ClassService {
       })
     );
 
-    return classesWithCounts.map((cls: any) => this.mapToClassDto(cls));
+    // Get student counts for all ClassArms
+    const classArmsWithCounts = await Promise.all(
+      classArms.map(async (arm: any) => {
+        const studentsCount = await this.prisma.enrollment.count({
+          where: {
+            schoolId: school.id,
+            classArmId: arm.id,
+            isActive: true,
+            academicYear: targetAcademicYear,
+          },
+        });
+
+        return {
+          id: arm.id,
+          name: `${arm.classLevel.name} ${arm.name}`, // e.g., "JSS 1 Gold"
+          code: null,
+          classLevel: arm.classLevel.name,
+          type: arm.classLevel.type,
+          academicYear: arm.academicYear,
+          description: null,
+          isActive: arm.isActive,
+          createdAt: arm.createdAt,
+          updatedAt: arm.updatedAt,
+          schoolId: school.id,
+          studentsCount,
+          teachers: (arm.classTeachers || []).map((ct: any) => ({
+            id: ct.id,
+            teacherId: ct.teacher.id,
+            firstName: ct.teacher.firstName,
+            lastName: ct.teacher.lastName,
+            email: ct.teacher.email,
+            subject: ct.subject || ct.teacher.subject,
+            isPrimary: ct.isPrimary,
+            createdAt: ct.createdAt,
+          })),
+          classArmId: arm.id,
+          classLevelId: arm.classLevelId,
+        };
+      })
+    );
+
+    // Combine Classes and ClassArms, then map to DTOs
+    const allClasses = [
+      ...classesWithCounts.map((cls: any) => this.mapToClassDto(cls)),
+      ...classArmsWithCounts.map((arm: any) => this.mapToClassDto(arm)),
+    ];
+
+    // Sort by name
+    return allClasses.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   /**
-   * Get a single class by ID
+   * Get a single class by ID (or ClassArm ID)
+   * For PRIMARY/SECONDARY: If classId is ClassArm, returns ClassArm data
+   * For TERTIARY: Returns Class data (backward compatibility)
    */
   async getClassById(schoolId: string, classId: string): Promise<ClassDto> {
     const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
@@ -317,6 +567,51 @@ export class ClassService {
       throw new BadRequestException('School not found');
     }
 
+    // Check if classId is a ClassArm (for PRIMARY/SECONDARY schools using ClassArms)
+    const classArm = await (this.prisma as any).classArm.findUnique({
+      where: { id: classId },
+      include: {
+        classLevel: true,
+        classTeachers: {
+          include: {
+            teacher: true,
+          },
+        },
+      },
+    });
+
+    if (classArm && classArm.classLevel.schoolId === school.id) {
+      // It's a ClassArm - return ClassArm data
+      const studentsCount = await this.prisma.enrollment.count({
+        where: {
+          schoolId: school.id,
+          classArmId: classArm.id,
+          isActive: true,
+          academicYear: classArm.academicYear,
+        },
+      });
+
+      return this.mapToClassDto({
+        id: classArm.id,
+        name: `${classArm.classLevel.name} ${classArm.name}`,
+        code: null,
+        classLevel: classArm.classLevel.name,
+        type: classArm.classLevel.type,
+        academicYear: classArm.academicYear,
+        description: null,
+        isActive: classArm.isActive,
+        createdAt: classArm.createdAt,
+        updatedAt: classArm.updatedAt,
+        schoolId: school.id,
+        classTeachers: classArm.classTeachers,
+        studentsCount,
+        // Include ClassArm-specific IDs for curriculum and other features
+        classArmId: classArm.id,
+        classLevelId: classArm.classLevelId,
+      });
+    }
+
+    // Fallback to Class (for schools without ClassArms or TERTIARY - backward compatibility)
     const classData = await this.classModel.findFirst({
       where: {
         id: classId,
@@ -332,7 +627,7 @@ export class ClassService {
     });
 
     if (!classData) {
-      throw new NotFoundException('Class not found');
+      throw new NotFoundException('Class or ClassArm not found');
     }
 
     // Count enrollments that match by classId OR by classLevel and academicYear
@@ -360,7 +655,8 @@ export class ClassService {
   }
 
   /**
-   * Assign a teacher to a class
+   * Assign a teacher to a class or ClassArm
+   * Supports both Classes (backward compatibility) and ClassArms (for PRIMARY/SECONDARY)
    */
   async assignTeacherToClass(
     schoolId: string,
@@ -373,13 +669,11 @@ export class ClassService {
       throw new BadRequestException('School not found');
     }
 
-    // Validate class exists
-    const classData = await this.classModel.findFirst({
-      where: {
-        id: classId,
-        schoolId: school.id,
-      },
+    // Check if classId is a ClassArm (for PRIMARY/SECONDARY schools using ClassArms)
+    const classArm = await (this.prisma as any).classArm.findUnique({
+      where: { id: classId },
       include: {
+        classLevel: true,
         classTeachers: {
           include: {
             teacher: true,
@@ -388,8 +682,39 @@ export class ClassService {
       },
     });
 
-    if (!classData) {
-      throw new NotFoundException('Class not found');
+    let classData: any = null;
+    let isClassArm = false;
+
+    if (classArm && classArm.classLevel.schoolId === school.id) {
+      // It's a ClassArm
+      isClassArm = true;
+      classData = {
+        id: classArm.id,
+        name: `${classArm.classLevel.name} ${classArm.name}`,
+        type: classArm.classLevel.type,
+        classLevel: classArm.classLevel.name,
+        academicYear: classArm.academicYear,
+        classTeachers: classArm.classTeachers,
+      };
+    } else {
+      // It's a Class - validate it exists
+      classData = await this.classModel.findFirst({
+        where: {
+          id: classId,
+          schoolId: school.id,
+        },
+        include: {
+          classTeachers: {
+            include: {
+              teacher: true,
+            },
+          },
+        },
+      });
+
+      if (!classData) {
+        throw new NotFoundException('Class or ClassArm not found');
+      }
     }
 
     // Validate teacher exists in school
@@ -402,25 +727,40 @@ export class ClassService {
     await this.validateTeacherAssignment(classData, teacher.id, assignmentData);
 
     // Check if assignment already exists
+    const existingWhere: any = {
+      teacherId: assignmentData.teacherId,
+      subject: assignmentData.subject || null,
+    };
+
+    if (isClassArm) {
+      existingWhere.classArmId = classId;
+      existingWhere.classId = null;
+    } else {
+      existingWhere.classId = classId;
+      existingWhere.classArmId = null;
+    }
+
     const existingAssignment = await this.classTeacherModel.findFirst({
-      where: {
-        classId: classId,
-        teacherId: assignmentData.teacherId,
-        subject: assignmentData.subject || null,
-      },
+      where: existingWhere,
     });
 
     if (existingAssignment) {
-      throw new ConflictException('Teacher is already assigned to this class with this subject');
+      throw new ConflictException('Teacher is already assigned to this class/arm with this subject');
     }
 
     // For primary schools, if this is the primary teacher, unset other primary teachers
     if (classData.type === ClassType.PRIMARY && assignmentData.isPrimary) {
+      const updateWhere: any = {
+        isPrimary: true,
+      };
+      if (isClassArm) {
+        updateWhere.classArmId = classId;
+      } else {
+        updateWhere.classId = classId;
+      }
+
       await this.classTeacherModel.updateMany({
-        where: {
-          classId: classId,
-          isPrimary: true,
-        },
+        where: updateWhere,
         data: {
           isPrimary: false,
         },
@@ -428,13 +768,22 @@ export class ClassService {
     }
 
     // Create assignment
+    const assignmentDataToCreate: any = {
+      teacherId: assignmentData.teacherId,
+      subject: assignmentData.subject || null,
+      isPrimary: assignmentData.isPrimary || false,
+    };
+
+    if (isClassArm) {
+      assignmentDataToCreate.classArmId = classId;
+      assignmentDataToCreate.classId = null;
+    } else {
+      assignmentDataToCreate.classId = classId;
+      assignmentDataToCreate.classArmId = null;
+    }
+
     await this.classTeacherModel.create({
-      data: {
-        classId: classId,
-        teacherId: assignmentData.teacherId,
-        subject: assignmentData.subject || null,
-        isPrimary: assignmentData.isPrimary || false,
-      },
+      data: assignmentDataToCreate,
     });
 
     // Send email to teacher if email exists
@@ -547,7 +896,8 @@ export class ClassService {
   }
 
   /**
-   * Update a class
+   * Update a class or ClassArm
+   * Supports both Classes (backward compatibility) and ClassArms (for PRIMARY/SECONDARY)
    */
   async updateClass(
     schoolId: string,
@@ -560,7 +910,110 @@ export class ClassService {
       throw new BadRequestException('School not found');
     }
 
-    // Validate class exists
+    // Check if classId is a ClassArm (for PRIMARY/SECONDARY schools using ClassArms)
+    const classArm = await (this.prisma as any).classArm.findUnique({
+      where: { id: classId },
+      include: {
+        classLevel: true,
+        classTeachers: {
+          include: {
+            teacher: true,
+          },
+        },
+      },
+    });
+
+    if (classArm && classArm.classLevel.schoolId === school.id) {
+      // It's a ClassArm - update ClassArm name
+      // For ClassArms, only the arm name (e.g., "A", "B", "Gold") can be updated
+      // The full display name is constructed as "ClassLevel Name + Arm Name"
+      const armUpdatePayload: any = {};
+      
+      if (updateData.name !== undefined) {
+        // The name coming in might be the full display name (e.g., "Class 1 Gold")
+        // or just the arm name (e.g., "Gold")
+        // We need to extract just the arm name
+        const classLevelName = classArm.classLevel.name;
+        let newArmName = updateData.name;
+        
+        // If the name starts with the class level name, extract just the arm portion
+        if (newArmName.startsWith(classLevelName + ' ')) {
+          newArmName = newArmName.substring(classLevelName.length + 1).trim();
+        }
+        
+        armUpdatePayload.name = newArmName || 'A'; // Default to 'A' if empty
+      }
+
+      if (Object.keys(armUpdatePayload).length === 0) {
+        // Nothing to update, return current data
+        const studentsCount = await this.prisma.enrollment.count({
+          where: {
+            schoolId: school.id,
+            classArmId: classArm.id,
+            isActive: true,
+          },
+        });
+        return this.mapToClassDto({
+          ...classArm,
+          name: `${classArm.classLevel.name} ${classArm.name}`,
+          classLevel: classArm.classLevel.name,
+          type: classArm.classLevel.type,
+          classArmId: classArm.id,
+          classLevelId: classArm.classLevelId,
+          studentsCount,
+        });
+      }
+
+      const updatedArm = await (this.prisma as any).classArm.update({
+        where: { id: classId },
+        data: armUpdatePayload,
+        include: {
+          classLevel: true,
+          classTeachers: {
+            include: {
+              teacher: true,
+            },
+          },
+        },
+      });
+
+      const studentsCount = await this.prisma.enrollment.count({
+        where: {
+          schoolId: school.id,
+          classArmId: updatedArm.id,
+          isActive: true,
+        },
+      });
+
+      return this.mapToClassDto({
+        id: updatedArm.id,
+        name: `${updatedArm.classLevel.name} ${updatedArm.name}`,
+        code: null,
+        classLevel: updatedArm.classLevel.name,
+        type: updatedArm.classLevel.type,
+        academicYear: updatedArm.academicYear,
+        description: null,
+        isActive: updatedArm.isActive,
+        createdAt: updatedArm.createdAt,
+        updatedAt: updatedArm.updatedAt,
+        schoolId: school.id,
+        studentsCount,
+        teachers: (updatedArm.classTeachers || []).map((ct: any) => ({
+          id: ct.id,
+          teacherId: ct.teacher.id,
+          firstName: ct.teacher.firstName,
+          lastName: ct.teacher.lastName,
+          email: ct.teacher.email,
+          subject: ct.subject || ct.teacher.subject,
+          isPrimary: ct.isPrimary,
+          createdAt: ct.createdAt,
+        })),
+        classArmId: updatedArm.id,
+        classLevelId: updatedArm.classLevelId,
+      });
+    }
+
+    // Fallback: It's a Class record - validate it exists
     const classData = await this.classModel.findFirst({
       where: {
         id: classId,
@@ -569,7 +1022,7 @@ export class ClassService {
     });
 
     if (!classData) {
-      throw new NotFoundException('Class not found');
+      throw new NotFoundException('Class or ClassArm not found');
     }
 
     // Validate school type if type is being updated
@@ -577,20 +1030,22 @@ export class ClassService {
       this.validateSchoolTypeForClass(school, updateData.type);
     }
 
-    // Update class
+    // Update class - allow renaming even if students are enrolled
+    // This is safe because enrollments reference classId, not the name
+    const updatePayload: any = {};
+    if (updateData.name !== undefined) updatePayload.name = updateData.name;
+    if (updateData.code !== undefined) updatePayload.code = updateData.code;
+    if (updateData.classLevel !== undefined) updatePayload.classLevel = updateData.classLevel;
+    if (updateData.type !== undefined) updatePayload.type = updateData.type;
+    if (updateData.academicYear !== undefined) updatePayload.academicYear = updateData.academicYear;
+    if (updateData.creditHours !== undefined) updatePayload.creditHours = updateData.creditHours;
+    if (updateData.description !== undefined) updatePayload.description = updateData.description;
+
     const updated = await this.classModel.update({
       where: {
         id: classId,
       },
-      data: {
-        name: updateData.name,
-        code: updateData.code,
-        classLevel: updateData.classLevel,
-        type: updateData.type,
-        academicYear: updateData.academicYear,
-        creditHours: updateData.creditHours,
-        description: updateData.description,
-      },
+      data: updatePayload,
       include: {
         classTeachers: {
           include: {
@@ -611,14 +1066,64 @@ export class ClassService {
   /**
    * Delete a class
    */
-  async deleteClass(schoolId: string, classId: string): Promise<void> {
+  /**
+   * Delete a class or ClassArm
+   * Supports both Classes (backward compatibility) and ClassArms (for PRIMARY/SECONDARY)
+   * @param forceDelete - If true, will unenroll students and delete even if students are enrolled
+   */
+  async deleteClass(schoolId: string, classId: string, forceDelete: boolean = false): Promise<void> {
     // Validate school exists
     const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
     if (!school) {
       throw new BadRequestException('School not found');
     }
 
-    // Validate class exists
+    // Check if classId is a ClassArm (for PRIMARY/SECONDARY schools using ClassArms)
+    const classArm = await (this.prisma as any).classArm.findUnique({
+      where: { id: classId },
+      include: {
+        classLevel: true,
+      },
+    });
+
+    if (classArm && classArm.classLevel.schoolId === school.id) {
+      // It's a ClassArm - check for enrollments before deleting
+      const enrollmentCount = await this.prisma.enrollment.count({
+        where: {
+          classArmId: classArm.id,
+          isActive: true,
+        },
+      });
+
+      if (enrollmentCount > 0 && !forceDelete) {
+        throw new BadRequestException(
+          `Cannot delete ClassArm "${classArm.classLevel.name} ${classArm.name}" because it has ${enrollmentCount} active student enrollment(s). Please transfer or remove students first, or use force delete.`
+        );
+      }
+
+      // If force deleting, unenroll all students first
+      if (enrollmentCount > 0 && forceDelete) {
+        await this.prisma.enrollment.updateMany({
+          where: {
+            classArmId: classArm.id,
+            isActive: true,
+          },
+          data: {
+            isActive: false,
+            endDate: new Date(),
+          },
+        });
+      }
+
+      // Delete ClassArm
+      await (this.prisma as any).classArm.delete({
+        where: { id: classArm.id },
+      });
+
+      return;
+    }
+
+    // It's a Class - validate it exists
     const classData = await this.classModel.findFirst({
       where: {
         id: classId,
@@ -627,10 +1132,45 @@ export class ClassService {
     });
 
     if (!classData) {
-      throw new NotFoundException('Class not found');
+      throw new NotFoundException('Class or ClassArm not found');
     }
 
-    // Delete class (cascade will handle related records)
+    // Check for enrollments before deleting (consistent with ClassArm behavior)
+    const enrollmentCount = await this.prisma.enrollment.count({
+      where: {
+        classId: classId,
+        isActive: true,
+      },
+    });
+
+    if (enrollmentCount > 0 && !forceDelete) {
+      throw new BadRequestException(
+        `Cannot delete class "${classData.name}" because it has ${enrollmentCount} active student enrollment(s). Please transfer or remove students first, or use force delete.`
+      );
+    }
+
+    // If force deleting, unenroll all students first
+    if (enrollmentCount > 0 && forceDelete) {
+      await this.prisma.enrollment.updateMany({
+        where: {
+          classId: classId,
+          isActive: true,
+        },
+        data: {
+          isActive: false,
+          endDate: new Date(),
+        },
+      });
+    }
+
+    // Also delete related class-teacher assignments first
+    await this.classTeacherModel.deleteMany({
+      where: {
+        classId: classId,
+      },
+    });
+
+    // Delete class
     await this.classModel.delete({
       where: {
         id: classId,
@@ -663,22 +1203,40 @@ export class ClassService {
       throw new BadRequestException('School not found');
     }
 
-    // Validate class exists
-    const classData = await this.classModel.findFirst({
-      where: {
-        id: classId,
-        schoolId: school.id,
+    // Check if classId is a ClassArm (for PRIMARY/SECONDARY schools using ClassArms)
+    const classArm = await (this.prisma as any).classArm.findUnique({
+      where: { id: classId },
+      include: {
+        classLevel: true,
       },
     });
 
-    if (!classData) {
-      throw new NotFoundException('Class not found');
-    }
+    let enrollmentWhere: any;
 
-    // Get enrollments for this class
-    // Students can be linked via classId OR by classLevel and academicYear
-    const enrollments = await this.prisma.enrollment.findMany({
-      where: {
+    if (classArm && classArm.classLevel.schoolId === school.id) {
+      // It's a ClassArm - get students enrolled in this arm
+      enrollmentWhere = {
+        schoolId: school.id,
+        isActive: true,
+        classArmId: classArm.id,
+        academicYear: classArm.academicYear,
+      };
+    } else {
+      // Fallback to Class (for schools without ClassArms or TERTIARY)
+      const classData = await this.classModel.findFirst({
+        where: {
+          id: classId,
+          schoolId: school.id,
+        },
+      });
+
+      if (!classData) {
+        throw new NotFoundException('Class not found');
+      }
+
+      // Get enrollments for this class
+      // Students can be linked via classId OR by classLevel and academicYear
+      enrollmentWhere = {
         schoolId: school.id,
         isActive: true,
         academicYear: classData.academicYear,
@@ -691,7 +1249,11 @@ export class ClassService {
             ],
           },
         ],
-      },
+      };
+    }
+
+    const enrollments = await this.prisma.enrollment.findMany({
+      where: enrollmentWhere,
       include: {
         student: {
           include: {
@@ -837,8 +1399,40 @@ export class ClassService {
 
   /**
    * Map Prisma class to DTO
+   * Handles both:
+   * - Raw Prisma objects with `classTeachers` relation
+   * - Pre-mapped objects with `teachers` array (from ClassArm mapping)
    */
   private mapToClassDto(classData: any): ClassDto {
+    // Check if teachers are already mapped (pre-processed from ClassArm)
+    let teachers: any[] = [];
+    
+    if (classData.classTeachers && Array.isArray(classData.classTeachers)) {
+      // Raw Prisma data with classTeachers relation
+      teachers = classData.classTeachers.map((ct: any) => ({
+        id: ct.id,
+        teacherId: ct.teacher?.id || ct.teacherId,
+        firstName: ct.teacher?.firstName || ct.firstName,
+        lastName: ct.teacher?.lastName || ct.lastName,
+        email: ct.teacher?.email || ct.email,
+        subject: ct.subject,
+        isPrimary: ct.isPrimary,
+        createdAt: ct.createdAt,
+      }));
+    } else if (classData.teachers && Array.isArray(classData.teachers)) {
+      // Pre-mapped teachers array (from ClassArm processing)
+      teachers = classData.teachers.map((t: any) => ({
+        id: t.id,
+        teacherId: t.teacherId || t.id, // teacherId may already be in the object
+        firstName: t.firstName,
+        lastName: t.lastName,
+        email: t.email,
+        subject: t.subject,
+        isPrimary: t.isPrimary,
+        createdAt: t.createdAt,
+      }));
+    }
+
     return {
       id: classData.id,
       name: classData.name,
@@ -850,17 +1444,11 @@ export class ClassService {
       description: classData.description,
       isActive: classData.isActive,
       createdAt: classData.createdAt,
-      teachers: classData.classTeachers.map((ct: any) => ({
-        id: ct.id,
-        teacherId: ct.teacher.id,
-        firstName: ct.teacher.firstName,
-        lastName: ct.teacher.lastName,
-        email: ct.teacher.email,
-        subject: ct.subject,
-        isPrimary: ct.isPrimary,
-        createdAt: ct.createdAt,
-      })),
+      teachers,
       studentsCount: classData.studentsCount ?? 0,
+      // Include classArmId and classLevelId if present (for ClassArm-based classes)
+      classArmId: classData.classArmId || undefined,
+      classLevelId: classData.classLevelId || undefined,
     };
   }
 }

@@ -79,5 +79,31 @@ export class AuthController {
     await this.authService.resetPassword(resetPasswordDto);
     return ResponseDto.ok(null, 'Password reset successfully');
   }
+
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Refresh access token using refresh token' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        refreshToken: {
+          type: 'string',
+          description: 'JWT refresh token',
+        },
+      },
+      required: ['refreshToken'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Token refreshed successfully',
+    type: ResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Invalid or expired refresh token' })
+  async refresh(@Body() body: { refreshToken: string }): Promise<ResponseDto<{ accessToken: string; refreshToken: string }>> {
+    const data = await this.authService.refreshToken(body.refreshToken);
+    return ResponseDto.ok(data, 'Token refreshed successfully');
+  }
 }
 

@@ -9,7 +9,8 @@
     "db:migrate:create": "prisma migrate dev --create-only",
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "db:seed-nerdc": "tsx prisma/seed-nerdc.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

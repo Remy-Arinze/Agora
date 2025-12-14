@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { SchoolRepository } from '../schools/domain/repositories/school.repository';
 import {
@@ -131,9 +131,160 @@ export class ResourcesService {
   }
 
   /**
+   * Generate default ClassLevels and ClassArms for a school
+   * This is now a PUBLIC method that should be called explicitly via API
+   */
+  async generateDefaultClasses(
+    schoolId: string,
+    schoolType: 'PRIMARY' | 'SECONDARY' | 'TERTIARY'
+  ): Promise<{ created: number; message: string }> {
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    // Validate school has this type
+    if (schoolType === 'PRIMARY' && !school.hasPrimary) {
+      throw new BadRequestException('School does not have PRIMARY level');
+    }
+    if (schoolType === 'SECONDARY' && !school.hasSecondary) {
+      throw new BadRequestException('School does not have SECONDARY level');
+    }
+    if (schoolType === 'TERTIARY' && !school.hasTertiary) {
+      throw new BadRequestException('School does not have TERTIARY level');
+    }
+
+    // Check if ClassLevels already exist for this type
+    const existingLevels = await this.classLevelModel.findMany({
+      where: {
+        schoolId: school.id,
+        type: schoolType,
+      },
+      include: {
+        classArms: {
+          where: { isActive: true },
+        },
+      },
+    });
+
+    if (existingLevels.length > 0) {
+      // Check if any levels have active ClassArms
+      const levelsWithArms = existingLevels.filter((level: any) => level.classArms && level.classArms.length > 0);
+      
+      if (levelsWithArms.length > 0) {
+        throw new ConflictException(`Classes for ${schoolType} already exist. Delete them first to regenerate.`);
+      }
+
+      // If levels exist but have no arms, delete the orphaned levels first
+      for (const level of existingLevels) {
+        await this.classLevelModel.delete({
+          where: { id: level.id },
+        });
+      }
+    }
+
+    // Create ClassLevels based on type
+    const levelsToCreate: Array<{ name: string; code: string; level: number; type: string }> = [];
+
+    if (schoolType === 'PRIMARY') {
+      for (let i = 1; i <= 6; i++) {
+        levelsToCreate.push({
+          name: `Primary ${i}`,
+          code: `PRIMARY${i}`,
+          level: i,
+          type: 'PRIMARY',
+        });
+      }
+    } else if (schoolType === 'SECONDARY') {
+      // JSS levels
+      for (let i = 1; i <= 3; i++) {
+        levelsToCreate.push({
+          name: `JSS ${i}`,
+          code: `JSS${i}`,
+          level: i,
+          type: 'SECONDARY',
+        });
+      }
+      // SS levels
+      for (let i = 1; i <= 3; i++) {
+        levelsToCreate.push({
+          name: `SS ${i}`,
+          code: `SS${i}`,
+          level: i + 3,
+          type: 'SECONDARY',
+        });
+      }
+    } else if (schoolType === 'TERTIARY') {
+      // For tertiary, create year levels
+      for (let i = 1; i <= 4; i++) {
+        levelsToCreate.push({
+          name: `Year ${i}`,
+          code: `YEAR${i}`,
+          level: i,
+          type: 'TERTIARY',
+        });
+      }
+    }
+
+    // Create ClassLevels
+    const createdLevels = [];
+    for (const levelData of levelsToCreate) {
+      const level = await this.classLevelModel.create({
+        data: {
+          ...levelData,
+          schoolId: school.id,
+          isActive: true,
+        },
+      });
+      createdLevels.push(level);
+    }
+
+    // Set up nextLevelId chain for promotion
+    for (let i = 0; i < createdLevels.length - 1; i++) {
+      await this.classLevelModel.update({
+        where: { id: createdLevels[i].id },
+        data: { nextLevelId: createdLevels[i + 1].id },
+      });
+    }
+
+    // Create default ClassArms for each ClassLevel
+    const now = new Date();
+    const year = now.getFullYear();
+    const academicYear = now.getMonth() >= 8 ? `${year}/${year + 1}` : `${year - 1}/${year}`;
+
+    for (const level of createdLevels) {
+      await this.classArmModel.create({
+        data: {
+          name: 'A',
+          classLevelId: level.id,
+          academicYear: academicYear,
+          isActive: true,
+        },
+      });
+    }
+
+    return {
+      created: createdLevels.length,
+      message: `Successfully created ${createdLevels.length} ${schoolType.toLowerCase()} classes`,
+    };
+  }
+
+  /**
    * Initialize ClassLevels and default ClassArms for a school if they don't exist
+   * @deprecated Use generateDefaultClasses() instead - this is kept for backward compatibility
    */
   private async initializeClassLevelsAndArms(
+    school: any,
+    schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY'
+  ): Promise<void> {
+    // This is now a no-op - classes should be generated manually via button press
+    return;
+  }
+
+  /**
+   * Legacy initialization - kept for reference but no longer auto-runs
+   */
+  private async _legacyInitializeClassLevelsAndArms(
     school: any,
     schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY'
   ): Promise<void> {
@@ -163,8 +314,8 @@ export class ResourcesService {
         if (type === 'PRIMARY') {
           for (let i = 1; i <= 6; i++) {
             levelsToCreate.push({
-              name: `Class ${i}`,
-              code: `CLASS${i}`,
+              name: `Primary ${i}`,
+              code: `PRIMARY${i}`,
               level: i,
               type: 'PRIMARY',
             });
@@ -223,11 +374,17 @@ export class ResourcesService {
         // Last level has no nextLevelId (graduates/alumni)
 
         // Create default ClassArms for each ClassLevel (one default arm per level)
+        // Get current academic year
+        const now = new Date();
+        const year = now.getFullYear();
+        const academicYear = now.getMonth() >= 8 ? `${year}/${year + 1}` : `${year - 1}/${year}`;
+
         for (const level of createdLevels) {
           await this.classArmModel.create({
             data: {
               name: 'A', // Default arm name
               classLevelId: level.id,
+              academicYear: academicYear,
               isActive: true,
             },
           });
@@ -244,10 +401,16 @@ export class ResourcesService {
 
           // If no arms exist, create a default one
           if (existingArms.length === 0) {
+            // Get current academic year
+            const now = new Date();
+            const year = now.getFullYear();
+            const academicYear = now.getMonth() >= 8 ? `${year}/${year + 1}` : `${year - 1}/${year}`;
+
             await this.classArmModel.create({
               data: {
                 name: 'A',
                 classLevelId: level.id,
+                academicYear: academicYear,
                 isActive: true,
               },
             });
@@ -272,23 +435,37 @@ export class ResourcesService {
       throw new NotFoundException('Class level not found');
     }
 
-    // Check if class arm already exists
+    // Get current academic year
+    const now = new Date();
+    const year = now.getFullYear();
+    const academicYear = now.getMonth() >= 8 ? `${year}/${year + 1}` : `${year - 1}/${year}`;
+
+    // Check if class arm already exists for this academic year
     const existing = await this.classArmModel.findFirst({
       where: {
         classLevelId: dto.classLevelId,
         name: dto.name,
+        academicYear: academicYear,
       },
     });
 
     if (existing) {
-      throw new BadRequestException(`Class arm "${dto.name}" already exists for this class level`);
+      throw new BadRequestException(
+        `ClassArm "${dto.name}" already exists for ${classLevel.name} in academic year ${academicYear}. ` +
+        `Please use a different arm name (e.g., "Gold", "Blue", "A", "B") or select a different ClassLevel.`
+      );
     }
+
+    // Note: Classes can coexist with ClassArms - this is intentional
+    // Schools can have both Classes (e.g., "JSS1") and ClassArms (e.g., "JSS1 Gold", "JSS1 Blue")
+    // This allows schools to gradually transition or use both systems simultaneously
 
     const classArm = await this.classArmModel.create({
       data: {
         name: dto.name,
         capacity: dto.capacity,
         classLevelId: dto.classLevelId,
+        academicYear: academicYear,
         isActive: true,
       },
       include: {

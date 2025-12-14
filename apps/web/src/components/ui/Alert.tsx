@@ -34,3 +34,17 @@ export const Alert = forwardRef<HTMLDivElement, AlertProps>(
 
 Alert.displayName = 'Alert';
 
+export const AlertDescription = forwardRef<HTMLParagraphElement, HTMLAttributes<HTMLParagraphElement>>(
+  ({ className, ...props }, ref) => {
+    return (
+      <p
+        ref={ref}
+        className={cn('text-sm', className)}
+        {...props}
+      />
+    );
+  }
+);
+
+AlertDescription.displayName = 'AlertDescription';
+

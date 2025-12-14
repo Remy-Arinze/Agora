@@ -13,7 +13,6 @@ import {
   Phone, 
   BookOpen, 
   GraduationCap,
-  ArrowLeft,
   Edit,
   Clock,
   User,
@@ -36,6 +35,9 @@ import {
 } from '@/lib/store/api/schoolAdminApi';
 import { PermissionAssignmentModal } from '@/components/permissions/PermissionAssignmentModal';
 import { EditTeacherProfileModal } from '@/components/modals/EditTeacherProfileModal';
+import { useSchoolType } from '@/hooks/useSchoolType';
+import { useTeacherSubjects } from '@/hooks/useTeacherSubjects';
+import { BackButton } from '@/components/ui/BackButton';
 import toast from 'react-hot-toast';
 
 const RESOURCE_LABELS: Record<PermissionResource, string> = {
@@ -109,9 +111,10 @@ export default function StaffDetailPage() {
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
 
-  // Get school ID
+  // Get school ID and type
   const { data: schoolResponse } = useGetMySchoolQuery();
   const schoolId = schoolResponse?.data?.id;
+  const { currentType: schoolType } = useSchoolType();
 
   // Get staff member data
   const { data: staffResponse, isLoading, error, refetch: refetchStaff } = useGetStaffMemberQuery(
@@ -138,6 +141,17 @@ export default function StaffDetailPage() {
   const teacherClasses = classesResponse?.data || [];
   const permissions = permissionsResponse?.data?.permissions || [];
   const isPrincipal = isAdmin && staff?.role?.toLowerCase() === 'principal';
+
+  // Get teacher subjects (only for SECONDARY school teachers)
+  const isSecondaryTeacher = isTeacher && schoolType === 'SECONDARY';
+  const {
+    subjects: teacherSubjects,
+    isLoading: isLoadingSubjects,
+  } = useTeacherSubjects({
+    schoolId,
+    teacherId: staffId,
+    skip: !isSecondaryTeacher || !schoolId,
+  });
   
   // Resend password reset mutation
   const [resendPasswordReset, { isLoading: isResendingPasswordReset }] = useResendPasswordResetForStaffMutation();
@@ -180,12 +194,7 @@ export default function StaffDetailPage() {
     return (
       <ProtectedRoute roles={['SCHOOL_ADMIN']}>
         <div className="w-full">
-          <Link href="/dashboard/school/teachers">
-            <Button variant="ghost" size="sm" className="mb-4">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Staff
-            </Button>
-          </Link>
+          <BackButton fallbackUrl="/dashboard/school/teachers" className="mb-4" />
           <div className="text-center py-12">
             <AlertCircle className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
             <p className="text-light-text-secondary dark:text-dark-text-secondary">
@@ -206,12 +215,7 @@ export default function StaffDetailPage() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-8"
         >
-          <Link href="/dashboard/school/teachers">
-            <Button variant="ghost" size="sm" className="mb-4">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Staff
-            </Button>
-          </Link>
+          <BackButton fallbackUrl="/dashboard/school/teachers" className="mb-4" />
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
@@ -395,13 +399,14 @@ export default function StaffDetailPage() {
                               (t) => t.teacherId === staffId
                             );
                             return (
-                              <div
+                              <Link
                                 key={classItem.id}
-                                className="border border-light-border dark:border-dark-border rounded-lg p-4 hover:bg-light-surface dark:hover:bg-[var(--dark-hover)] transition-colors"
+                                href={`/dashboard/school/courses/${classItem.id}`}
+                                className="block border border-light-border dark:border-dark-border rounded-lg p-4 hover:bg-light-surface dark:hover:bg-[var(--dark-hover)] hover:border-blue-300 dark:hover:border-blue-700 transition-colors cursor-pointer"
                               >
                                 <div className="flex items-start justify-between">
                                   <div className="flex-1">
-                                    <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary mb-1">
+                                    <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary mb-1 hover:text-blue-600 dark:hover:text-blue-400">
                                       {classItem.name}
                                     </h3>
                                     <div className="space-y-1 text-sm text-light-text-secondary dark:text-dark-text-secondary">
@@ -429,9 +434,76 @@ export default function StaffDetailPage() {
                                     </div>
                                   </div>
                                 </div>
-                              </div>
+                              </Link>
                             );
                           })}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Subjects Teacher Can Teach (only for SECONDARY school teachers) */}
+                {isSecondaryTeacher && (
+                  <Card>
+                    <CardHeader>
+                      <div className="flex items-center gap-3">
+                        <GraduationCap className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                        <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
+                          Subject Competencies
+                        </CardTitle>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      {isLoadingSubjects ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
+                        </div>
+                      ) : teacherSubjects.length === 0 ? (
+                        <div className="text-center py-8">
+                          <GraduationCap className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+                          <p className="text-light-text-secondary dark:text-dark-text-secondary">
+                            No subjects assigned yet.
+                          </p>
+                          <p className="text-sm text-light-text-muted dark:text-dark-text-muted mt-1">
+                            Edit the teacher profile to add subjects they can teach.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {teacherSubjects.map((subject) => (
+                            <div
+                              key={subject.id}
+                              className="border border-light-border dark:border-dark-border rounded-lg p-4 hover:bg-light-surface dark:hover:bg-[var(--dark-hover)] transition-colors"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary mb-1">
+                                    {subject.name}
+                                  </h3>
+                                  <div className="flex flex-wrap gap-2 mt-2">
+                                    {subject.code && (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300">
+                                        {subject.code}
+                                      </span>
+                                    )}
+                                    {subject.classLevelName && (
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                                        {subject.classLevelName}
+                                      </span>
+                                    )}
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                      subject.assignedClassCount > 0
+                                        ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                        : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                                    }`}>
+                                      {subject.assignedClassCount} class{subject.assignedClassCount !== 1 ? 'es' : ''}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </CardContent>
@@ -603,6 +675,7 @@ export default function StaffDetailPage() {
             }}
             schoolId={schoolId!}
             staffType={staff.type}
+            schoolType={schoolType}
             onSuccess={() => {
               // Refetch staff data
               refetchStaff();

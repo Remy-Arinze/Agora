@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, FormEvent, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useDispatch } from 'react-redux';
 import { Eye, EyeOff } from 'lucide-react';
 import { setCredentials } from '@/lib/store/slices/authSlice';
@@ -13,6 +13,7 @@ import Link from 'next/link';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const dispatch = useDispatch();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,6 +22,13 @@ export default function LoginPage() {
     emailOrPublicId: '',
     password: '',
   });
+  const sessionExpired = searchParams?.get('expired') === 'true';
+
+  useEffect(() => {
+    if (sessionExpired) {
+      setError('Your session has expired. Please log in again to continue.');
+    }
+  }, [sessionExpired]);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -102,7 +110,15 @@ export default function LoginPage() {
           </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
+            {sessionExpired && (
+              <Alert variant="warning">
+                <div>
+                  <p className="font-semibold">Session Expired</p>
+                  <p className="text-sm mt-1">Your session has expired for security reasons. Please log in again to continue.</p>
+                </div>
+              </Alert>
+            )}
+            {error && !sessionExpired && (
               <Alert variant="error">{error}</Alert>
             )}
 

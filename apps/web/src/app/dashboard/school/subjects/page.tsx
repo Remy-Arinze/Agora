@@ -5,6 +5,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { SearchInput } from '@/components/ui/SearchInput';
 import { motion } from 'framer-motion';
 import {
   BookOpen,
@@ -12,13 +13,12 @@ import {
   Edit,
   Trash2,
   Users,
-  Search,
   Loader2,
   X,
   CheckCircle,
   AlertCircle,
-  Sparkles,
 } from 'lucide-react';
+import { AutoGenerateButton } from '@/components/ui/AutoGenerateButton';
 import {
   useGetMySchoolQuery,
   useGetSubjectsQuery,
@@ -249,14 +249,11 @@ export default function SubjectsPage() {
             </div>
             <div className="flex items-center gap-3">
               {canAutoGenerate && (
-                <Button 
-                  variant="secondary" 
+                <AutoGenerateButton
                   onClick={openConfirmModal}
-                  disabled={isGenerating}
-                >
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Auto-Generate
-                </Button>
+                  isLoading={isGenerating}
+                  label="Auto-Generate"
+                />
               )}
               <Button variant="primary" onClick={() => setShowCreateModal(true)}>
                 <Plus className="h-4 w-4 mr-2" />
@@ -317,16 +314,13 @@ export default function SubjectsPage() {
                   <h2 className="text-xl font-semibold text-light-text-primary dark:text-dark-text-primary">
                     General Subjects
                   </h2>
-                  <div className="relative w-[40%]">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-light-text-muted dark:text-dark-text-muted" />
-                    <Input
-                      type="text"
-                      placeholder={currentType === 'TERTIARY' ? 'Search courses...' : 'Search subjects...'}
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
+                  <SearchInput
+                    value={searchQuery}
+                    onChange={setSearchQuery}
+                    placeholder={currentType === 'TERTIARY' ? 'Search courses...' : 'Search subjects...'}
+                    containerClassName="w-[40%]"
+                    size="lg"
+                  />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {groupedSubjects.all.map((subject) => (
@@ -351,16 +345,13 @@ export default function SubjectsPage() {
               <h2 className="text-xl font-semibold text-light-text-primary dark:text-dark-text-primary">
                 {currentType === 'TERTIARY' ? 'Courses' : 'Subjects'}
               </h2>
-              <div className="relative w-[40%]">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-light-text-muted dark:text-dark-text-muted" />
-                <Input
-                  type="text"
-                  placeholder={currentType === 'TERTIARY' ? 'Search courses...' : 'Search subjects...'}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+              <SearchInput
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder={currentType === 'TERTIARY' ? 'Search courses...' : 'Search subjects...'}
+                containerClassName="w-[40%]"
+                size="lg"
+              />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredSubjects.map((subject) => (

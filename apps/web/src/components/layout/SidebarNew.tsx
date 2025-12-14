@@ -8,202 +8,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/Button';
 import { useGetMyStudentProfileQuery } from '@/lib/store/api/schoolAdminApi';
 import { useState } from 'react';
-import {
-  LayoutDashboard,
-  Building2,
-  Users,
-  BarChart3,
-  GraduationCap,
-  Upload,
-  UserCheck,
-  User,
-  ArrowRightLeft,
-  LogOut,
-  Puzzle,
-  BookOpen,
-  BookMarked,
-  Calendar,
-  Clock,
-  UserPlus,
-  FileText,
-  School,
-  Award,
-} from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { getActivePluginsForTeacher } from '@/lib/plugins';
-import { useSchoolType } from '@/hooks/useSchoolType';
-import { getTerminology } from '@/lib/utils/terminology';
-
-interface NavItem {
-  label: string | ((terminology: ReturnType<typeof getTerminology>) => string);
-  href: string;
-  icon: React.ReactNode;
-  roles?: string[];
-}
-
-const getNavItems = (terminology: ReturnType<typeof getTerminology>): NavItem[] => [
-  // Super Admin sections - Overview first
-  {
-    label: 'Overview',
-    href: '/dashboard/super-admin/overview',
-    icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0" />,
-    roles: ['SUPER_ADMIN'],
-  },
-  {
-    label: 'Schools',
-    href: '/dashboard/super-admin/schools',
-    icon: <Building2 className="h-5 w-5 flex-shrink-0" />,
-    roles: ['SUPER_ADMIN'],
-  },
-  {
-    label: 'Analytics',
-    href: '/dashboard/super-admin/analytics',
-    icon: <BarChart3 className="h-5 w-5 flex-shrink-0" />,
-    roles: ['SUPER_ADMIN'],
-  },
-  {
-    label: 'Plugins',
-    href: '/dashboard/super-admin/plugins',
-    icon: <Puzzle className="h-5 w-5 flex-shrink-0" />,
-    roles: ['SUPER_ADMIN'],
-  },
-  // School sections
-  {
-    label: 'Overview',
-    href: '/dashboard/school/overview',
-    icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0" />,
-    roles: ['SCHOOL_ADMIN'],
-  },
-  {
-    label: 'Students',
-    href: '/dashboard/school/students',
-    icon: <GraduationCap className="h-5 w-5 flex-shrink-0" />,
-    roles: ['SCHOOL_ADMIN'],
-  },
-  {
-    label: 'Staff',
-    href: '/dashboard/school/teachers',
-    icon: <Users className="h-5 w-5 flex-shrink-0" />,
-    roles: ['SCHOOL_ADMIN'],
-  },
-  {
-    label: () => terminology.courses,
-    href: '/dashboard/school/courses',
-    icon: <BookOpen className="h-5 w-5 flex-shrink-0" />,
-    roles: ['SCHOOL_ADMIN'],
-  },
-  {
-    label: 'Subjects',
-    href: '/dashboard/school/subjects',
-    icon: <BookMarked className="h-5 w-5 flex-shrink-0" />,
-    roles: ['SCHOOL_ADMIN'],
-  },
-  {
-    label: 'Timetables',
-    href: '/dashboard/school/timetables',
-    icon: <Clock className="h-5 w-5 flex-shrink-0" />,
-    roles: ['SCHOOL_ADMIN'],
-  },
-  {
-    label: 'Calendar',
-    href: '/dashboard/school/calendar',
-    icon: <Calendar className="h-5 w-5 flex-shrink-0" />,
-    roles: ['SCHOOL_ADMIN'],
-  },
-  {
-    label: 'Admissions',
-    href: '/dashboard/school/admissions',
-    icon: <UserPlus className="h-5 w-5 flex-shrink-0" />,
-    roles: ['SCHOOL_ADMIN'],
-  },
-  {
-    label: 'Transfers',
-    href: '/dashboard/school/transfers',
-    icon: <ArrowRightLeft className="h-5 w-5 flex-shrink-0" />,
-    roles: ['SCHOOL_ADMIN'],
-  },
-  {
-    label: 'Marketplace',
-    href: '/dashboard/school/marketplace',
-    icon: <Puzzle className="h-5 w-5 flex-shrink-0" />,
-    roles: ['SCHOOL_ADMIN'],
-  },
-  // Student sections
-  {
-    label: 'Overview',
-    href: '/dashboard/student/overview',
-    icon: <LayoutDashboard className="h-5 w-5 flex-shrink-0" />,
-    roles: ['STUDENT'],
-  },
-  {
-    label: 'Classes',
-    href: '/dashboard/student/classes',
-    icon: <BookOpen className="h-5 w-5 flex-shrink-0" />,
-    roles: ['STUDENT'],
-  },
-  {
-    label: 'Timetables',
-    href: '/dashboard/student/timetables',
-    icon: <Clock className="h-5 w-5 flex-shrink-0" />,
-    roles: ['STUDENT'],
-  },
-  {
-    label: 'Results',
-    href: '/dashboard/student/grades',
-    icon: <FileText className="h-5 w-5 flex-shrink-0" />,
-    roles: ['STUDENT'],
-  },
-  {
-    label: 'Calendar',
-    href: '/dashboard/student/calendar',
-    icon: <Calendar className="h-5 w-5 flex-shrink-0" />,
-    roles: ['STUDENT'],
-  },
-  {
-    label: 'Resources',
-    href: '/dashboard/student/resources',
-    icon: <FileText className="h-5 w-5 flex-shrink-0" />,
-    roles: ['STUDENT'],
-  },
-  {
-    label: 'History',
-    href: '/dashboard/student/history',
-    icon: <GraduationCap className="h-5 w-5 flex-shrink-0" />,
-    roles: ['STUDENT'],
-  },
-  {
-    label: 'Transfers',
-    href: '/dashboard/student/transfers',
-    icon: <ArrowRightLeft className="h-5 w-5 flex-shrink-0" />,
-    roles: ['STUDENT'],
-  },
-  // Teacher sections
-  {
-    label: 'Timetables',
-    href: '/dashboard/teacher/timetables',
-    icon: <Clock className="h-5 w-5 flex-shrink-0" />,
-    roles: ['TEACHER'],
-  },
-  {
-    label: 'Classes',
-    href: '/dashboard/teacher/classes',
-    icon: <BookOpen className="h-5 w-5 flex-shrink-0" />,
-    roles: ['TEACHER'],
-  },
-  {
-    label: 'Calendar',
-    href: '/dashboard/teacher/calendar',
-    icon: <Calendar className="h-5 w-5 flex-shrink-0" />,
-    roles: ['TEACHER'],
-  },
-  {
-    label: 'Transfers',
-    href: '/dashboard/transfers',
-    icon: <ArrowRightLeft className="h-5 w-5 flex-shrink-0" />,
-    roles: ['PARENT'],
-  },
-];
+import { useSidebarConfig, type NavItem } from '@/hooks/useSidebarConfig';
 
 function LogoSection() {
   const { open } = useSidebar();
@@ -344,23 +153,19 @@ export function SidebarNew() {
   const user = useSelector((state: RootState) => state.auth.user);
   const pathname = usePathname();
   
-  // Get school type and terminology for SCHOOL_ADMIN
-  const { currentType } = useSchoolType();
-  const terminology = getTerminology(user?.role === 'SCHOOL_ADMIN' ? currentType : null);
+  // Use centralized sidebar config
+  const { sections } = useSidebarConfig();
 
   if (!user) return null;
 
-  const navItems = getNavItems(terminology);
-  const filteredNavItems = navItems.filter(
-    (item) => !item.roles || item.roles.includes(user.role)
+  // Flatten sections into links
+  let links = sections.flatMap((section) =>
+    section.items.map((item: NavItem) => ({
+      label: item.label,
+      href: item.href,
+      icon: <item.icon className="h-5 w-5 flex-shrink-0" />,
+    }))
   );
-
-  // Add active plugins as tools for teachers
-  let links = filteredNavItems.map((item) => ({
-    label: typeof item.label === 'function' ? item.label(terminology) : item.label,
-    href: item.href,
-    icon: item.icon,
-  }));
 
   // If user is a teacher, add active plugins as tools
   if (user.role === 'TEACHER') {

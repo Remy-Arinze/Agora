@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { SchoolRepository } from '../domain/repositories/school.repository';
 import { SchoolMapper } from '../domain/mappers/school.mapper';
@@ -8,6 +8,8 @@ import { StaffListResponseDto, StaffListItemDto, StaffListMetaDto, GetStaffListQ
 import { UpdateSchoolDto } from '../dto/update-school.dto';
 import { UserWithContext } from '../../auth/types/user-with-context.type';
 import { CloudinaryService } from '../../storage/cloudinary/cloudinary.service';
+import { EmailService } from '../../email/email.service';
+import { randomBytes } from 'crypto';
 
 /**
  * Service for school admin operations on their own school
@@ -19,7 +21,8 @@ export class SchoolAdminSchoolsService {
     private readonly prisma: PrismaService,
     private readonly schoolRepository: SchoolRepository,
     private readonly schoolMapper: SchoolMapper,
-    private readonly cloudinaryService: CloudinaryService
+    private readonly cloudinaryService: CloudinaryService,
+    private readonly emailService: EmailService
   ) {}
 
   /**
@@ -709,8 +712,9 @@ export class SchoolAdminSchoolsService {
 
   /**
    * Update school information
+   * School admins can update basic fields directly, but sensitive changes require token verification
    */
-  async updateSchool(user: UserWithContext, updateSchoolDto: UpdateSchoolDto): Promise<SchoolDto> {
+  async updateSchool(user: UserWithContext, updateSchoolDto: UpdateSchoolDto, verificationToken?: string): Promise<SchoolDto> {
     const schoolId = user.currentSchoolId;
 
     if (!schoolId) {
@@ -723,10 +727,76 @@ export class SchoolAdminSchoolsService {
       throw new BadRequestException('School not found');
     }
 
+    // Fields that school admins CANNOT change
+    const restrictedFields = ['subdomain', 'isActive', 'schoolId'];
+    const hasRestrictedFields = restrictedFields.some(field => updateSchoolDto[field as keyof UpdateSchoolDto] !== undefined);
+    
+    if (hasRestrictedFields) {
+      throw new BadRequestException('You do not have permission to change restricted fields (subdomain, isActive, schoolId)');
+    }
+
+    // Check for sensitive changes that require token verification
+    const { levels, ...basicFields } = updateSchoolDto;
+    const hasSchoolTypeChange = levels && (
+      (levels.primary !== undefined && levels.primary !== school.hasPrimary) ||
+      (levels.secondary !== undefined && levels.secondary !== school.hasSecondary) ||
+      (levels.tertiary !== undefined && levels.tertiary !== school.hasTertiary)
+    );
+
+    // If school type is changing, require token verification
+    if (hasSchoolTypeChange) {
+      if (!verificationToken) {
+        throw new BadRequestException('Token verification required for school type changes. Please request a verification token first.');
+      }
+
+      // Verify token
+      const tokenRecord = await this.prisma.schoolProfileEditToken.findUnique({
+        where: { token: verificationToken },
+      });
+
+      if (!tokenRecord) {
+        throw new UnauthorizedException('Invalid verification token');
+      }
+
+      if (tokenRecord.schoolId !== school.id) {
+        throw new UnauthorizedException('Token does not belong to this school');
+      }
+
+      if (tokenRecord.usedAt) {
+        throw new UnauthorizedException('Verification token has already been used');
+      }
+
+      if (tokenRecord.expiresAt < new Date()) {
+        throw new UnauthorizedException('Verification token has expired');
+      }
+
+      // Verify the changes match what was requested
+      const requestedChanges = tokenRecord.changes as any;
+      if (JSON.stringify(levels) !== JSON.stringify(requestedChanges.levels)) {
+        throw new BadRequestException('Changes do not match the verification token');
+      }
+
+      // Mark token as used
+      await this.prisma.schoolProfileEditToken.update({
+        where: { id: tokenRecord.id },
+        data: { usedAt: new Date() },
+      });
+    }
+
+    // Prepare update data
+    const updateData: any = { ...basicFields };
+    
+    // Only update school type if levels are provided and verified
+    if (levels && (hasSchoolTypeChange ? verificationToken : true)) {
+      if (levels.primary !== undefined) updateData.hasPrimary = levels.primary;
+      if (levels.secondary !== undefined) updateData.hasSecondary = levels.secondary;
+      if (levels.tertiary !== undefined) updateData.hasTertiary = levels.tertiary;
+    }
+
     // Update school
     const updatedSchool = await this.prisma.school.update({
       where: { id: school.id },
-      data: updateSchoolDto,
+      data: updateData,
       include: {
         admins: {
           include: { user: true },
@@ -740,6 +810,131 @@ export class SchoolAdminSchoolsService {
     });
 
     return this.schoolMapper.toDto(updatedSchool);
+  }
+
+  /**
+   * Request verification token for sensitive school profile changes
+   * Sends an email with verification token
+   */
+  async requestEditToken(user: UserWithContext, changes: UpdateSchoolDto): Promise<{ message: string; token?: string }> {
+    const schoolId = user.currentSchoolId;
+
+    if (!schoolId) {
+      throw new BadRequestException('You are not associated with any school');
+    }
+
+    const school = await this.schoolRepository.findById(schoolId);
+
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    // Check if changes include sensitive fields
+    const { levels } = changes;
+    const hasSchoolTypeChange = levels && (
+      (levels.primary !== undefined && levels.primary !== school.hasPrimary) ||
+      (levels.secondary !== undefined && levels.secondary !== school.hasSecondary) ||
+      (levels.tertiary !== undefined && levels.tertiary !== school.hasTertiary)
+    );
+
+    if (!hasSchoolTypeChange) {
+      throw new BadRequestException('No sensitive changes detected. You can update these fields directly without verification.');
+    }
+
+    // Get principal email for verification
+    const principal = await this.prisma.schoolAdmin.findFirst({
+      where: {
+        schoolId: school.id,
+        role: { equals: 'Principal', mode: 'insensitive' },
+      },
+      include: { user: true },
+    });
+
+    if (!principal || !principal.user?.email) {
+      throw new BadRequestException('Principal email not found. Please ensure your school has a principal with an email address.');
+    }
+
+    // Generate token
+    const token = `SPET-${randomBytes(32).toString('hex').toUpperCase()}`;
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24); // Token expires in 24 hours
+
+    // Store token with proposed changes
+    await this.prisma.schoolProfileEditToken.create({
+      data: {
+        token,
+        schoolId: school.id,
+        changes: changes as any,
+        expiresAt,
+      },
+    });
+
+    // Send verification email
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const verificationUrl = `${frontendUrl}/dashboard/school/settings/profile?token=${token}`;
+
+    await this.emailService.sendSchoolProfileEditVerificationEmail(
+      principal.user.email,
+      `${principal.firstName} ${principal.lastName}`,
+      school.name,
+      token,
+      verificationUrl,
+      changes
+    );
+
+    return {
+      message: `Verification email sent to ${principal.user.email}. Please check your email to complete the profile update.`,
+    };
+  }
+
+  /**
+   * Verify edit token and get proposed changes
+   */
+  async verifyEditToken(token: string, user: UserWithContext): Promise<{ changes: UpdateSchoolDto; school: SchoolDto }> {
+    const schoolId = user.currentSchoolId;
+
+    if (!schoolId) {
+      throw new BadRequestException('You are not associated with any school');
+    }
+
+    const tokenRecord = await this.prisma.schoolProfileEditToken.findUnique({
+      where: { token },
+      include: {
+        school: {
+          include: {
+            admins: {
+              include: { user: true },
+              orderBy: { role: 'asc' },
+            },
+            teachers: true,
+            enrollments: {
+              where: { isActive: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!tokenRecord) {
+      throw new NotFoundException('Invalid verification token');
+    }
+
+    if (tokenRecord.schoolId !== schoolId) {
+      throw new UnauthorizedException('Token does not belong to your school');
+    }
+
+    if (tokenRecord.usedAt) {
+      throw new BadRequestException('This verification token has already been used');
+    }
+
+    if (tokenRecord.expiresAt < new Date()) {
+      throw new BadRequestException('Verification token has expired. Please request a new token.');
+    }
+
+    return {
+      changes: tokenRecord.changes as UpdateSchoolDto,
+      school: this.schoolMapper.toDto(tokenRecord.school),
+    };
   }
 }
 

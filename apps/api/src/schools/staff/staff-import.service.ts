@@ -63,14 +63,30 @@ export class StaffImportService {
       errors: [],
     };
 
+    // Helper function to safely convert any value to trimmed string
+    const toTrimmedString = (value: any): string => {
+      if (value === null || value === undefined) return '';
+      return String(value).trim();
+    };
+
     // Process each row
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const rowNumber = i + 2; // +2 because Excel is 1-indexed and has header
 
       try {
+        // Normalize all fields to strings (Excel may parse phone numbers as numbers)
+        const type = toTrimmedString(row.type).toLowerCase();
+        const firstName = toTrimmedString(row.firstName);
+        const lastName = toTrimmedString(row.lastName);
+        const email = toTrimmedString(row.email);
+        const phone = toTrimmedString(row.phone);
+        const role = toTrimmedString(row.role);
+        const subject = toTrimmedString(row.subject);
+        const employeeId = toTrimmedString(row.employeeId);
+
         // Validate required fields
-        if (!row.type || !row.firstName || !row.lastName || !row.email || !row.phone) {
+        if (!type || !firstName || !lastName || !email || !phone) {
           summary.errors.push({
             row: rowNumber,
             error: 'Missing required fields: type, firstName, lastName, email, or phone',
@@ -80,17 +96,17 @@ export class StaffImportService {
         }
 
         // Validate type
-        if (row.type !== 'teacher' && row.type !== 'admin') {
+        if (type !== 'teacher' && type !== 'admin') {
           summary.errors.push({
             row: rowNumber,
-            error: `Invalid type: "${row.type}". Must be "teacher" or "admin"`,
+            error: `Invalid type: "${type}". Must be "teacher" or "admin"`,
           });
           summary.errorCount++;
           continue;
         }
 
         // Validate admin-specific requirements
-        if (row.type === 'admin' && !row.role) {
+        if (type === 'admin' && !role) {
           summary.errors.push({
             row: rowNumber,
             error: 'Missing required field: role (required for admin type)',
@@ -100,7 +116,7 @@ export class StaffImportService {
         }
 
         // Process based on type
-        if (row.type === 'teacher') {
+        if (type === 'teacher') {
           try {
             // Safely convert isTemporary to boolean
             let isTemporary = false;
@@ -109,16 +125,18 @@ export class StaffImportService {
                 isTemporary = row.isTemporary;
               } else if (typeof row.isTemporary === 'string') {
                 isTemporary = row.isTemporary.trim().toLowerCase() === 'true';
+              } else {
+                isTemporary = Boolean(row.isTemporary);
               }
             }
 
             const result = await this.teacherService.addTeacher(schoolId, {
-              firstName: row.firstName.trim(),
-              lastName: row.lastName.trim(),
-              email: row.email.trim(),
-              phone: row.phone.trim(),
-              subject: row.subject?.trim() || undefined,
-              employeeId: row.employeeId?.trim() || undefined,
+              firstName,
+              lastName,
+              email,
+              phone,
+              subject: subject || undefined,
+              employeeId: employeeId || undefined,
               isTemporary,
             });
 
@@ -135,14 +153,14 @@ export class StaffImportService {
             });
             summary.errorCount++;
           }
-        } else if (row.type === 'admin') {
+        } else if (type === 'admin') {
           try {
             const result = await this.adminService.addAdmin(schoolId, {
-              firstName: row.firstName.trim(),
-              lastName: row.lastName.trim(),
-              email: row.email.trim(),
-              phone: row.phone.trim(),
-              role: row.role.trim(),
+              firstName,
+              lastName,
+              email,
+              phone,
+              role,
             });
 
             summary.successCount++;

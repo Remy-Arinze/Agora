@@ -108,12 +108,17 @@ export class SubjectDto {
 
 export class CreateClassArmDto {
   @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
   name: string;
 
   @ApiProperty({ required: false })
+  @IsOptional()
   capacity?: number;
 
   @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
   classLevelId: string;
 }
 

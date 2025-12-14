@@ -193,12 +193,26 @@ export default function StudentClassesPage() {
 
   const isLoadingTimetable = isLoadingClassTimetable || isLoadingClassArmTimetable;
 
-  // Extract all terms from sessions for selector
+  // Extract all terms from sessions for selector - filtered by school type and deduplicated
   const allTerms = useMemo(() => {
     if (!sessionsResponse?.data) return [];
     
+    // Filter sessions by current school type to avoid duplicates
+    const filteredSessions = sessionsResponse.data.filter((session: any) => {
+      if (!currentType) return !session.schoolType;
+      return session.schoolType === currentType;
+    });
+    
+    // Deduplicate sessions by name (keep first/latest)
+    const uniqueSessionsMap = new Map<string, any>();
+    filteredSessions.forEach((session: any) => {
+      if (!uniqueSessionsMap.has(session.name)) {
+        uniqueSessionsMap.set(session.name, session);
+      }
+    });
+    
     const terms: Array<{ id: string; name: string; sessionName: string }> = [];
-    sessionsResponse.data.forEach((session: any) => {
+    Array.from(uniqueSessionsMap.values()).forEach((session: any) => {
       if (session.terms) {
         session.terms.forEach((term: any) => {
           terms.push({
@@ -216,7 +230,7 @@ export default function StudentClassesPage() {
       }
       return b.name.localeCompare(a.name);
     });
-  }, [sessionsResponse]);
+  }, [sessionsResponse, currentType]);
 
   const isLoading = isLoadingClasses || isLoadingTimetable;
 

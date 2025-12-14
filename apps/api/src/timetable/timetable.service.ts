@@ -261,6 +261,11 @@ export class TimetableService {
         classTeachers: {
           include: {
             class: true,
+            classArm: {
+              include: {
+                classLevel: true,
+              },
+            },
           },
         },
       },
@@ -270,59 +275,33 @@ export class TimetableService {
       throw new NotFoundException('Teacher not found');
     }
 
-    // Get classes where this teacher is assigned
-    const assignedClassIds = teacher.classTeachers.map((ct) => ct.classId);
-    const assignedClasses = teacher.classTeachers.map((ct) => ({
-      classId: ct.classId,
-      subject: ct.subject,
-      classType: ct.class.type,
-    }));
+    // Build conditions for periods where teacher is assigned
+    const orConditions: any[] = [
+      // Periods where teacherId is explicitly set to this teacher
+      { teacherId: teacher.id },
+    ];
 
-    // Build where clause: periods where teacher is explicitly assigned OR
-    // periods for classes where teacher is assigned
-    const whereClause: any = {
-      termId: termId,
-      OR: [
-        // Periods where teacherId is explicitly set
-        { teacherId: teacher.id },
-      ],
-    };
-
-    // Add periods for classes where teacher is assigned
-    if (assignedClassIds.length > 0) {
-      const classConditions: any[] = [];
-
-      for (const assignedClass of assignedClasses) {
-        if (assignedClass.classType === 'PRIMARY') {
-          // For PRIMARY: Show unassigned periods for assigned classes
-          // (Periods with teacherId = this teacher are already covered by the first OR condition)
-          classConditions.push({
-            classId: assignedClass.classId,
-            teacherId: null, // Only unassigned periods
-          });
-        } else if (assignedClass.classType === 'SECONDARY') {
-          // For SECONDARY: Show unassigned periods for assigned classes
-          classConditions.push({
-            classId: assignedClass.classId,
-            teacherId: null, // Only unassigned periods
-          });
-        } else if (assignedClass.classType === 'TERTIARY') {
-          // For TERTIARY: Show unassigned periods for assigned courses
-          classConditions.push({
-            courseId: assignedClass.classId,
-            teacherId: null, // Only unassigned periods
-          });
+    // Add conditions for each class/classArm assignment
+    for (const ct of teacher.classTeachers) {
+      if (ct.classArmId) {
+        // ClassArm assignment (PRIMARY/SECONDARY)
+        orConditions.push({ classArmId: ct.classArmId });
+      } else if (ct.classId && ct.class) {
+        // Class assignment
+        if (ct.class.type === 'TERTIARY') {
+          orConditions.push({ courseId: ct.classId });
+        } else {
+          orConditions.push({ classId: ct.classId });
         }
-      }
-
-      if (classConditions.length > 0) {
-        whereClause.OR.push(...classConditions);
       }
     }
 
     // Get all periods for this teacher
     const periods = await this.timetablePeriodModel.findMany({
-      where: whereClause,
+      where: {
+        termId: termId,
+        OR: orConditions,
+      },
       include: {
         subject: true,
         course: true,
@@ -346,7 +325,8 @@ export class TimetableService {
   }
 
   /**
-   * Get timetable for a class
+   * Get timetable for a class or classArm
+   * The classId parameter can be either a Class ID or a ClassArm ID
    */
   async getTimetableForClass(
     schoolId: string,
@@ -358,11 +338,29 @@ export class TimetableService {
       throw new BadRequestException('School not found');
     }
 
+    // Check if this is a ClassArm ID first
+    const classArm = await this.prisma.classArm.findUnique({
+      where: { id: classId },
+    });
+
+    // Build where clause based on whether it's a ClassArm or Class
+    const whereClause: any = {
+      termId: termId,
+    };
+
+    if (classArm) {
+      // It's a ClassArm ID
+      whereClause.classArmId = classId;
+    } else {
+      // It's a Class ID - check both classId and courseId for TERTIARY
+      whereClause.OR = [
+        { classId: classId },
+        { courseId: classId },
+      ];
+    }
+
     const periods = await this.timetablePeriodModel.findMany({
-      where: {
-        classId: classId,
-        termId: termId,
-      },
+      where: whereClause,
       include: {
         subject: true,
         course: true,
@@ -410,6 +408,11 @@ export class TimetableService {
           },
           include: {
             class: true,
+            classArm: {
+              include: {
+                classLevel: true,
+              },
+            },
           },
           take: 1,
         },
@@ -423,16 +426,21 @@ export class TimetableService {
     const enrollment = student.enrollments[0];
     const classData = enrollment.class;
 
-    if (!classData) {
-      throw new NotFoundException('Student is not assigned to a class');
-    }
-
     // Check if this is a TERTIARY institution
-    const isTertiary = school.hasTertiary && classData.type === 'TERTIARY';
+    const isTertiary = school.hasTertiary && classData?.type === 'TERTIARY';
 
     if (!isTertiary) {
-      // PRIMARY/SECONDARY: Use existing logic - get timetable for student's class
-      return this.getTimetableForClass(schoolId, classData.id, termId);
+      // PRIMARY/SECONDARY: Check if enrollment has ClassArm (for schools using ClassArms)
+      if (enrollment.classArmId && enrollment.classArm) {
+        // School uses ClassArms - get timetable for ClassArm
+        return this.getTimetableForClassArm(schoolId, enrollment.classArmId, termId);
+      }
+      // Fallback to Class timetable (for schools without ClassArms - backward compatibility)
+      if (classData?.id) {
+        return this.getTimetableForClass(schoolId, classData.id, termId);
+      }
+      // If no class either, return empty timetable
+      return [];
     }
 
     // TERTIARY: Hybrid approach - merge home class timetable + course registrations
@@ -574,18 +582,34 @@ export class TimetableService {
       throw new BadRequestException('School not found');
     }
 
-    const where: any = {
+    // Build where clause that handles both Class and ClassArm periods
+    const orConditions: any[] = [];
+
+    // Condition for periods linked to Class records
+    const classCondition: any = {
       class: {
         schoolId: school.id,
+        ...(schoolType ? { type: schoolType } : {}),
       },
     };
+    orConditions.push(classCondition);
 
-    if (schoolType) {
-      where.class = {
-        ...where.class,
-        type: schoolType,
+    // Condition for periods linked to ClassArm records (for PRIMARY/SECONDARY)
+    if (!schoolType || schoolType === 'PRIMARY' || schoolType === 'SECONDARY') {
+      const classArmCondition: any = {
+        classArm: {
+          classLevel: {
+            schoolId: school.id,
+            ...(schoolType ? { type: schoolType } : {}),
+          },
+        },
       };
+      orConditions.push(classArmCondition);
     }
+
+    const where: any = {
+      OR: orConditions,
+    };
 
     if (termId) {
       where.termId = termId;
@@ -607,20 +631,21 @@ export class TimetableService {
         term: true,
       },
       orderBy: [
-        { class: { name: 'asc' } },
         { dayOfWeek: 'asc' },
         { startTime: 'asc' },
       ],
     });
 
-    // Group periods by class
+    // Group periods by class or classArm
     const timetablesByClass: Record<string, TimetablePeriodDto[]> = {};
     periods.forEach((period: any) => {
-      if (period.classId) {
-        if (!timetablesByClass[period.classId]) {
-          timetablesByClass[period.classId] = [];
+      // Use classArmId for ClassArm periods, classId for Class periods
+      const groupId = period.classArmId || period.classId;
+      if (groupId) {
+        if (!timetablesByClass[groupId]) {
+          timetablesByClass[groupId] = [];
         }
-        timetablesByClass[period.classId].push(this.mapToPeriodDto(period));
+        timetablesByClass[groupId].push(this.mapToPeriodDto(period));
       }
     });
 

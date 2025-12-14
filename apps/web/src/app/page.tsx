@@ -8,6 +8,9 @@ import { LandingNavbar } from '@/components/layout/LandingNavbar';
 import { Button } from '@/components/ui/Button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import Link from 'next/link';
+import Image from 'next/image';
+import { useGetPublicSchoolsQuery, useGetPlatformStatsQuery } from '@/lib/store/api/publicApi';
+import { useState, useEffect } from 'react';
 
 const fadeInUp = {
   initial: { opacity: 0, y: 60 },
@@ -26,12 +29,42 @@ const staggerContainer = {
   },
 };
 
+// Helper to format large numbers
+const formatNumber = (num: number): string => {
+  if (num >= 1000000) {
+    return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M+';
+  }
+  if (num >= 1000) {
+    return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K+';
+  }
+  return num.toString() + '+';
+};
+
 export default function Home() {
   const user = useSelector((state: RootState) => state.auth.user);
   const router = useRouter();
+  const [isMounted, setIsMounted] = useState(false);
+  
+  // Ensure component is mounted before using persisted auth state
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+  
+  // Fetch real platform data
+  const { data: stats, error: statsError, isLoading: statsLoading } = useGetPlatformStatsQuery();
+  const { data: schools, error: schoolsError, isLoading: schoolsLoading } = useGetPublicSchoolsQuery();
+  
+  // Debug: log errors in development
+  if (process.env.NODE_ENV === 'development') {
+    if (statsError) console.error('Stats API error:', statsError);
+    if (schoolsError) console.error('Schools API error:', schoolsError);
+  }
+  
+  // Only use user state after hydration to avoid mismatch
+  const isLoggedIn = isMounted && !!user;
 
   const handleGetStarted = () => {
-    if (user) {
+    if (isLoggedIn && user) {
       const roleMap: Record<string, string> = {
         SUPER_ADMIN: '/dashboard/super-admin',
         SCHOOL_ADMIN: '/dashboard/school',
@@ -89,7 +122,7 @@ export default function Home() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.8, delay: 0.2 }}
-              className="flex items-center justify-center gap-3 mb-8"
+              className="flex items-center justify-center gap-3 mb-10"
             >
               <div className="h-16 w-20 bg-gradient-to-br from-blue-400 to-blue-600 dark:from-blue-500 dark:to-blue-700 rounded-br-lg rounded-tr-sm rounded-tl-lg rounded-bl-sm flex-shrink-0 shadow-2xl" />
               <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold text-white drop-shadow-2xl tracking-tight">
@@ -102,9 +135,9 @@ export default function Home() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.4 }}
-              className="text-2xl md:text-3xl lg:text-4xl text-white mb-6 font-bold drop-shadow-xl"
+              className="text-2xl md:text-3xl lg:text-4xl text-white font-bold drop-shadow-xl"
             >
-              Digital Education Identity Platform
+              One Student. One ID. A Lifelong Journey.
             </motion.p>
             
             {/* Subtitle */}
@@ -112,12 +145,9 @@ export default function Home() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8, delay: 0.6 }}
-              className="text-lg md:text-xl text-white/95 max-w-4xl mx-auto mb-12 leading-relaxed drop-shadow-lg"
+              className="text-lg md:text-xl text-white/95 max-w-4xl mx-auto mb-6 leading-relaxed drop-shadow-lg"
             >
-              A Chain-of-Trust Registry for lifelong Digital Education Identity in Africa.
-              Every student gets a permanent, verifiable academic record that follows them
-              throughout their educational journey.
-            </motion.p>
+Stop leaving student history behind. Connect every school, every grade, and every result in one unbreakable chain.            </motion.p>
             
             {/* CTA Buttons */}
             <motion.div
@@ -131,7 +161,7 @@ export default function Home() {
                 onClick={handleGetStarted}
                 className="bg-white text-blue-600 hover:bg-blue-50 shadow-2xl hover:shadow-blue-500/50 transition-all duration-300"
               >
-                {user ? 'Go to Dashboard' : 'Get Started Free'}
+                {isLoggedIn ? 'Go to Dashboard' : 'Get Started Free'}
               </Button>
               <Link href="#how-it-works">
                 <Button 
@@ -152,15 +182,21 @@ export default function Home() {
               className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto mt-16"
             >
               <div className="text-center">
-                <div className="text-3xl md:text-4xl font-bold text-white mb-2">100+</div>
+                <div className="text-3xl md:text-4xl font-bold text-white mb-2">
+                  {stats ? formatNumber(stats.totalSchools) : '0+'}
+                </div>
                 <div className="text-white/80 text-sm md:text-base">Schools</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl md:text-4xl font-bold text-white mb-2">50K+</div>
+                <div className="text-3xl md:text-4xl font-bold text-white mb-2">
+                  {stats ? formatNumber(stats.totalStudents) : '0+'}
+                </div>
                 <div className="text-white/80 text-sm md:text-base">Students</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl md:text-4xl font-bold text-white mb-2">1M+</div>
+                <div className="text-3xl md:text-4xl font-bold text-white mb-2">
+                  {stats ? formatNumber(stats.totalRecords) : '0+'}
+                </div>
                 <div className="text-white/80 text-sm md:text-base">Records</div>
               </div>
               <div className="text-center">
@@ -169,31 +205,31 @@ export default function Home() {
               </div>
             </motion.div>
           </motion.div>
-          
-          {/* Scroll Indicator */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 1, delay: 1.5 }}
-            className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-10"
-          >
-            <Link href="#how-it-works" className="flex flex-col items-center text-white/80 hover:text-white transition-colors">
-              <span className="text-sm mb-2">Scroll to explore</span>
-              <motion.div
-                animate={{ y: [0, 10, 0] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                </svg>
-              </motion.div>
-            </Link>
-          </motion.div>
         </div>
+        
+        {/* Scroll Indicator - Positioned at bottom center of hero section */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 1, delay: 1.5 }}
+          className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-20"
+        >
+          <Link href="#how-it-works" className="flex flex-col items-center text-white/80 hover:text-white transition-colors">
+            <span className="text-sm mb-2">Scroll to explore</span>
+            <motion.div
+              animate={{ y: [0, 10, 0] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+              </svg>
+            </motion.div>
+          </Link>
+        </motion.div>
       </section>
 
       {/* What is Agora Section */}
-      <section id="how-it-works" className="py-24 bg-[var(--light-bg)] dark:bg-[var(--dark-bg)] relative overflow-hidden">
+      <section id="how-it-works" data-navbar-light="true" className="py-24 bg-[var(--light-bg)] dark:bg-[var(--dark-bg)] relative overflow-hidden">
         {/* Decorative gradient elements */}
         <div className="absolute top-0 left-0 w-full h-full">
           <div className="absolute top-0 right-0 w-96 h-96 bg-blue-100/30 dark:bg-blue-900/20 rounded-full blur-3xl" />
@@ -217,14 +253,27 @@ export default function Home() {
             className="text-center mb-20"
           >
             <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
-              What is Agora?
+              Infrastructure, Not Just Software
             </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-4xl mx-auto leading-relaxed">
-              Agora is not just another Learning Management System. We're building
-              <span className="font-semibold text-blue-600 dark:text-blue-400"> Infrastructure-as-a-Service </span>
-              for education—a Chain-of-Trust Registry where schools verify teachers,
-              teachers verify data, and parents claim their children's digital identities.
+            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-4xl mx-auto leading-relaxed mb-4">
+              <span className="font-semibold text-blue-600 dark:text-blue-400">Agora is the Chain-of-Trust Registry</span> connecting the African education ecosystem.
             </p>
+            <p className="text-lg text-gray-600 dark:text-gray-300 max-w-4xl mx-auto leading-relaxed">
+              We are moving beyond standard Learning Management Systems. Agora creates a secure digital handshake where Schools verify Teachers, Teachers verify Data, and Parents claim their children's identities forever.
+            </p>
+          </motion.div>
+
+          {/* The Three Pillars Badge */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="text-center mb-12"
+          >
+            <span className="inline-block px-4 py-2 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-full text-sm font-semibold">
+              The Three Pillars
+            </span>
           </motion.div>
 
           <motion.div
@@ -234,61 +283,92 @@ export default function Home() {
             viewport={{ once: true }}
             className="grid grid-cols-1 md:grid-cols-3 gap-8"
           >
+            {/* Pillar 1: The "Forever" Passport */}
             <motion.div variants={fadeInUp}>
-              <Card className="h-full border-2 border-blue-100 dark:border-blue-900 hover:border-blue-400 dark:hover:border-blue-700 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 bg-[var(--light-card)] dark:bg-[var(--dark-surface)]">
-                <CardHeader>
-                  <div className="w-14 h-14 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900 dark:to-blue-800 rounded-xl flex items-center justify-center mb-4 shadow-lg">
-                    <svg className="w-7 h-7 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <Card className="h-full border-0 shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 overflow-hidden relative group">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500" />
+                <CardHeader className="pb-2">
+                  <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center mb-5 shadow-lg group-hover:scale-110 transition-transform">
+                    <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
+                    </svg>
+                  </div>
+                  <CardTitle className="text-2xl dark:text-white mb-2">The "Forever" Passport</CardTitle>
+                  <p className="text-sm font-medium text-blue-600 dark:text-blue-400">Lifelong Identity</p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="bg-white/60 dark:bg-white/5 rounded-xl p-4">
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">The Concept</p>
+                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                      Every student receives a Universal ID (UID) that stays with them from Primary 1 to University.
+                    </p>
+                  </div>
+                  <div className="bg-blue-100/50 dark:bg-blue-900/20 rounded-xl p-4 border-l-4 border-blue-500">
+                    <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2">The Benefit</p>
+                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                      Grades, vaccinations, and awards from every school they've ever attended are secured in one unbreakable digital timeline. <span className="font-semibold text-blue-600 dark:text-blue-400">No more lost files.</span>
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Pillar 2: The Chain-of-Trust */}
+            <motion.div variants={fadeInUp}>
+              <Card className="h-full border-0 shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/50 dark:to-teal-950/50 overflow-hidden relative group">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500 to-teal-500" />
+                <CardHeader className="pb-2">
+                  <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl flex items-center justify-center mb-5 shadow-lg group-hover:scale-110 transition-transform">
+                    <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                     </svg>
                   </div>
-                  <CardTitle className="text-xl dark:text-white">Chain-of-Trust</CardTitle>
+                  <CardTitle className="text-2xl dark:text-white mb-2">The Chain-of-Trust</CardTitle>
+                  <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">Verification</p>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                    Schools verify Teachers → Teachers verify Data → Parents claim the Data.
-                    Every record is cryptographically signed and immutable once claimed.
-                  </p>
+                <CardContent className="space-y-4">
+                  <div className="bg-white/60 dark:bg-white/5 rounded-xl p-4">
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">The Concept</p>
+                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                      Every grade and academic record is signed by verified teachers. Schools verify teachers, teachers verify data through their digital signatures on assessments.
+                    </p>
+                  </div>
+                  <div className="bg-emerald-100/50 dark:bg-emerald-900/20 rounded-xl p-4 border-l-4 border-emerald-500">
+                    <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-2">The Benefit</p>
+                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                      Academic records carry verified provenance. <span className="font-semibold text-emerald-600 dark:text-emerald-400">When students transfer, their complete academic history—every grade, every term—travels with them, verified and immutable.</span>
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
             </motion.div>
 
+            {/* Pillar 3: Seamless Transfers */}
             <motion.div variants={fadeInUp}>
-              <Card className="h-full border-2 border-blue-100 dark:border-blue-900 hover:border-blue-400 dark:hover:border-blue-700 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 bg-[var(--light-card)] dark:bg-[var(--dark-surface)]">
-                <CardHeader>
-                  <div className="w-14 h-14 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900 dark:to-blue-800 rounded-xl flex items-center justify-center mb-4 shadow-lg">
-                    <svg className="w-7 h-7 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+              <Card className="h-full border-0 shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/50 dark:to-orange-950/50 overflow-hidden relative group">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-500 to-orange-500" />
+                <CardHeader className="pb-2">
+                  <div className="w-16 h-16 bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl flex items-center justify-center mb-5 shadow-lg group-hover:scale-110 transition-transform">
+                    <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
                     </svg>
                   </div>
-                  <CardTitle className="text-xl dark:text-white">Shadow Profiles</CardTitle>
+                  <CardTitle className="text-2xl dark:text-white mb-2">Seamless Transfers</CardTitle>
+                  <p className="text-sm font-medium text-amber-600 dark:text-amber-400">Mobility</p>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                    Students exist as unclaimed "Shadow Records" uploaded by schools.
-                    Parents verify and claim these profiles using OTP, creating a secure
-                    handshake that locks the identity.
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div variants={fadeInUp}>
-              <Card className="h-full border-2 border-blue-100 dark:border-blue-900 hover:border-blue-400 dark:hover:border-blue-700 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 bg-[var(--light-card)] dark:bg-[var(--dark-surface)]">
-                <CardHeader>
-                  <div className="w-14 h-14 bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900 dark:to-blue-800 rounded-xl flex items-center justify-center mb-4 shadow-lg">
-                    <svg className="w-7 h-7 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                    </svg>
+                <CardContent className="space-y-4">
+                  <div className="bg-white/60 dark:bg-white/5 rounded-xl p-4">
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">The Concept</p>
+                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                      Students transfer between schools using secure Transfer Access Codes (TAC). Their complete academic history—all grades, enrollments, and records—moves with them automatically.
+                    </p>
                   </div>
-                  <CardTitle className="text-xl dark:text-white">Lifelong Identity</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                    Each student receives a Universal ID (UID) that follows them
-                    throughout their academic journey, even when transferring between schools.
-                    Complete academic history, verified and portable.
-                  </p>
+                  <div className="bg-amber-100/50 dark:bg-amber-900/20 rounded-xl p-4 border-l-4 border-amber-500">
+                    <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-2">The Benefit</p>
+                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
+                      No more lost transcripts or manual record transfers. <span className="font-semibold text-amber-600 dark:text-amber-400">Schools can view historical records of transferred students, ensuring continuity and transparency across the education ecosystem.</span>
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
             </motion.div>
@@ -296,120 +376,227 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Who It's For Section */}
-      <section className="py-24 bg-[var(--light-bg)] dark:bg-[var(--dark-bg)] relative overflow-hidden">
-        {/* Decorative elements */}
-        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-200/20 dark:bg-blue-900/20 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-indigo-200/20 dark:bg-indigo-900/20 rounded-full blur-3xl" />
-        
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+      {/* Schools Using Agora Section */}
+      <section data-navbar-light="true" className="py-24 bg-[var(--light-bg] dark:bg-dark-surface relative overflow-hidden">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: "-100px" }}
             transition={{ duration: 0.6 }}
-            className="text-center mb-20"
+            className="text-center mb-16"
           >
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
-              Who is Agora For?
+            <span className="inline-block px-4 py-2 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-full text-sm font-semibold mb-4">
+              Trusted Partners
+            </span>
+            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
+              Schools Using Agora
             </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-              Built for the entire education ecosystem in Africa
+            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+              Join the growing network of forward-thinking institutions
             </p>
           </motion.div>
 
           <motion.div
-            variants={staggerContainer}
-            initial="initial"
-            whileInView="animate"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="relative overflow-hidden"
           >
-            <motion.div variants={fadeInUp}>
-              <Card className="h-full text-center hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 bg-[var(--light-card)] dark:bg-[var(--dark-surface)] border-0 shadow-lg">
-                <CardHeader>
-                  <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl">
-                    <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                  </div>
-                  <CardTitle className="text-xl dark:text-white mb-3">For Schools</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                    White-label portals to capture student data at the source.
-                    Manage enrollments, teachers, and academic records with
-                    complete control and verification.
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
+            {/* First carousel - scrolling right to left */}
+            <div className="relative py-8">
+              {/* Gradient fade edges */}
+              <div 
+                className="absolute left-0 top-0 bottom-0 w-32 z-10 pointer-events-none"
+                style={{
+                  background: 'linear-gradient(to right, var(--light-bg), transparent)',
+                }}
+              />
+              <div 
+                className="absolute right-0 top-0 bottom-0 w-32 z-10 pointer-events-none dark:hidden"
+                style={{
+                  background: 'linear-gradient(to left, var(--light-bg), transparent)',
+                }}
+              />
+              <div 
+                className="absolute right-0 top-0 bottom-0 w-32 z-10 pointer-events-none hidden dark:block"
+                style={{
+                  background: 'linear-gradient(to left, var(--dark-surface), transparent)',
+                }}
+              />
+              <div 
+                className="absolute left-0 top-0 bottom-0 w-32 z-10 pointer-events-none hidden dark:block"
+                style={{
+                  background: 'linear-gradient(to right, var(--dark-surface), transparent)',
+                }}
+              />
+              
+              {schools && schools.length > 0 ? (
+                <div className="flex gap-12 md:gap-16 animate-scroll">
+                  {/* First set of logos */}
+                  {schools.map((school) => (
+                    <div
+                      key={school.id}
+                      className="flex-shrink-0 flex items-center justify-center group"
+                    >
+                      {school.logo ? (
+                        <Image
+                          src={school.logo}
+                          alt={school.name}
+                          width={128}
+                          height={128}
+                          className="w-32 h-32 md:w-40 md:h-40 object-contain transition-transform duration-300 group-hover:scale-110"
+                        />
+                      ) : (
+                        <div className="w-32 h-32 md:w-40 md:h-40 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg transition-transform duration-300 group-hover:scale-110">
+                          <span className="text-white text-4xl md:text-5xl font-bold">
+                            {school.name.charAt(0)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {/* Duplicate set for seamless loop */}
+                  {schools.map((school) => (
+                    <div
+                      key={`${school.id}-duplicate`}
+                      className="flex-shrink-0 flex items-center justify-center group"
+                    >
+                      {school.logo ? (
+                        <Image
+                          src={school.logo}
+                          alt={school.name}
+                          width={128}
+                          height={128}
+                          className="w-32 h-32 md:w-40 md:h-40 object-contain transition-transform duration-300 group-hover:scale-110"
+                        />
+                      ) : (
+                        <div className="w-32 h-32 md:w-40 md:h-40 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg transition-transform duration-300 group-hover:scale-110">
+                          <span className="text-white text-4xl md:text-5xl font-bold">
+                            {school.name.charAt(0)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                // Show placeholder when no schools or loading
+                <div className="flex gap-12 md:gap-16">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <div
+                      key={i}
+                      className="flex-shrink-0 w-32 h-32 md:w-40 md:h-40 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center opacity-40 border border-dashed border-gray-300 dark:border-gray-600"
+                    >
+                      <svg className="w-16 h-16 text-gray-400 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
-            <motion.div variants={fadeInUp}>
-              <Card className="h-full text-center hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 bg-[var(--light-card)] dark:bg-[var(--dark-surface)] border-0 shadow-lg">
-                <CardHeader>
-                  <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl">
-                    <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                    </svg>
-                  </div>
-                  <CardTitle className="text-xl dark:text-white mb-3">For Parents</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                    Claim and access your children's digital education identity.
-                    View academic records, grades, and attendance in one secure place.
-                    Transfer requests made simple.
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div variants={fadeInUp}>
-              <Card className="h-full text-center hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 bg-[var(--light-card)] dark:bg-[var(--dark-surface)] border-0 shadow-lg">
-                <CardHeader>
-                  <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl">
-                    <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                    </svg>
-                  </div>
-                  <CardTitle className="text-xl dark:text-white mb-3">For Students</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                    Your lifelong digital education identity. Access your complete
-                    academic history, verified grades, and credentials that follow
-                    you from primary school to university.
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div variants={fadeInUp}>
-              <Card className="h-full text-center hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 bg-[var(--light-card)] dark:bg-[var(--dark-surface)] border-0 shadow-lg">
-                <CardHeader>
-                  <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl">
-                    <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                  <CardTitle className="text-xl dark:text-white mb-3">For Teachers</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
-                    Record grades and attendance with cryptographic signatures.
-                    Your verification creates trusted academic records that
-                    cannot be tampered with.
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
+            {/* Second carousel - scrolling left to right */}
+            <div className="relative py-8">
+              {/* Gradient fade edges */}
+              <div 
+                className="absolute left-0 top-0 bottom-0 w-32 z-10 pointer-events-none"
+                style={{
+                  background: 'linear-gradient(to right, var(--light-bg), transparent)',
+                }}
+              />
+              <div 
+                className="absolute right-0 top-0 bottom-0 w-32 z-10 pointer-events-none dark:hidden"
+                style={{
+                  background: 'linear-gradient(to left, var(--light-bg), transparent)',
+                }}
+              />
+              <div 
+                className="absolute right-0 top-0 bottom-0 w-32 z-10 pointer-events-none hidden dark:block"
+                style={{
+                  background: 'linear-gradient(to left, var(--dark-surface), transparent)',
+                }}
+              />
+              <div 
+                className="absolute left-0 top-0 bottom-0 w-32 z-10 pointer-events-none hidden dark:block"
+                style={{
+                  background: 'linear-gradient(to right, var(--dark-surface), transparent)',
+                }}
+              />
+              
+              {schools && schools.length > 0 ? (
+                <div className="flex gap-12 md:gap-16 animate-scroll-reverse">
+                  {/* First set of logos */}
+                  {schools.map((school) => (
+                    <div
+                      key={`reverse-${school.id}`}
+                      className="flex-shrink-0 flex items-center justify-center group"
+                    >
+                      {school.logo ? (
+                        <Image
+                          src={school.logo}
+                          alt={school.name}
+                          width={128}
+                          height={128}
+                          className="w-32 h-32 md:w-40 md:h-40 object-contain transition-transform duration-300 group-hover:scale-110"
+                        />
+                      ) : (
+                        <div className="w-32 h-32 md:w-40 md:h-40 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg transition-transform duration-300 group-hover:scale-110">
+                          <span className="text-white text-4xl md:text-5xl font-bold">
+                            {school.name.charAt(0)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {/* Duplicate set for seamless loop */}
+                  {schools.map((school) => (
+                    <div
+                      key={`reverse-${school.id}-duplicate`}
+                      className="flex-shrink-0 flex items-center justify-center group"
+                    >
+                      {school.logo ? (
+                        <Image
+                          src={school.logo}
+                          alt={school.name}
+                          width={128}
+                          height={128}
+                          className="w-32 h-32 md:w-40 md:h-40 object-contain transition-transform duration-300 group-hover:scale-110"
+                        />
+                      ) : (
+                        <div className="w-32 h-32 md:w-40 md:h-40 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg transition-transform duration-300 group-hover:scale-110">
+                          <span className="text-white text-4xl md:text-5xl font-bold">
+                            {school.name.charAt(0)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                // Show placeholder when no schools or loading
+                <div className="flex gap-12 md:gap-16">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <div
+                      key={i}
+                      className="flex-shrink-0 w-32 h-32 md:w-40 md:h-40 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center opacity-40 border border-dashed border-gray-300 dark:border-gray-600"
+                    >
+                      <svg className="w-16 h-16 text-gray-400 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </motion.div>
         </div>
       </section>
 
       {/* Key Features Section */}
-      <section className="py-24 bg-[var(--light-bg)] dark:bg-[var(--dark-bg)]">
+      <section data-navbar-light="true" className="py-24 bg-[var(--light-bg)] dark:bg-[var(--dark-bg)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -561,7 +748,7 @@ export default function Home() {
                 onClick={handleGetStarted}
                 className="bg-white text-blue-600 hover:bg-blue-50 shadow-2xl hover:shadow-white/50 transition-all duration-300 text-lg px-10 py-6 font-semibold hover:scale-105"
               >
-                {user ? 'Go to Dashboard' : 'Get Started Free'}
+                {isLoggedIn ? 'Go to Dashboard' : 'Get Started Free'}
               </Button>
               <Link href="/auth/login">
                 <Button

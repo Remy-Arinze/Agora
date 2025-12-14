@@ -449,30 +449,58 @@ export class TransfersService {
       throw new NotFoundException('Student not found');
     }
 
-    // Find target class
-    const targetClass = await this.prisma.class.findFirst({
-      where: {
-        schoolId,
-        name: dto.targetClassLevel,
-      },
-    });
+    // Handle ClassArm enrollment (for PRIMARY/SECONDARY schools using ClassArms)
+    let enrollmentClassLevel = dto.targetClassLevel;
+    let enrollmentClassArmId: string | null = null;
+    let enrollmentClassId: string | null = null;
 
-    // Validate classArmId if provided
-    let validClassArmId: string | null = null;
     if (dto.classArmId) {
-      const classArm = await this.prisma.classArm.findFirst({
-        where: {
-          id: dto.classArmId,
-          classId: dto.classId || targetClass?.id,
-          schoolId,
+      // Validate ClassArm exists and belongs to destination school
+      const classArm = await this.prisma.classArm.findUnique({
+        where: { id: dto.classArmId },
+        include: {
+          classLevel: true,
         },
       });
-      if (classArm) {
-        validClassArmId = classArm.id;
-      } else {
-        // If classArmId is provided but doesn't exist, log warning but continue
-        console.warn(`ClassArm ${dto.classArmId} not found in destination school, proceeding without it`);
+
+      if (!classArm || classArm.classLevel.schoolId !== schoolId) {
+        throw new BadRequestException('ClassArm not found or does not belong to destination school');
       }
+
+      // Validate capacity if set
+      if (classArm.capacity !== null) {
+        const currentEnrollments = await this.prisma.enrollment.count({
+          where: {
+            classArmId: classArm.id,
+            isActive: true,
+            academicYear: dto.academicYear,
+          },
+        });
+
+        if (currentEnrollments >= classArm.capacity) {
+          throw new BadRequestException(`ClassArm "${classArm.name}" is at full capacity (${classArm.capacity} students)`);
+        }
+      }
+
+      enrollmentClassArmId = classArm.id;
+      enrollmentClassLevel = classArm.classLevel.name; // Auto-populate from ClassArm's ClassLevel
+    } else {
+      // Fallback to Class (for schools without ClassArms or TERTIARY - backward compatibility)
+      const targetClass = await this.prisma.class.findFirst({
+        where: {
+          schoolId,
+          OR: [
+            { name: dto.targetClassLevel },
+            { classLevel: dto.targetClassLevel },
+          ],
+          isActive: true,
+        },
+      });
+
+      if (targetClass) {
+        enrollmentClassId = targetClass.id;
+      }
+      // If no matching class found, enrollment will be created with just classLevel (backward compatibility)
     }
 
     // Find active term to link enrollment to
@@ -494,9 +522,9 @@ export class TransfersService {
       data: {
         studentId: student.id,
         schoolId,
-        classId: dto.classId || targetClass?.id,
-        classArmId: validClassArmId, // Only set if valid, otherwise null
-        classLevel: dto.targetClassLevel,
+        classArmId: enrollmentClassArmId,
+        classId: enrollmentClassId || dto.classId || null,
+        classLevel: enrollmentClassLevel,
         academicYear: dto.academicYear,
         enrollmentDate: new Date(),
         isActive: true,
