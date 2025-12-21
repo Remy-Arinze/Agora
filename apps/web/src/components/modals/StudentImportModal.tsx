@@ -69,9 +69,9 @@ export function StudentImportModal({ isOpen, onClose, schoolId }: StudentImportM
   };
 
   const downloadTemplate = () => {
-    const csvContent = `firstName,middleName,lastName,dateOfBirth,classLevel,email,phone,parentName,parentPhone,parentEmail,parentRelationship,bloodGroup,allergies,medications,emergencyContact,emergencyContactPhone,medicalNotes
-John,,Doe,2010-05-15,JSS1,john.doe@example.com,+2348012345678,John Doe Sr,+2348012345679,john.sr@example.com,Father,O+,Peanuts,Inhaler,Jane Doe,+2348012345680,Student has asthma
-Jane,Mary,Smith,2011-08-20,Class 1,jane.smith@example.com,+2348012345681,Mary Smith,+2348012345682,mary@example.com,Mother,A-,,,"`;
+    const csvContent = `firstName,middleName,lastName,dateOfBirth,classLevel,classArm,email,phone,parentName,parentPhone,parentEmail,parentRelationship,bloodGroup,allergies,medications,emergencyContact,emergencyContactPhone,medicalNotes
+John,,Doe,2010-05-15,JSS 3,A,john.doe@example.com,+2348012345678,John Doe Sr,+2348012345679,john.sr@example.com,Father,O+,Peanuts,Inhaler,Jane Doe,+2348012345680,Student has asthma
+Jane,Mary,Smith,2011-08-20,Primary 1,Gold,jane.smith@example.com,+2348012345681,Mary Smith,+2348012345682,mary@example.com,Mother,A-,,,"`;
 
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
@@ -113,7 +113,7 @@ Jane,Mary,Smith,2011-08-20,Class 1,jane.smith@example.com,+2348012345681,Mary Sm
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">firstName</code> - Student first name</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">lastName</code> - Student last name</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">dateOfBirth</code> - Date of birth (YYYY-MM-DD format)</li>
-                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">classLevel</code> - Class level (must match existing class name, e.g., "JSS1", "Class 1")</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">classLevel</code> - Class level (e.g., "JSS 3", "Primary 1", "SS 1")</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">parentName</code> - Parent/Guardian name</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">parentPhone</code> - Parent/Guardian phone number</li>
                       </ul>
@@ -121,6 +121,7 @@ Jane,Mary,Smith,2011-08-20,Class 1,jane.smith@example.com,+2348012345681,Mary Sm
                     <div>
                       <strong className="text-blue-900 dark:text-blue-100">Optional columns:</strong>
                       <ul className="list-disc list-inside ml-2 text-blue-800 dark:text-blue-200">
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">classArm</code> - Class arm name (e.g., "A", "Gold", "Blue") - <span className="text-green-600 dark:text-green-400 font-medium">Recommended for schools with multiple arms per class</span></li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">middleName</code> - Student middle name</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">email</code> - Student email (recommended)</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">phone</code> - Student phone number</li>
@@ -145,9 +146,10 @@ Jane,Mary,Smith,2011-08-20,Class 1,jane.smith@example.com,+2348012345681,Mary Sm
                 <div className="flex-1">
                   <h3 className="font-semibold text-amber-900 dark:text-amber-100 mb-2">Important Notes</h3>
                   <ul className="list-disc list-inside space-y-1 text-sm text-amber-800 dark:text-amber-200">
-                    <li>Class level must exactly match an existing class name in your school</li>
+                    <li><code className="bg-amber-100 dark:bg-amber-800 px-1 rounded">classLevel</code> must match an existing class level (e.g., "JSS 3", "Primary 1")</li>
+                    <li><code className="bg-amber-100 dark:bg-amber-800 px-1 rounded">classArm</code> should match the arm name only (e.g., "A", "Gold") - the system will find the full class</li>
                     <li>If a student email already exists in the Agora system, you'll need to initiate a transfer instead</li>
-                    <li>Students will be automatically enrolled in the specified class</li>
+                    <li>Students will be automatically enrolled in the specified class/arm</li>
                     <li>Password reset emails will be sent to students with email addresses</li>
                     <li>Each row will be processed individually - errors in one row won't stop others</li>
                     <li>Date format must be YYYY-MM-DD (e.g., 2010-05-15)</li>

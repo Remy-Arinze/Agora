@@ -492,7 +492,7 @@ export function TimetableBuilder({
               )}
               
               <SortableContext items={draggableItems.map((item) => item.id)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                <div className="space-y-2 max-h-[600px] overflow-y-auto scrollbar-hide">
                   {draggableItems.length === 0 ? (
                     <p className="text-sm text-light-text-muted dark:text-dark-text-muted text-center py-4">
                       No {schoolType === 'TERTIARY' ? 'courses' : 'subjects'} available

@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class StudentBulkImportRowDto {
   @ApiProperty({ example: 'John', description: 'Student first name' })
@@ -16,8 +16,14 @@ export class StudentBulkImportRowDto {
   })
   dateOfBirth: string;
 
-  @ApiProperty({ example: 'JSS1', description: 'Class level (must match existing class name)' })
+  @ApiProperty({ example: 'JSS 3', description: 'Class level (must match existing ClassLevel name, e.g., "JSS 3", "Primary 1")' })
   classLevel: string;
+
+  @ApiPropertyOptional({ 
+    example: 'A', 
+    description: 'Class arm name for schools using ClassArms (e.g., "A", "Gold", "Blue"). If provided, student will be enrolled in the specific ClassArm. If omitted, falls back to classLevel only.' 
+  })
+  classArm?: string;
 
   @ApiProperty({ 
     example: 'student@example.com', 

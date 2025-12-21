@@ -421,14 +421,14 @@ export class SchoolAdminSchoolsService {
     };
 
     // If schoolType is provided, filter teachers by:
-    // - For PRIMARY: Teachers assigned to classes of that type
-    // - For SECONDARY/TERTIARY: Teachers assigned to subjects of that type OR form teachers for classes of that type
+    // - For PRIMARY: Teachers assigned to classes/classArms of that type
+    // - For SECONDARY/TERTIARY: Teachers assigned to subjects of that type OR form teachers for classes/classArms of that type
     // - All: Unassigned teachers (newly imported)
     let teacherIdsForSchoolType: string[] | undefined;
     if (schoolType) {
       const teacherIdSets = new Set<string>();
 
-      // Get all classes of the specified school type
+      // Get all Class records of the specified school type (for backward compatibility)
       const classesOfType = await this.prisma.class.findMany({
         where: {
           schoolId,
@@ -439,6 +439,26 @@ export class SchoolAdminSchoolsService {
       });
       const classIds = classesOfType.map((c) => c.id);
 
+      // Also get ClassArm IDs for PRIMARY/SECONDARY (new ClassLevel + ClassArm system)
+      let classArmIds: string[] = [];
+      if (schoolType === 'PRIMARY' || schoolType === 'SECONDARY') {
+        const classLevels = await this.prisma.classLevel.findMany({
+          where: {
+            schoolId,
+            type: schoolType,
+            isActive: true,
+          },
+          include: {
+            classArms: {
+              where: { isActive: true },
+              select: { id: true },
+            },
+          },
+        });
+        classArmIds = classLevels.flatMap((cl) => cl.classArms.map((arm) => arm.id));
+      }
+
+      // Get teachers assigned to Classes (backward compatibility)
       if (classIds.length > 0) {
         if (schoolType === 'PRIMARY') {
           // For PRIMARY: Include all teachers assigned to primary classes
@@ -455,6 +475,32 @@ export class SchoolAdminSchoolsService {
           const formTeachers = await this.prisma.classTeacher.findMany({
             where: {
               classId: { in: classIds },
+              isPrimary: true,
+            },
+            select: { teacherId: true },
+            distinct: ['teacherId'],
+          });
+          formTeachers.forEach((ft) => teacherIdSets.add(ft.teacherId));
+        }
+      }
+
+      // Get teachers assigned to ClassArms (new system for PRIMARY/SECONDARY)
+      if (classArmIds.length > 0) {
+        if (schoolType === 'PRIMARY') {
+          // For PRIMARY: Include all teachers assigned to primary class arms
+          const classArmTeachers = await this.prisma.classTeacher.findMany({
+            where: {
+              classArmId: { in: classArmIds },
+            },
+            select: { teacherId: true },
+            distinct: ['teacherId'],
+          });
+          classArmTeachers.forEach((ct) => teacherIdSets.add(ct.teacherId));
+        } else if (schoolType === 'SECONDARY') {
+          // For SECONDARY: Include form teachers for class arms
+          const formTeachers = await this.prisma.classTeacher.findMany({
+            where: {
+              classArmId: { in: classArmIds },
               isPrimary: true,
             },
             select: { teacherId: true },
@@ -517,6 +563,16 @@ export class SchoolAdminSchoolsService {
                   type: true,
                 },
               },
+              classArm: {
+                include: {
+                  classLevel: {
+                    select: {
+                      id: true,
+                      type: true,
+                    },
+                  },
+                },
+              },
             },
           },
           subjectTeachers: {
@@ -536,21 +592,22 @@ export class SchoolAdminSchoolsService {
 
     // Filter teachers by schoolType if provided
     // Include teachers who:
-    // 1. Are assigned to classes/subjects of the specified schoolType, OR
-    // 2. Are not assigned to any class/subject yet (newly imported teachers)
+    // 1. Are assigned to classes/classArms/subjects of the specified schoolType, OR
+    // 2. Are not assigned to any class/classArm/subject yet (newly imported teachers)
     let filteredTeachers = allTeachers;
     if (schoolType && teacherIdsForSchoolType !== undefined) {
       filteredTeachers = allTeachers.filter((teacher) => {
-        // If teacher has no class or subject assignments, include them (newly imported)
+        // Check class assignments (both Class and ClassArm)
         const hasNoClassAssignments = !teacher.classTeachers || teacher.classTeachers.length === 0;
         const hasNoSubjectAssignments = !teacher.subjectTeachers || teacher.subjectTeachers.length === 0;
         
+        // If teacher has no assignments at all, include them (newly imported)
         if (hasNoClassAssignments && hasNoSubjectAssignments) {
           return true;
         }
 
         // Check if teacher is in the list of teachers for this schoolType
-        // (includes class assignments for PRIMARY, subject assignments and form teachers for SECONDARY/TERTIARY)
+        // (includes class/classArm assignments for PRIMARY, subject assignments and form teachers for SECONDARY/TERTIARY)
         return teacherIdsForSchoolType!.includes(teacher.id);
       });
     }

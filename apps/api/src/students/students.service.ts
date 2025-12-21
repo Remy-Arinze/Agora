@@ -27,10 +27,13 @@ export class StudentsService {
     const { page = 1, limit = 20 } = pagination;
     const skip = (page - 1) * limit;
 
-    // If schoolType is provided, get classes of that type to filter enrollments
-    let classIds: string[] | undefined;
-    let classLevels: string[] | undefined;
+    // If schoolType is provided, get classes AND classArms of that type to filter enrollments
+    let classIds: string[] = [];
+    let classLevels: string[] = [];
+    let classArmIds: string[] = [];
+    
     if (schoolType) {
+      // Get Class records of this type (for backward compatibility and TERTIARY)
       const classes = await this.prisma.class.findMany({
         where: {
           schoolId: tenantId,
@@ -45,26 +48,61 @@ export class StudentsService {
       classIds = classes.map((c) => c.id);
       classLevels = classes.map((c) => c.name);
       
-      // If no classes found for this school type, return empty result
-      if (classIds.length === 0 && classLevels.length === 0) {
+      // Also get ClassLevel + ClassArm records for PRIMARY/SECONDARY (new system)
+      if (schoolType === 'PRIMARY' || schoolType === 'SECONDARY') {
+        const classLevelRecords = await this.prisma.classLevel.findMany({
+          where: {
+            schoolId: tenantId,
+            type: schoolType,
+            isActive: true,
+          },
+          include: {
+            classArms: {
+              where: { isActive: true },
+              select: { id: true, name: true },
+            },
+          },
+        });
+        
+        // Add ClassLevel names and ClassArm IDs
+        for (const cl of classLevelRecords) {
+          classLevels.push(cl.name);
+          for (const arm of cl.classArms) {
+            classArmIds.push(arm.id);
+            // Also add full arm name (e.g., "Primary 1 Gold") to classLevels
+            classLevels.push(`${cl.name} ${arm.name}`);
+          }
+        }
+      }
+      
+      // Remove duplicates
+      classLevels = [...new Set(classLevels)];
+    }
+
+    // Build the enrollment filter
+    const enrollmentFilter: any = {
+      schoolId: tenantId,
+      isActive: true,
+    };
+
+    // If schoolType is provided, we MUST filter by it
+    if (schoolType) {
+      // If no classes/classArms found for this school type, return empty result
+      if (classIds.length === 0 && classLevels.length === 0 && classArmIds.length === 0) {
         return new PaginatedResponseDto([], 0, page, limit);
       }
+      
+      // Add the type filter
+      enrollmentFilter.OR = [
+        ...(classIds.length > 0 ? [{ classId: { in: classIds } }] : []),
+        ...(classArmIds.length > 0 ? [{ classArmId: { in: classArmIds } }] : []),
+        ...(classLevels.length > 0 ? [{ classLevel: { in: classLevels } }] : []),
+      ];
     }
 
     const whereClause: any = {
       enrollments: {
-        some: {
-          schoolId: tenantId,
-          isActive: true,
-          ...(schoolType && classIds && classLevels && (classIds.length > 0 || classLevels.length > 0)
-            ? {
-                OR: [
-                  ...(classIds.length > 0 ? [{ classId: { in: classIds } }] : []),
-                  ...(classLevels.length > 0 ? [{ classLevel: { in: classLevels } }] : []),
-                ],
-              }
-            : {}),
-        },
+        some: enrollmentFilter,
       },
     };
 
@@ -81,18 +119,7 @@ export class StudentsService {
             },
           },
           enrollments: {
-            where: {
-              schoolId: tenantId,
-              isActive: true,
-              ...(schoolType && classIds && classLevels && (classIds.length > 0 || classLevels.length > 0)
-                ? {
-                    OR: [
-                      ...(classIds.length > 0 ? [{ classId: { in: classIds } }] : []),
-                      ...(classLevels.length > 0 ? [{ classLevel: { in: classLevels } }] : []),
-                    ],
-                  }
-                : {}),
-            },
+            where: enrollmentFilter,
             include: {
               school: {
                 select: {

@@ -24,8 +24,6 @@ import {
   useGetMyStudentClassesQuery,
   useGetMyStudentGradesQuery,
   useGetMyStudentTimetableQuery,
-  useGetTimetableForClassQuery,
-  useGetTimetableForClassArmQuery,
   useGetMyStudentCalendarQuery,
   useGetActiveSessionQuery,
   useGetUpcomingEventsQuery,
@@ -79,28 +77,17 @@ export default function StudentOverviewPage() {
   const activeSession = activeSessionResponse?.data;
   const activeTermId = activeSession?.term?.id;
 
-  // Get recent grades (last 5) - only published grades
+  // Get grades for stats
   const { data: gradesResponse, isLoading: isLoadingGrades } = useGetMyStudentGradesQuery(
     { termId: activeTermId },
     { skip: !activeTermId }
   );
   const allGrades = gradesResponse?.data || [];
   
-  // Filter to only published grades and get recent ones
+  // Filter to only published grades
   const publishedGrades = useMemo(() => {
     return allGrades.filter((g: any) => g.isPublished !== false);
   }, [allGrades]);
-  
-  const recentGrades = useMemo(() => {
-    return publishedGrades
-      .sort((a: any, b: any) => {
-        // Sort by published date (updatedAt or createdAt) - most recent first
-        const dateA = new Date(a.updatedAt || a.createdAt).getTime();
-        const dateB = new Date(b.updatedAt || b.createdAt).getTime();
-        return dateB - dateA;
-      })
-      .slice(0, 5);
-  }, [publishedGrades]);
 
   // Get recently published grades count (last 7 days)
   const recentlyPublishedGrades = useMemo(() => {
@@ -113,66 +100,17 @@ export default function StudentOverviewPage() {
     });
   }, [publishedGrades]);
 
-  // Get timetable - use same approach as timetables page
-  const isTertiary = currentType === 'TERTIARY';
-  
-  // For TERTIARY: Use getMyStudentTimetable
+  // Get timetable - use unified student timetable endpoint
+  // The backend handles PRIMARY/SECONDARY (ClassArm) and TERTIARY (courses) automatically
   const { 
-    data: studentTimetableResponse, 
-    isLoading: isLoadingStudentTimetable 
+    data: timetableResponse, 
+    isLoading: isLoadingTimetable 
   } = useGetMyStudentTimetableQuery(
     { termId: activeTermId },
-    { skip: !activeTermId || !isTertiary }
+    { skip: !classData } // Skip until we know student is enrolled
   );
-
-  // For PRIMARY/SECONDARY: Use class and classArm timetables
-  const { 
-    data: classTimetableResponse, 
-    isLoading: isLoadingClassTimetable 
-  } = useGetTimetableForClassQuery(
-    {
-      schoolId: schoolId!,
-      classId: classData?.id!,
-      termId: activeTermId!,
-    },
-    { skip: !schoolId || !classData?.id || !activeTermId || isTertiary }
-  );
-
-  const classArmId = classData?.classArmId || classData?.enrollment?.classArmId;
-  const { 
-    data: classArmTimetableResponse, 
-    isLoading: isLoadingClassArmTimetable 
-  } = useGetTimetableForClassArmQuery(
-    {
-      schoolId: schoolId!,
-      classArmId: classArmId!,
-      termId: activeTermId!,
-    },
-    { skip: !schoolId || !classArmId || !activeTermId || isTertiary }
-  );
-
-  // Combine timetables based on school type
-  const timetable = useMemo(() => {
-    if (isTertiary && studentTimetableResponse?.data) {
-      return studentTimetableResponse.data;
-    } else {
-      const classPeriods = classTimetableResponse?.data || [];
-      const classArmPeriods = classArmTimetableResponse?.data || [];
-      const allPeriods = [...classPeriods, ...classArmPeriods];
-      return Array.from(
-        new Map(allPeriods.map((p: any) => [p.id, p])).values()
-      );
-    }
-  }, [
-    isTertiary,
-    studentTimetableResponse,
-    classTimetableResponse,
-    classArmTimetableResponse
-  ]);
-
-  const isLoadingTimetable = isTertiary 
-    ? isLoadingStudentTimetable 
-    : (isLoadingClassTimetable || isLoadingClassArmTimetable);
+  
+  const timetable = timetableResponse?.data || [];
 
   // Get today's schedule
   const todaySchedule = useMemo(() => {
@@ -308,14 +246,14 @@ export default function StudentOverviewPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary">
-                    Active {terminology.courses}
+                    Current {currentType === 'TERTIARY' ? 'Level' : 'Class'}
                   </p>
-                  <p className="text-3xl font-bold text-light-text-primary dark:text-dark-text-primary mt-2">
-                    {stats.activeClassesCount}
+                  <p className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary mt-2">
+                    {classData?.name || activeEnrollment?.classLevel || 'N/A'}
                   </p>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
-                  <BookOpen className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                  <GraduationCap className="h-6 w-6 text-purple-600 dark:text-purple-400" />
                 </div>
               </div>
             </CardContent>
@@ -365,62 +303,6 @@ export default function StudentOverviewPage() {
 
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          {/* Recent Grades */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
-                  Recent Grades
-                </CardTitle>
-                <Link href="/dashboard/student/grades">
-                  <Button variant="ghost" size="sm" className="text-blue-600 dark:text-blue-400">
-                    View All →
-                  </Button>
-                </Link>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {recentGrades.length > 0 ? (
-                <div className="space-y-4 max-h-[400px] overflow-y-auto scrollbar-hide pr-2">
-                  {recentGrades.map((grade: any) => (
-                    <motion.div
-                      key={grade.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="p-4 bg-gray-50 dark:bg-dark-surface rounded-lg"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h4 className="font-semibold text-light-text-primary dark:text-dark-text-primary">
-                            {grade.subject || grade.assessmentName || 'Assessment'}
-                          </h4>
-                          <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-1">
-                            {grade.enrollment?.classLevel || 'Class'} • {grade.term || 'Term'}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-bold text-light-text-primary dark:text-dark-text-primary">
-                            {grade.percentage?.toFixed(1)}%
-                          </p>
-                          <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary mt-1">
-                            {grade.score}/{grade.maxScore}
-                          </p>
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <Award className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
-                  <p className="text-light-text-secondary dark:text-dark-text-secondary">
-                    No grades published yet
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
           {/* Today's Schedule */}
           <Card>
             <CardHeader>
@@ -428,7 +310,7 @@ export default function StudentOverviewPage() {
                 <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
                   Today's Schedule
                 </CardTitle>
-                <Link href="/dashboard/student/timetable">
+                <Link href="/dashboard/student/timetables">
                   <Button variant="ghost" size="sm" className="text-blue-600 dark:text-blue-400">
                     View Timetable →
                   </Button>
@@ -579,7 +461,7 @@ export default function StudentOverviewPage() {
                   My {terminology.courses}
                 </Button>
               </Link>
-              <Link href="/dashboard/student/timetable">
+              <Link href="/dashboard/student/timetables">
                 <Button className="w-full" variant="ghost">
                   <Clock className="h-4 w-4 mr-2" />
                   Timetable

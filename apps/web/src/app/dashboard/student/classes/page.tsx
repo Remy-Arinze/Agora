@@ -21,8 +21,7 @@ import {
 import { 
   useGetMyStudentProfileQuery,
   useGetMyStudentClassesQuery,
-  useGetTimetableForClassQuery,
-  useGetTimetableForClassArmQuery,
+  useGetMyStudentTimetableQuery,
   useGetActiveSessionQuery,
   useGetSessionsQuery,
   useGetCurriculumForClassQuery,
@@ -156,42 +155,12 @@ export default function StudentClassesPage() {
   // Determine which term to use
   const currentTermId = selectedTermId || activeSession?.term?.id || '';
 
-  // Get timetable for the class (the timetable assigned to this class)
-  const { data: classTimetableResponse, isLoading: isLoadingClassTimetable } = useGetTimetableForClassQuery(
-    {
-      schoolId: schoolId!,
-      classId: classData?.id!,
-      termId: currentTermId,
-    },
-    { skip: !schoolId || !classData?.id || !currentTermId }
+  // Get student's timetable - unified endpoint handles all school types
+  const { data: timetableResponse, isLoading: isLoadingTimetable } = useGetMyStudentTimetableQuery(
+    { termId: currentTermId || undefined },
+    { skip: !classData } // Skip until we know student is enrolled
   );
-
-  // Also get timetable for classArm if student is in a classArm
-  const classArmId = classData?.classArmId || classData?.enrollment?.classArmId;
-  const { data: classArmTimetableResponse, isLoading: isLoadingClassArmTimetable } = useGetTimetableForClassArmQuery(
-    {
-      schoolId: schoolId!,
-      classArmId: classArmId!,
-      termId: currentTermId,
-    },
-    { skip: !schoolId || !classArmId || !currentTermId }
-  );
-
-  // Combine both timetables (class and classArm)
-  const timetable = useMemo(() => {
-    const classPeriods = classTimetableResponse?.data || [];
-    const classArmPeriods = classArmTimetableResponse?.data || [];
-    
-    // Combine and deduplicate by period id
-    const allPeriods = [...classPeriods, ...classArmPeriods];
-    const uniquePeriods = Array.from(
-      new Map(allPeriods.map((p: any) => [p.id, p])).values()
-    );
-    
-    return uniquePeriods;
-  }, [classTimetableResponse, classArmTimetableResponse]);
-
-  const isLoadingTimetable = isLoadingClassTimetable || isLoadingClassArmTimetable;
+  const timetable = timetableResponse?.data || [];
 
   // Extract all terms from sessions for selector - filtered by school type and deduplicated
   const allTerms = useMemo(() => {

@@ -12,6 +12,52 @@ export class OnboardingService {
     private readonly studentAdmissionService: StudentAdmissionService
   ) {}
 
+  /**
+   * Find ClassArm ID by ClassLevel name and ClassArm name
+   * Supports formats like:
+   * - classLevel: "JSS 3", classArm: "A" -> finds "JSS 3 A"
+   * - classLevel: "Primary 1", classArm: "Gold" -> finds "Primary 1 Gold"
+   */
+  private async findClassArmId(
+    schoolId: string,
+    classLevelName: string,
+    classArmName?: string
+  ): Promise<string | null> {
+    if (!classArmName) {
+      return null;
+    }
+
+    // First find the ClassLevel by name
+    const classLevel = await this.prisma.classLevel.findFirst({
+      where: {
+        schoolId,
+        name: classLevelName,
+        isActive: true,
+      },
+    });
+
+    if (!classLevel) {
+      return null;
+    }
+
+    // Get current academic year
+    const now = new Date();
+    const year = now.getFullYear();
+    const academicYear = now.getMonth() >= 8 ? `${year}/${year + 1}` : `${year - 1}/${year}`;
+
+    // Then find the ClassArm under that ClassLevel
+    const classArm = await this.prisma.classArm.findFirst({
+      where: {
+        classLevelId: classLevel.id,
+        name: classArmName,
+        academicYear,
+        isActive: true,
+      },
+    });
+
+    return classArm?.id || null;
+  }
+
   async bulkImport(
     file: Express.Multer.File,
     tenantId: string
@@ -48,6 +94,10 @@ export class OnboardingService {
         const classLevelValue = row.classLevel || row.class;
         const classLevel = classLevelValue ? String(classLevelValue).trim() : null;
         
+        // Support 'classArm' field for schools using ClassArms (e.g., "A", "Gold", "Blue")
+        const classArmValue = row.classArm;
+        const classArm = classArmValue ? String(classArmValue).trim() : null;
+        
         // Trim and validate required fields (check for empty strings after trimming)
         const firstName = row.firstName ? String(row.firstName).trim() : null;
         const lastName = row.lastName ? String(row.lastName).trim() : null;
@@ -71,13 +121,26 @@ export class OnboardingService {
           continue;
         }
 
+        // Try to find ClassArm ID if classArm is provided
+        let classArmId: string | undefined = undefined;
+        if (classArm) {
+          const foundClassArmId = await this.findClassArmId(tenantId, classLevel, classArm);
+          if (foundClassArmId) {
+            classArmId = foundClassArmId;
+          } else {
+            // ClassArm not found - add warning but continue with classLevel only
+            console.warn(`ClassArm "${classArm}" not found for ClassLevel "${classLevel}" in row ${rowNumber}. Will use classLevel only.`);
+          }
+        }
+
         // Use StudentAdmissionService to add student (reuses existing flow)
         const result = await this.studentAdmissionService.addStudent(tenantId, {
           firstName: firstName,
           lastName: lastName,
           middleName: row.middleName ? String(row.middleName).trim() : undefined,
           dateOfBirth: dateOfBirth,
-          classLevel: classLevel,
+          classLevel: classArmId ? undefined : classLevel, // Only send classLevel if no classArmId
+          classArmId: classArmId, // Send classArmId if found
           email: row.email ? String(row.email).trim() : undefined,
           phone: row.phone ? String(row.phone).trim() : undefined,
           parentName: row.parentName ? String(row.parentName).trim() : parentPhone, // Fallback to phone if name not provided

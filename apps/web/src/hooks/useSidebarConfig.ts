@@ -48,7 +48,7 @@ export function useSidebarConfig(): {
   currentType: 'PRIMARY' | 'SECONDARY' | 'TERTIARY' | null;
 } {
   const user = useSelector((state: RootState) => state.auth.user);
-  const { currentType, hasMultipleTypes } = useSchoolType();
+  const { currentType } = useSchoolType();
   const terminology = getTerminology(user?.role === 'SCHOOL_ADMIN' ? currentType : null);
 
   const sections = useMemo(() => {

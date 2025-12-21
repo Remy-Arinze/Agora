@@ -121,25 +121,6 @@ export class ClassService {
   }
 
   /**
-   * Initialize default classes for a school based on school type
-   * 
-   * NOTE: This function is now a no-op. Legacy auto-creation of Class records has been
-   * disabled to prevent duplication with the ClassArm system. Schools should use:
-   * - ClassLevel + ClassArm for PRIMARY/SECONDARY (auto-created when needed)
-   * - Manual course creation for TERTIARY
-   */
-  private async initializeDefaultClasses(
-    _school: any,
-    _academicYear: string,
-    _typeFilter?: ClassType
-  ): Promise<void> {
-    // No-op: Auto-creation of legacy Class records is disabled
-    // PRIMARY/SECONDARY schools use the ClassLevel + ClassArm system
-    // TERTIARY schools create courses manually
-    return;
-  }
-
-  /**
    * Get classes assigned to a teacher
    * For PRIMARY/SECONDARY: Returns ClassArms if school uses ClassArms
    * For TERTIARY: Returns Classes (backward compatibility)
@@ -394,6 +375,8 @@ export class ClassService {
 
   /**
    * Get all classes for a school
+   * - PRIMARY/SECONDARY: Returns ClassArms only (new system)
+   * - TERTIARY: Returns Classes (courses)
    * @param typeFilter - Optional filter to only get classes of a specific type (PRIMARY, SECONDARY, TERTIARY)
    */
   async getClasses(
@@ -409,103 +392,83 @@ export class ClassService {
     // Use provided academic year or default to current
     const targetAcademicYear = academicYear || this.getCurrentAcademicYear();
 
-    // Always initialize default Classes first (for PRIMARY/SECONDARY/TERTIARY)
-    await this.initializeDefaultClasses(school, targetAcademicYear, typeFilter);
-
-    // Get all Classes
-    const where: any = {
-      schoolId: school.id,
-      academicYear: targetAcademicYear,
-    };
-
-    // Filter by type if provided
-    if (typeFilter) {
-      where.type = typeFilter;
-    }
-
-    const classes = await this.classModel.findMany({
-      where,
-      include: {
-        classTeachers: {
-          include: {
-            teacher: true,
-          },
-        },
-      },
-      orderBy: {
-        name: 'asc',
-      },
-    });
-
-    // For PRIMARY/SECONDARY: Also get ClassArms and include them in the response
-    let classArms: any[] = [];
-    if (typeFilter !== ClassType.TERTIARY && (typeFilter === ClassType.PRIMARY || typeFilter === ClassType.SECONDARY || !typeFilter)) {
-      const classArmWhere: any = {
-        classLevel: {
+    // For TERTIARY: Return Classes (courses)
+    if (typeFilter === ClassType.TERTIARY) {
+      const classes = await this.classModel.findMany({
+        where: {
           schoolId: school.id,
+          academicYear: targetAcademicYear,
+          type: ClassType.TERTIARY,
         },
-        academicYear: targetAcademicYear,
-        isActive: true,
-      };
-
-      if (typeFilter) {
-        classArmWhere.classLevel = {
-          ...classArmWhere.classLevel,
-          type: typeFilter,
-        };
-      } else {
-        classArmWhere.classLevel = {
-          ...classArmWhere.classLevel,
-          type: { in: ['PRIMARY', 'SECONDARY'] },
-        };
-      }
-
-      classArms = await this.classArmModel.findMany({
-        where: classArmWhere,
         include: {
-          classLevel: true,
           classTeachers: {
             include: {
               teacher: true,
             },
           },
         },
-        orderBy: [
-          { classLevel: { level: 'asc' } },
-          { name: 'asc' },
-        ],
+        orderBy: {
+          name: 'asc',
+        },
       });
+
+      // Get student counts for TERTIARY classes
+      const classesWithCounts = await Promise.all(
+        classes.map(async (cls: any) => {
+          const studentsCount = await this.prisma.enrollment.count({
+            where: {
+              schoolId: school.id,
+              classId: cls.id,
+              isActive: true,
+              academicYear: targetAcademicYear,
+            },
+          });
+          return { ...cls, studentsCount };
+        })
+      );
+
+      return classesWithCounts.map((cls: any) => this.mapToClassDto(cls));
     }
 
-    // Get student counts for all classes
-    const classesWithCounts = await Promise.all(
-      classes.map(async (cls: any) => {
-        // Count enrollments that match by classId OR by classLevel and academicYear
-        const studentsCount = await this.prisma.enrollment.count({
-          where: {
-            schoolId: school.id,
-            isActive: true,
-            academicYear: targetAcademicYear,
-            OR: [
-              { classId: cls.id },
-              {
-                AND: [
-                  { classId: null },
-                  { classLevel: cls.classLevel },
-                ],
-              },
-            ],
+    // For PRIMARY/SECONDARY: Return ClassArms only
+    const classArmWhere: any = {
+      classLevel: {
+        schoolId: school.id,
+      },
+      academicYear: targetAcademicYear,
+      isActive: true,
+    };
+
+    if (typeFilter) {
+      classArmWhere.classLevel = {
+        ...classArmWhere.classLevel,
+        type: typeFilter,
+      };
+    } else {
+      // If no filter, get PRIMARY and SECONDARY ClassArms
+      classArmWhere.classLevel = {
+        ...classArmWhere.classLevel,
+        type: { in: ['PRIMARY', 'SECONDARY'] },
+      };
+    }
+
+    const classArms = await this.classArmModel.findMany({
+      where: classArmWhere,
+      include: {
+        classLevel: true,
+        classTeachers: {
+          include: {
+            teacher: true,
           },
-        });
+        },
+      },
+      orderBy: [
+        { classLevel: { level: 'asc' } },
+        { name: 'asc' },
+      ],
+    });
 
-        return {
-          ...cls,
-          studentsCount,
-        };
-      })
-    );
-
-    // Get student counts for all ClassArms
+    // Get student counts for ClassArms
     const classArmsWithCounts = await Promise.all(
       classArms.map(async (arm: any) => {
         const studentsCount = await this.prisma.enrollment.count({
@@ -519,7 +482,7 @@ export class ClassService {
 
         return {
           id: arm.id,
-          name: `${arm.classLevel.name} ${arm.name}`, // e.g., "JSS 1 Gold"
+          name: `${arm.classLevel.name} ${arm.name}`, // e.g., "JSS 3 A"
           code: null,
           classLevel: arm.classLevel.name,
           type: arm.classLevel.type,
@@ -546,14 +509,7 @@ export class ClassService {
       })
     );
 
-    // Combine Classes and ClassArms, then map to DTOs
-    const allClasses = [
-      ...classesWithCounts.map((cls: any) => this.mapToClassDto(cls)),
-      ...classArmsWithCounts.map((arm: any) => this.mapToClassDto(arm)),
-    ];
-
-    // Sort by name
-    return allClasses.sort((a, b) => a.name.localeCompare(b.name));
+    return classArmsWithCounts.map((arm: any) => this.mapToClassDto(arm));
   }
 
   /**

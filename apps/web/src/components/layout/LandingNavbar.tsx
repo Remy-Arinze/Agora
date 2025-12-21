@@ -2,7 +2,6 @@
 
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/Button';
-import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -150,7 +149,6 @@ export function LandingNavbar() {
                     </div>
 
                     <div className="flex items-center space-x-4">
-                        <ThemeToggle />
                         {isMounted && !user && (
                             <div className="flex items-center space-x-2">
                                 <Link href="/auth/login">

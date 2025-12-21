@@ -17,6 +17,7 @@ import {
   X,
   CheckCircle,
   AlertCircle,
+  Sparkles,
 } from 'lucide-react';
 import { AutoGenerateButton } from '@/components/ui/AutoGenerateButton';
 import {

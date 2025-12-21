@@ -17,8 +17,7 @@ import {
   useGetSessionsQuery,
   useGetEventsQuery,
   useGetUpcomingEventsQuery,
-  useGetTimetableForClassQuery,
-  useGetTimetableForClassArmQuery,
+  useGetMyStudentTimetableQuery,
   type CalendarEvent,
   type CalendarEventType,
   type AcademicSession,
@@ -131,33 +130,12 @@ export default function StudentCalendarPage() {
   const events = eventsResponse?.data || [];
   const upcomingEvents = upcomingEventsResponse?.data || [];
 
-  // Get student's class timetable
-  const { data: classTimetableResponse } = useGetTimetableForClassQuery(
-    {
-      schoolId: schoolId!,
-      classId: classData?.id!,
-      termId: activeSession?.term?.id || '',
-    },
-    { skip: !schoolId || !classData?.id || !activeSession?.term?.id }
+  // Get student's timetable - unified endpoint handles all school types
+  const { data: timetableResponse } = useGetMyStudentTimetableQuery(
+    { termId: activeSession?.term?.id },
+    { skip: !classData } // Skip until we know student is enrolled
   );
-
-  const classArmId = classData?.classArmId || classData?.enrollment?.classArmId;
-  const { data: classArmTimetableResponse } = useGetTimetableForClassArmQuery(
-    {
-      schoolId: schoolId!,
-      classArmId: classArmId!,
-      termId: activeSession?.term?.id || '',
-    },
-    { skip: !schoolId || !classArmId || !activeSession?.term?.id }
-  );
-
-  // Combine class and classArm timetables
-  const timetable = useMemo(() => {
-    const classPeriods = classTimetableResponse?.data || [];
-    const classArmPeriods = classArmTimetableResponse?.data || [];
-    const allPeriods = [...classPeriods, ...classArmPeriods];
-    return Array.from(new Map(allPeriods.map((p: any) => [p.id, p])).values());
-  }, [classTimetableResponse, classArmTimetableResponse]);
+  const timetable = timetableResponse?.data || [];
 
   // Combine events, timetable periods, and session/term milestones into calendar events
   const calendarEvents = useMemo<CalendarEventWithType[]>(() => {

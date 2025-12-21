@@ -6,12 +6,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { motion } from 'framer-motion';
 import { Clock, Loader2, AlertCircle } from 'lucide-react';
 import {
-  useGetMyStudentProfileQuery,
   useGetMyStudentClassesQuery,
-  useGetTimetableForClassQuery,
-  useGetTimetableForClassArmQuery,
-  useGetTimetableForStudentQuery,
-  useGetMyStudentEnrollmentsQuery,
+  useGetMyStudentTimetableQuery,
   useGetActiveSessionQuery,
   useGetSessionsQuery,
 } from '@/lib/store/api/schoolAdminApi';
@@ -22,19 +18,14 @@ import { getTerminology } from '@/lib/utils/terminology';
 export default function StudentTimetablePage() {
   const [selectedTermId, setSelectedTermId] = useState<string>('');
 
-  // Get student profile
-  const { data: profileResponse } = useGetMyStudentProfileQuery();
-  const student = profileResponse?.data;
-  const studentId = student?.id;
-
-  // Get student's classes to find the school ID
+  // Get student's classes to find the school ID (for term selector)
   const { data: classesResponse, isLoading: isLoadingClasses } = useGetMyStudentClassesQuery();
   const classes = classesResponse?.data || [];
   const classData = useMemo(() => {
     return classes[0] || null; // Get the active/primary class
   }, [classes]);
   
-  // Get school ID from class data
+  // Get school ID from class data (for term selector only)
   const schoolId = classData?.enrollment?.school?.id;
 
   const { currentType } = useSchoolType();
@@ -49,95 +40,37 @@ export default function StudentTimetablePage() {
     subjectSingular: 'Subject',
   };
 
-  // Get active session
+  // Get active session (for term selector)
   const { data: activeSessionResponse } = useGetActiveSessionQuery(
-    { schoolId: schoolId! },
+    { schoolId: schoolId || '' },
     { skip: !schoolId }
   );
   const activeSession = activeSessionResponse?.data;
 
   // Get all sessions to populate term selector
   const { data: sessionsResponse } = useGetSessionsQuery(
-    { schoolId: schoolId! },
+    { schoolId: schoolId || '' },
     { skip: !schoolId }
   );
 
   // Determine which term to use (selected or active)
   const currentTermId = selectedTermId || activeSession?.term?.id || '';
 
-  // For TERTIARY: Use getTimetableForStudent (hybrid approach with course registrations)
-  // For PRIMARY/SECONDARY: Fallback to class timetable
-  const isTertiary = currentType === 'TERTIARY';
-  
+  // Use the unified student timetable endpoint which handles:
+  // - PRIMARY/SECONDARY: Automatically uses ClassArm or Class timetable
+  // - TERTIARY: Merges home class + course registrations
   const { 
-    data: studentTimetableResponse, 
-    isLoading: isLoadingStudentTimetable, 
-    error: studentTimetableError 
-  } = useGetTimetableForStudentQuery(
-    {
-      schoolId: schoolId!,
-      studentId: studentId!,
-      termId: currentTermId,
-    },
-    { skip: !schoolId || !studentId || !currentTermId || !isTertiary }
+    data: timetableResponse, 
+    isLoading: isLoadingTimetable, 
+    error: timetableError 
+  } = useGetMyStudentTimetableQuery(
+    { termId: currentTermId || undefined },
+    { skip: !classData } // Skip until we have class data (to ensure student is enrolled)
   );
 
-  // Fallback for PRIMARY/SECONDARY: Get timetable for the class
-  const { 
-    data: classTimetableResponse, 
-    isLoading: isLoadingClassTimetable, 
-    error: classTimetableError 
-  } = useGetTimetableForClassQuery(
-    {
-      schoolId: schoolId!,
-      classId: classData?.id!,
-      termId: currentTermId,
-    },
-    { skip: !schoolId || !classData?.id || !currentTermId || isTertiary }
-  );
+  const timetable = timetableResponse?.data || [];
 
-  // Also get timetable for classArm if student is in a classArm (PRIMARY/SECONDARY only)
-  const classArmId = classData?.classArmId || classData?.enrollment?.classArmId;
-  const { 
-    data: classArmTimetableResponse, 
-    isLoading: isLoadingClassArmTimetable 
-  } = useGetTimetableForClassArmQuery(
-    {
-      schoolId: schoolId!,
-      classArmId: classArmId!,
-      termId: currentTermId,
-    },
-    { skip: !schoolId || !classArmId || !currentTermId || isTertiary }
-  );
-
-  // Combine timetables based on school type
-  const timetable = useMemo(() => {
-    if (isTertiary && studentTimetableResponse?.data) {
-      // TERTIARY: Use student timetable (already includes merged home class + course registrations)
-      return studentTimetableResponse.data;
-    } else {
-      // PRIMARY/SECONDARY: Combine class and classArm timetables
-      const classPeriods = classTimetableResponse?.data || [];
-      const classArmPeriods = classArmTimetableResponse?.data || [];
-      
-      // Combine and deduplicate by period id
-      const allPeriods = [...classPeriods, ...classArmPeriods];
-      const uniquePeriods = Array.from(
-        new Map(allPeriods.map((p: any) => [p.id, p])).values()
-      );
-      
-      return uniquePeriods;
-    }
-  }, [
-    isTertiary,
-    studentTimetableResponse,
-    classTimetableResponse,
-    classArmTimetableResponse
-  ]);
-
-  const isLoading = isLoadingClasses || 
-    (isTertiary ? isLoadingStudentTimetable : (isLoadingClassTimetable || isLoadingClassArmTimetable));
-  const error = isTertiary ? studentTimetableError : classTimetableError;
+  const isLoading = isLoadingClasses || isLoadingTimetable;
 
   // Extract all terms from sessions for selector - filtered by school type and deduplicated
   const allTerms = useMemo(() => {
@@ -194,7 +127,7 @@ export default function StudentTimetablePage() {
     );
   }
 
-  if (error) {
+  if (timetableError) {
     return (
       <ProtectedRoute roles={['STUDENT']}>
         <div className="flex items-center justify-center min-h-[400px]">
@@ -263,4 +196,3 @@ export default function StudentTimetablePage() {
     </ProtectedRoute>
   );
 }
-

@@ -129,6 +129,7 @@ function AdmissionsPageContent() {
     phone: '',
     address: '',
     classLevel: '',
+    classArmId: '', // For ClassArm-based enrollment
     // Parent/Guardian Information
     parentName: '',
     parentPhone: '',
@@ -277,7 +278,8 @@ function AdmissionsPageContent() {
         email: formData.email?.trim() || undefined,
         phone: formData.phone.trim(),
         address: formData.address?.trim() || undefined,
-        classLevel: formData.classLevel,
+        classLevel: formData.classArmId ? undefined : formData.classLevel, // Only send if no ClassArm
+        classArmId: formData.classArmId || undefined, // Send ClassArm ID if available
         academicYear: undefined, // Will be auto-determined by backend
         parentName: formData.parentName.trim(),
         parentPhone: formData.parentPhone.trim(),
@@ -333,6 +335,7 @@ function AdmissionsPageContent() {
         phone: '',
         address: '',
         classLevel: '',
+        classArmId: '',
         parentName: '',
         parentPhone: '',
         parentEmail: '',
@@ -786,6 +789,7 @@ function AdmissionsPageContent() {
                 phone: '',
                 address: '',
                 classLevel: '',
+                classArmId: '',
                 parentName: '',
                 parentPhone: '',
                 parentEmail: '',
@@ -964,9 +968,29 @@ function AdmissionsPageContent() {
                       Class Level *
                     </label>
                     <select
-                      value={formData.classLevel}
+                      value={formData.classArmId || formData.classLevel}
                       onChange={(e) => {
-                        setFormData({ ...formData, classLevel: e.target.value });
+                        const selectedValue = e.target.value;
+                        // Find the selected class to check if it's a ClassArm
+                        const selectedClass = classes.find((cls: any) => 
+                          cls.classArmId === selectedValue || cls.id === selectedValue || cls.name === selectedValue
+                        );
+                        
+                        if (selectedClass?.classArmId) {
+                          // It's a ClassArm - store classArmId and classLevel
+                          setFormData({ 
+                            ...formData, 
+                            classArmId: selectedClass.classArmId,
+                            classLevel: selectedClass.classLevel || selectedClass.name,
+                          });
+                        } else {
+                          // It's a legacy Class - store classLevel only
+                          setFormData({ 
+                            ...formData, 
+                            classArmId: '',
+                            classLevel: selectedClass?.name || selectedValue,
+                          });
+                        }
                         if (errors.classLevel) {
                           setErrors({ ...errors, classLevel: undefined });
                         }
@@ -980,8 +1004,8 @@ function AdmissionsPageContent() {
                       disabled={classes.length === 0}
                     >
                       <option value="">{classes.length === 0 ? 'Loading classes...' : 'Select class'}</option>
-                      {classes.map((cls: Class) => (
-                        <option key={cls.id} value={cls.name}>
+                      {classes.map((cls: any) => (
+                        <option key={cls.id} value={cls.classArmId || cls.id}>
                           {cls.name}
                         </option>
                       ))}

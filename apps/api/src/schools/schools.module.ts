@@ -4,10 +4,6 @@ import { AuthModule } from '../auth/auth.module';
 import { EmailModule } from '../email/email.module';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 
-// Legacy controller and service - DEPRECATED: Will be removed after migration verification
-// import { SchoolsController } from './schools.controller';
-// import { SchoolsService } from './schools.service';
-
 // Super Admin
 import { SuperAdminSchoolsController } from './super-admin/super-admin-schools.controller';
 import { SuperAdminSchoolsService } from './super-admin/super-admin-schools.service';
@@ -67,8 +63,6 @@ import { CloudinaryModule } from '../storage/cloudinary/cloudinary.module';
     FacultyController,
     DepartmentController,
     LevelController,
-    // Legacy controller - DEPRECATED: Commented out, remove after verification
-    // SchoolsController,
   ],
   providers: [
     // New architecture services
@@ -96,8 +90,6 @@ import { CloudinaryModule } from '../storage/cloudinary/cloudinary.module';
     StaffValidatorService,
   ],
   exports: [
-    // Export services for use in other modules
-    // SchoolsService, // DEPRECATED: Remove after migration verification
     SuperAdminSchoolsService,
     SchoolAdminSchoolsService,
     AdminService,
