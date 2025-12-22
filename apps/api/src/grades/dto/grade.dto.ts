@@ -182,6 +182,11 @@ export class BulkGradeEntryDto {
   @IsOptional()
   academicYear?: string;
 
+  @ApiPropertyOptional({ description: 'Whether grades are published', default: false })
+  @IsBoolean()
+  @IsOptional()
+  isPublished?: boolean;
+
   @ApiProperty({ description: 'Array of student grades', type: [StudentGradeEntryDto] })
   @IsArray()
   @ValidateNested({ each: true })

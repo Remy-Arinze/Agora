@@ -5,7 +5,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { motion } from 'framer-motion';
-import { FileText, Download, Upload, X, Loader2, AlertCircle } from 'lucide-react';
+import { FileText, Download, X, Loader2, AlertCircle, Upload } from 'lucide-react';
 import {
   useGetMyStudentResourcesQuery,
   useGetMyStudentPersonalResourcesQuery,
@@ -14,6 +14,7 @@ import {
   useGetMyStudentClassesQuery,
   useGetMyStudentSchoolQuery,
 } from '@/lib/store/api/schoolAdminApi';
+import { FileUploadModal } from '@/components/modals/FileUploadModal';
 import toast from 'react-hot-toast';
 
 type ResourceType = 'class' | 'personal';
@@ -21,8 +22,6 @@ type ResourceType = 'class' | 'personal';
 export default function StudentResourcesPage() {
   const [activeTab, setActiveTab] = useState<ResourceType>('class');
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [description, setDescription] = useState('');
 
   // Get student's school and classes
   const { data: schoolResponse } = useGetMyStudentSchoolQuery();
@@ -31,10 +30,10 @@ export default function StudentResourcesPage() {
   const classes = classesResponse?.data || [];
   const classData = useMemo(() => classes[0] || null, [classes]);
 
-  // Get class resources
+  // Get class resources - backend automatically filters by student's enrolled classes/classArms
   const { data: classResourcesResponse, isLoading: isLoadingClassResources } = useGetMyStudentResourcesQuery(
-    { classId: classData?.id },
-    { skip: !classData?.id }
+    {},
+    { skip: !classData } // Skip until we know student is enrolled
   );
   const classResources = classResourcesResponse?.data || [];
 
@@ -46,55 +45,25 @@ export default function StudentResourcesPage() {
   const [uploadPersonalResource, { isLoading: isUploadingMutation }] = useUploadPersonalResourceMutation();
   const [deletePersonalResource] = useDeletePersonalResourceMutation();
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      // Validate file size (50MB max)
-      if (file.size > 50 * 1024 * 1024) {
-        toast.error('File size exceeds 50MB limit');
-        return;
-      }
-      
-      // Validate file type - only documents and spreadsheets, no images
-      const allowedMimeTypes = [
-        'application/pdf',
-        'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'application/vnd.ms-excel',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'application/vnd.ms-powerpoint',
-        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-        'text/plain',
-        'text/csv',
-      ];
-      
-      if (!allowedMimeTypes.includes(file.type)) {
-        toast.error(`File type ${file.type} is not allowed. Only documents and spreadsheets are permitted (PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT, CSV). Images are not allowed.`);
-        return;
-      }
-      
-      setSelectedFile(file);
-    }
-  };
+  // Allowed file types for personal resources (documents only, no images)
+  const allowedFileTypes = [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'text/plain',
+    'text/csv',
+  ];
 
-  const handleUpload = async () => {
-    if (!selectedFile) {
-      toast.error('Please select a file');
-      return;
-    }
-
-    try {
-      await uploadPersonalResource({
-        file: selectedFile,
-        description: description || undefined,
-      }).unwrap();
-      toast.success('Resource uploaded successfully');
-      setShowUploadModal(false);
-      setSelectedFile(null);
-      setDescription('');
-    } catch (error: any) {
-      toast.error(error?.data?.message || error?.message || 'Failed to upload resource');
-    }
+  const handleUpload = async (file: File, description?: string) => {
+    await uploadPersonalResource({
+      file,
+      description: description || undefined,
+    }).unwrap();
+    toast.success('Resource uploaded successfully');
   };
 
   const handleDownload = async (resource: any, isPersonal: boolean) => {
@@ -385,96 +354,14 @@ export default function StudentResourcesPage() {
         </Card>
 
         {/* Upload Modal */}
-        {showUploadModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-light-card dark:bg-dark-surface rounded-lg shadow-xl max-w-md w-full"
-            >
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-2xl font-bold text-light-text-primary dark:text-dark-text-primary">
-                    Upload Personal Resource
-                  </h2>
-                  <button
-                    onClick={() => {
-                      setShowUploadModal(false);
-                      setSelectedFile(null);
-                      setDescription('');
-                    }}
-                    className="text-light-text-secondary dark:text-dark-text-secondary hover:text-light-text-primary dark:hover:text-dark-text-primary"
-                  >
-                    <X className="h-6 w-6" />
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-light-text-primary dark:text-dark-text-primary mb-2">
-                      File
-                    </label>
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv"
-                      onChange={handleFileSelect}
-                      className="w-full px-3 py-2 border border-light-border dark:border-dark-border rounded-md bg-light-bg dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary"
-                    />
-                    {selectedFile && (
-                      <p className="mt-2 text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                        Selected: {selectedFile.name} ({formatFileSize(selectedFile.size)})
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-light-text-primary dark:text-dark-text-primary mb-2">
-                      Description (Optional)
-                    </label>
-                    <textarea
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-light-border dark:border-dark-border rounded-md bg-light-bg dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary"
-                      placeholder="Add a description for this resource..."
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-3 mt-6">
-                    <Button
-                      variant="ghost"
-                      onClick={() => {
-                        setShowUploadModal(false);
-                        setSelectedFile(null);
-                        setDescription('');
-                      }}
-                      disabled={isUploadingMutation}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="primary"
-                      onClick={handleUpload}
-                      disabled={!selectedFile || isUploadingMutation}
-                    >
-                      {isUploadingMutation ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Uploading...
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="h-4 w-4 mr-2" />
-                          Upload
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
+        <FileUploadModal
+          isOpen={showUploadModal}
+          onClose={() => setShowUploadModal(false)}
+          onUpload={handleUpload}
+          title="Upload Personal Resource"
+          acceptedFileTypes={allowedFileTypes}
+          isUploading={isUploadingMutation}
+        />
       </div>
     </ProtectedRoute>
   );

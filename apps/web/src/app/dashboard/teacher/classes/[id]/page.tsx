@@ -39,6 +39,7 @@ import {
   useGetClassStudentsQuery,
   useGetClassGradesQuery,
   useDeleteGradeMutation,
+  useUpdateGradeMutation,
   useGetCurriculumForClassQuery,
   useGetTimetableForClassQuery,
   useGetSessionsQuery,
@@ -129,6 +130,23 @@ export default function ClassDetailPage() {
   );
 
   const [deleteGrade, { isLoading: isDeleting }] = useDeleteGradeMutation();
+  const [updateGrade, { isLoading: isPublishing }] = useUpdateGradeMutation();
+
+  const handlePublishGrade = async (gradeId: string) => {
+    if (!schoolId) return;
+    
+    try {
+      await updateGrade({
+        schoolId,
+        gradeId,
+        gradeData: { isPublished: true },
+      }).unwrap();
+      toast.success('Grade published successfully');
+      refetchGrades();
+    } catch (error: any) {
+      toast.error(error?.data?.message || 'Failed to publish grade');
+    }
+  };
 
   const classData = classResponse?.data;
 
@@ -675,6 +693,9 @@ export default function ClassDetailPage() {
                                 Percentage
                               </th>
                               <th className="px-4 py-3 text-left text-xs font-medium text-light-text-secondary dark:text-dark-text-secondary uppercase">
+                                Status
+                              </th>
+                              <th className="px-4 py-3 text-left text-xs font-medium text-light-text-secondary dark:text-dark-text-secondary uppercase">
                                 Actions
                               </th>
                             </tr>
@@ -743,7 +764,29 @@ export default function ClassDetailPage() {
                                     </p>
                                   </td>
                                   <td className="px-4 py-3">
+                                    {grade.isPublished ? (
+                                      <span className="px-2 py-1 text-xs font-medium rounded bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400">
+                                        Published
+                                      </span>
+                                    ) : (
+                                      <span className="px-2 py-1 text-xs font-medium rounded bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400">
+                                        Draft
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td className="px-4 py-3">
                                     <div className="flex items-center gap-2">
+                                      {!grade.isPublished && (
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => handlePublishGrade(grade.id)}
+                                          disabled={isPublishing}
+                                          className="text-blue-600 dark:text-blue-400"
+                                        >
+                                          Publish
+                                        </Button>
+                                      )}
                                       <Button
                                         variant="ghost"
                                         size="sm"

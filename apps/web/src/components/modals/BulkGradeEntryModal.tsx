@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { useBulkCreateGradesMutation, useGetClassGradesQuery } from '@/lib/store/api/schoolAdminApi';
 import type { GradeType, BulkGradeEntryDto, StudentWithEnrollment } from '@/lib/store/api/schoolAdminApi';
 import toast from 'react-hot-toast';
@@ -46,6 +47,7 @@ export function BulkGradeEntryModal({
   const [assessmentDate, setAssessmentDate] = useState('');
   const [sequence, setSequence] = useState<number | ''>('');
   const [studentGrades, setStudentGrades] = useState<StudentGradeEntry[]>([]);
+  const [isPublished, setIsPublished] = useState(false);
 
   const [bulkCreateGrades, { isLoading }] = useBulkCreateGradesMutation();
 
@@ -99,6 +101,7 @@ export function BulkGradeEntryModal({
       setAssessmentDate('');
       setSequence('');
       setStudentGrades([]);
+      setIsPublished(false);
     }
   }, [isOpen, students]);
 
@@ -162,6 +165,7 @@ export function BulkGradeEntryModal({
       sequence: sequence !== '' ? sequence as number : undefined,
       termId: termId || undefined,
       academicYear: academicYear || undefined,
+      isPublished: isPublished,
       grades: validGrades.map((entry) => ({
         enrollmentId: entry.enrollmentId,
         score: entry.score as number,
@@ -204,21 +208,16 @@ export function BulkGradeEntryModal({
         
         {/* Common Fields */}
         <div className="grid grid-cols-2 gap-4 p-4 bg-light-surface dark:bg-dark-surface rounded-lg border border-light-border dark:border-dark-border">
-          <div>
-            <label className="block text-sm font-medium text-light-text-primary dark:text-dark-text-primary mb-1">
-              Grade Type <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={gradeType}
-              onChange={(e) => setGradeType(e.target.value as GradeType)}
-              className="w-full px-3 py-2 border border-light-border dark:border-dark-border rounded-md bg-light-bg dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary"
-              required
-            >
-              <option value="CA">CA (Continuous Assessment)</option>
-              <option value="ASSIGNMENT">Assignment</option>
-              <option value="EXAM">Exam</option>
-            </select>
-          </div>
+          <Select
+            label="Grade Type"
+            required
+            value={gradeType}
+            onChange={(e) => setGradeType(e.target.value as GradeType)}
+          >
+            <option value="CA">CA (Continuous Assessment)</option>
+            <option value="ASSIGNMENT">Assignment</option>
+            <option value="EXAM">Exam</option>
+          </Select>
 
           <div>
             <label className="block text-sm font-medium text-light-text-primary dark:text-dark-text-primary mb-1">
@@ -385,6 +384,22 @@ export function BulkGradeEntryModal({
               </table>
             </div>
           </div>
+        </div>
+
+        <div className="flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+          <input
+            type="checkbox"
+            id="bulkIsPublished"
+            checked={isPublished}
+            onChange={(e) => setIsPublished(e.target.checked)}
+            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+          />
+          <label htmlFor="bulkIsPublished" className="text-sm text-blue-900 dark:text-blue-100">
+            <span className="font-medium">Publish immediately</span>
+            <span className="text-blue-700 dark:text-blue-300 ml-1">
+              (Students will be able to see these grades)
+            </span>
+          </label>
         </div>
 
         <div className="flex justify-end gap-3 pt-4 border-t border-light-border dark:border-dark-border">

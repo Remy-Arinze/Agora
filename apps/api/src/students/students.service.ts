@@ -600,45 +600,58 @@ export class StudentsService {
       throw new ForbiddenException('Access denied. Student role required.');
     }
 
-    // Build where clause for student
-    const studentWhere: any = {
-      userId: user.id,
-    };
+    // Get student by userId
+    const student = await this.prisma.student.findFirst({
+      where: { userId: user.id },
+    });
 
-    if (schoolId) {
-      studentWhere.enrollments = {
-        some: {
-          schoolId,
-          isActive: true,
-        },
-      };
-    } else {
-      studentWhere.enrollments = {
-        some: {
-          isActive: true,
-        },
-      };
+    if (!student) {
+      return [];
     }
 
-    // Get student
-    const student = await this.prisma.student.findFirst({
-      where: studentWhere,
+    // Build enrollment filter - get ALL enrollments for grades (not just active)
+    // This ensures we can see grades from all enrollments
+    const enrollmentFilter: any = {};
+
+    // Filter by school if provided
+    if (schoolId) {
+      enrollmentFilter.schoolId = schoolId;
+    }
+
+    // If classId is provided, check if it's a ClassArm or Class
+    if (filters?.classId) {
+      // Check if it's a ClassArm
+      const classArm = await this.prisma.classArm.findUnique({
+        where: { id: filters.classId },
+      });
+
+      if (classArm) {
+        enrollmentFilter.classArmId = filters.classId;
+      } else {
+        enrollmentFilter.classId = filters.classId;
+      }
+    }
+
+    // Get all enrollments for this student (including inactive for historical grades)
+    const enrollments = await this.prisma.enrollment.findMany({
+      where: {
+        studentId: student.id,
+        ...enrollmentFilter,
+      },
       include: {
-        enrollments: {
-          where: {
-            ...(schoolId ? { schoolId } : {}),
-            isActive: true,
-            ...(filters?.classId ? { classId: filters.classId } : {}),
+        classArm: {
+          include: {
+            classLevel: true,
           },
         },
       },
     });
 
-    if (!student || student.enrollments.length === 0) {
+    if (enrollments.length === 0) {
       return [];
     }
 
-    const enrollmentIds = student.enrollments.map((e) => e.id);
+    const enrollmentIds = enrollments.map((e) => e.id);
 
     // Build where clause - only published grades
     const where: any = {
@@ -666,6 +679,16 @@ export class StudentsService {
                 name: true,
               },
             },
+            classArm: {
+              include: {
+                classLevel: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
           },
         },
         teacher: {
@@ -684,29 +707,46 @@ export class StudentsService {
       ],
     });
 
-    return grades.map((grade) => ({
-      id: grade.id,
-      enrollmentId: grade.enrollmentId,
-      teacherId: grade.teacherId,
-      subject: grade.subject,
-      assessmentName: grade.assessmentName,
-      score: grade.score.toNumber(),
-      maxScore: grade.maxScore.toNumber(),
-      percentage: grade.score.toNumber() / grade.maxScore.toNumber() * 100,
-      remarks: grade.remarks,
-      assessmentDate: grade.assessmentDate?.toISOString(),
-      academicYear: grade.academicYear,
-      term: grade.term,
-      sequence: grade.sequence,
-      isPublished: grade.isPublished,
-      createdAt: grade.createdAt.toISOString(),
-      enrollment: {
-        id: grade.enrollment.id,
-        classLevel: grade.enrollment.classLevel,
-        class: grade.enrollment.class,
-      },
-      teacher: grade.teacher,
-    }));
+    return grades.map((grade) => {
+      // Determine class name from either Class or ClassArm
+      const className = grade.enrollment.classArm
+        ? `${grade.enrollment.classArm.classLevel.name} ${grade.enrollment.classArm.name}`
+        : grade.enrollment.class?.name || grade.enrollment.classLevel;
+
+      return {
+        id: grade.id,
+        enrollmentId: grade.enrollmentId,
+        teacherId: grade.teacherId,
+        subject: grade.subject,
+        gradeType: grade.gradeType,
+        assessmentName: grade.assessmentName,
+        score: grade.score.toNumber(),
+        maxScore: grade.maxScore.toNumber(),
+        percentage: grade.maxScore.toNumber() > 0 
+          ? (grade.score.toNumber() / grade.maxScore.toNumber()) * 100 
+          : 0,
+        remarks: grade.remarks,
+        assessmentDate: grade.assessmentDate?.toISOString(),
+        academicYear: grade.academicYear,
+        term: grade.term,
+        termId: grade.termId,
+        sequence: grade.sequence,
+        isPublished: grade.isPublished,
+        createdAt: grade.createdAt.toISOString(),
+        enrollment: {
+          id: grade.enrollment.id,
+          classLevel: grade.enrollment.classLevel,
+          className: className,
+          class: grade.enrollment.class,
+          classArm: grade.enrollment.classArm ? {
+            id: grade.enrollment.classArm.id,
+            name: grade.enrollment.classArm.name,
+            classLevel: grade.enrollment.classArm.classLevel,
+          } : null,
+        },
+        teacher: grade.teacher,
+      };
+    });
   }
 
   /**
@@ -1361,6 +1401,17 @@ export class StudentsService {
             type: true,
           },
         },
+        classArm: {
+          include: {
+            classLevel: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+              },
+            },
+          },
+        },
       },
       orderBy: { enrollmentDate: 'desc' },
     });
@@ -1391,6 +1442,16 @@ export class StudentsService {
               select: {
                 id: true,
                 name: true,
+              },
+            },
+            classArm: {
+              include: {
+                classLevel: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
               },
             },
           },
@@ -1456,15 +1517,25 @@ export class StudentsService {
     allGrades.forEach((grade) => {
       const schoolId = grade.enrollment.schoolId;
       if (schoolsMap.has(schoolId)) {
+        // Determine class name from ClassArm or classLevel
+        const className = grade.enrollment.classArm
+          ? `${grade.enrollment.classArm.classLevel.name} ${grade.enrollment.classArm.name}`
+          : grade.enrollment.classLevel;
+
         schoolsMap.get(schoolId).grades.push({
           id: grade.id,
           subject: grade.subject,
           assessmentName: grade.assessmentName,
+          gradeType: grade.gradeType,
           score: grade.score.toNumber(),
           maxScore: grade.maxScore.toNumber(),
-          percentage: grade.score.toNumber() / grade.maxScore.toNumber() * 100,
+          percentage: grade.maxScore.toNumber() > 0 
+            ? (grade.score.toNumber() / grade.maxScore.toNumber()) * 100 
+            : 0,
           academicYear: grade.academicYear,
           term: grade.term,
+          termId: grade.termId,
+          className: className,
           assessmentDate: grade.assessmentDate?.toISOString(),
           teacher: grade.teacher,
         });
@@ -1483,12 +1554,18 @@ export class StudentsService {
     // Build timeline
     const timeline: any[] = [];
     allEnrollments.forEach((enrollment) => {
+      // Determine class name from ClassArm or classLevel
+      const className = enrollment.classArm
+        ? `${enrollment.classArm.classLevel.name} ${enrollment.classArm.name}`
+        : enrollment.classLevel;
+
       timeline.push({
         type: 'enrollment',
         date: enrollment.enrollmentDate,
         school: enrollment.school,
         details: {
           classLevel: enrollment.classLevel,
+          className: className,
           academicYear: enrollment.academicYear,
         },
       });

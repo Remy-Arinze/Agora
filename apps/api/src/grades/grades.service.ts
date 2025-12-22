@@ -70,30 +70,40 @@ export class GradesService {
       }
     }
 
-    // For secondary schools, validate teacher is assigned to class/subject
+    // Validate teacher is assigned to class/subject (supports both Class and ClassArm)
+    // Note: Use teacher.id (database ID) for ClassTeacher queries
     if (dto.subject) {
+      // Build the where clause based on enrollment type (classId or classArmId)
+      const classAssignmentWhere: any = {
+        teacherId: teacher.id,
+        subject: dto.subject,
+      };
+
+      if (enrollment.classArmId) {
+        classAssignmentWhere.classArmId = enrollment.classArmId;
+      } else if (enrollment.classId) {
+        classAssignmentWhere.classId = enrollment.classId;
+      }
+
       const classAssignment = await this.prisma.classTeacher.findFirst({
-        where: {
-          teacherId: teacherId,
-          class: {
-            id: enrollment.classId || undefined,
-            schoolId: school.id,
-          },
-          subject: dto.subject,
-        },
+        where: classAssignmentWhere,
       });
 
       if (!classAssignment) {
         // Check if teacher is primary teacher (for primary schools)
+        const primaryTeacherWhere: any = {
+          teacherId: teacher.id,
+          isPrimary: true,
+        };
+
+        if (enrollment.classArmId) {
+          primaryTeacherWhere.classArmId = enrollment.classArmId;
+        } else if (enrollment.classId) {
+          primaryTeacherWhere.classId = enrollment.classId;
+        }
+
         const isPrimaryTeacher = await this.prisma.classTeacher.findFirst({
-          where: {
-            teacherId: teacherId,
-            class: {
-              id: enrollment.classId || undefined,
-              schoolId: school.id,
-            },
-            isPrimary: true,
-          },
+          where: primaryTeacherWhere,
         });
 
         if (!isPrimaryTeacher) {
@@ -119,10 +129,11 @@ export class GradesService {
     }
 
     // Create grade
+    // Note: Use teacher.id (database ID) for Grade.teacherId
     const grade = await this.prisma.grade.create({
       data: {
         enrollmentId: dto.enrollmentId,
-        teacherId: teacherId,
+        teacherId: teacher.id,
         subject: dto.subject || '',
         gradeType: dto.gradeType,
         assessmentName: dto.assessmentName || null,
@@ -195,8 +206,8 @@ export class GradesService {
    * Update a grade
    */
   async updateGrade(schoolId: string, gradeId: string, dto: UpdateGradeDto, user: UserWithContext): Promise<any> {
-    const teacherId = user.currentProfileId;
-    if (!teacherId) {
+    const teacherProfileId = user.currentProfileId;
+    if (!teacherProfileId) {
       throw new ForbiddenException('Teacher profile not found');
     }
 
@@ -204,6 +215,13 @@ export class GradesService {
     const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
     if (!school) {
       throw new NotFoundException('School not found');
+    }
+
+    // Get teacher's database ID from profile ID
+    // Note: currentProfileId contains teacherId (unique string like "TCH-XXX"), not the database id
+    const teacher = await this.staffRepository.findTeacherByTeacherId(teacherProfileId);
+    if (!teacher || teacher.schoolId !== school.id) {
+      throw new ForbiddenException('Teacher not found in this school');
     }
 
     // Get grade
@@ -228,7 +246,9 @@ export class GradesService {
     }
 
     // Only the teacher who created the grade can update it
-    if (grade.teacherId !== teacherId) {
+    // Compare using database ID (teacher.id) or profile ID (for backward compatibility with old grades)
+    const isOwner = grade.teacherId === teacher.id || grade.teacherId === teacherProfileId;
+    if (!isOwner) {
       throw new ForbiddenException('You can only update grades you created');
     }
 
@@ -324,8 +344,8 @@ export class GradesService {
    * Delete a grade
    */
   async deleteGrade(schoolId: string, gradeId: string, user: UserWithContext): Promise<void> {
-    const teacherId = user.currentProfileId;
-    if (!teacherId) {
+    const teacherProfileId = user.currentProfileId;
+    if (!teacherProfileId) {
       throw new ForbiddenException('Teacher profile not found');
     }
 
@@ -333,6 +353,13 @@ export class GradesService {
     const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
     if (!school) {
       throw new NotFoundException('School not found');
+    }
+
+    // Get teacher's database ID from profile ID
+    // Note: currentProfileId contains teacherId (unique string like "TCH-XXX"), not the database id
+    const teacher = await this.staffRepository.findTeacherByTeacherId(teacherProfileId);
+    if (!teacher || teacher.schoolId !== school.id) {
+      throw new ForbiddenException('Teacher not found in this school');
     }
 
     // Get grade
@@ -356,7 +383,9 @@ export class GradesService {
     }
 
     // Only the teacher who created the grade can delete it
-    if (grade.teacherId !== teacherId) {
+    // Compare using database ID (teacher.id) or profile ID (for backward compatibility with old grades)
+    const isOwner = grade.teacherId === teacher.id || grade.teacherId === teacherProfileId;
+    if (!isOwner) {
       throw new ForbiddenException('You can only delete grades you created');
     }
 
@@ -366,7 +395,8 @@ export class GradesService {
   }
 
   /**
-   * Get grades for a class
+   * Get grades for a class or ClassArm
+   * Supports both Classes (TERTIARY/backward compat) and ClassArms (PRIMARY/SECONDARY)
    */
   async getClassGrades(
     schoolId: string,
@@ -382,34 +412,62 @@ export class GradesService {
       throw new NotFoundException('School not found');
     }
 
-    // Validate class exists
-    const classData = await this.prisma.class.findFirst({
-      where: {
-        id: classId,
-        schoolId: school.id,
-      },
+    // Check if classId is a ClassArm (for PRIMARY/SECONDARY schools)
+    const classArm = await this.prisma.classArm.findUnique({
+      where: { id: classId },
+      include: { classLevel: true },
     });
 
-    if (!classData) {
-      throw new NotFoundException('Class not found');
+    let classData: any = null;
+    let isClassArm = false;
+
+    if (classArm && classArm.classLevel.schoolId === school.id) {
+      // It's a ClassArm
+      isClassArm = true;
+      classData = {
+        id: classArm.id,
+        name: `${classArm.classLevel.name} ${classArm.name}`,
+        classLevel: classArm.classLevel.name,
+        academicYear: classArm.academicYear,
+        type: classArm.classLevel.type,
+      };
+    } else {
+      // It's a Class - validate it exists (for TERTIARY/backward compatibility)
+      classData = await this.prisma.class.findFirst({
+        where: {
+          id: classId,
+          schoolId: school.id,
+        },
+      });
+
+      if (!classData) {
+        throw new NotFoundException('Class or ClassArm not found');
+      }
     }
 
-    // Get enrollments for this class
+    // Get enrollments for this class/ClassArm
+    const enrollmentWhere: any = {
+      schoolId: school.id,
+      isActive: true,
+      academicYear: classData.academicYear,
+    };
+
+    if (isClassArm) {
+      enrollmentWhere.classArmId = classId;
+    } else {
+      enrollmentWhere.OR = [
+        { classId: classId },
+        {
+          AND: [
+            { classLevel: classData.classLevel },
+            { classId: null },
+          ],
+        },
+      ];
+    }
+
     const enrollments = await this.prisma.enrollment.findMany({
-      where: {
-        schoolId: school.id,
-        isActive: true,
-        academicYear: classData.academicYear,
-        OR: [
-          { classId: classId },
-          {
-            AND: [
-              { classLevel: classData.classLevel },
-              { classId: null },
-            ],
-          },
-        ],
-      },
+      where: enrollmentWhere,
       select: { id: true },
     });
 
@@ -442,13 +500,20 @@ export class GradesService {
       const teacher = await this.staffRepository.findTeacherByTeacherId(teacherIdString);
       
       if (teacher) {
-        // Get teacher's assigned subjects for this class
+        // Get teacher's assigned subjects for this class/ClassArm
         // Use teacher.id (database ID) for ClassTeacher.teacherId
+        const assignmentWhere: any = {
+          teacherId: teacher.id,
+        };
+
+        if (isClassArm) {
+          assignmentWhere.classArmId = classId;
+        } else {
+          assignmentWhere.classId = classId;
+        }
+
         const assignments = await this.prisma.classTeacher.findMany({
-          where: {
-            teacherId: teacher.id,
-            classId: classId,
-          },
+          where: assignmentWhere,
         });
 
         if (assignments.length > 0) {
@@ -587,11 +652,12 @@ export class GradesService {
         where.teacherId = teacher.id;
         
         if (!subject) {
-          // Get teacher's subjects from their class assignments
+          // Get teacher's subjects from their class assignments (both Class and ClassArm)
           // Use teacher.id (database ID) for ClassTeacher.teacherId
-          const assignments = await this.prisma.classTeacher.findMany({
+          const classAssignments = await this.prisma.classTeacher.findMany({
             where: {
               teacherId: teacher.id,
+              classId: { not: null },
               class: {
                 schoolId: school.id,
               },
@@ -599,7 +665,21 @@ export class GradesService {
             select: { subject: true },
           });
 
-          const assignedSubjects = assignments.map((a) => a.subject).filter(Boolean);
+          const classArmAssignments = await this.prisma.classTeacher.findMany({
+            where: {
+              teacherId: teacher.id,
+              classArmId: { not: null },
+              classArm: {
+                classLevel: {
+                  schoolId: school.id,
+                },
+              },
+            },
+            select: { subject: true },
+          });
+
+          const allAssignments = [...classAssignments, ...classArmAssignments];
+          const assignedSubjects = allAssignments.map((a) => a.subject).filter(Boolean);
           if (assignedSubjects.length > 0) {
             where.subject = { in: assignedSubjects };
           }
@@ -686,7 +766,8 @@ export class GradesService {
   }
 
   /**
-   * Bulk create grades for a class
+   * Bulk create grades for a class or ClassArm
+   * Supports both Classes (TERTIARY/backward compat) and ClassArms (PRIMARY/SECONDARY)
    */
   async bulkCreateGrades(schoolId: string, dto: any, user: UserWithContext): Promise<any[]> {
     const teacherId = user.currentProfileId;
@@ -707,37 +788,72 @@ export class GradesService {
       throw new ForbiddenException('Teacher not found in this school');
     }
 
-    // Validate class exists
-    const classData = await this.prisma.class.findFirst({
-      where: {
-        id: dto.classId,
-        schoolId: school.id,
-      },
+    // Check if classId is a ClassArm (for PRIMARY/SECONDARY schools)
+    const classArm = await this.prisma.classArm.findUnique({
+      where: { id: dto.classId },
+      include: { classLevel: true },
     });
 
-    if (!classData) {
-      throw new NotFoundException('Class not found');
+    let classData: any = null;
+    let isClassArm = false;
+
+    if (classArm && classArm.classLevel.schoolId === school.id) {
+      // It's a ClassArm
+      isClassArm = true;
+      classData = {
+        id: classArm.id,
+        name: `${classArm.classLevel.name} ${classArm.name}`,
+        classLevel: classArm.classLevel.name,
+        academicYear: classArm.academicYear,
+        type: classArm.classLevel.type,
+      };
+    } else {
+      // It's a Class - validate it exists (for TERTIARY/backward compatibility)
+      classData = await this.prisma.class.findFirst({
+        where: {
+          id: dto.classId,
+          schoolId: school.id,
+        },
+      });
+
+      if (!classData) {
+        throw new NotFoundException('Class or ClassArm not found');
+      }
     }
 
-    // Validate teacher is assigned to this class/subject
+    // Validate teacher is assigned to this class/ClassArm/subject
     // Note: Use teacher.id (database ID) for ClassTeacher queries
     if (dto.subject) {
+      const assignmentWhere: any = {
+        teacherId: teacher.id,
+        subject: dto.subject,
+      };
+
+      if (isClassArm) {
+        assignmentWhere.classArmId = dto.classId;
+      } else {
+        assignmentWhere.classId = dto.classId;
+      }
+
       const assignment = await this.prisma.classTeacher.findFirst({
-        where: {
-          classId: dto.classId,
-          teacherId: teacher.id,
-          subject: dto.subject,
-        },
+        where: assignmentWhere,
       });
 
       if (!assignment) {
         // Check if teacher is primary teacher (for primary schools)
+        const primaryWhere: any = {
+          teacherId: teacher.id,
+          isPrimary: true,
+        };
+
+        if (isClassArm) {
+          primaryWhere.classArmId = dto.classId;
+        } else {
+          primaryWhere.classId = dto.classId;
+        }
+
         const isPrimaryTeacher = await this.prisma.classTeacher.findFirst({
-          where: {
-            classId: dto.classId,
-            teacherId: teacher.id,
-            isPrimary: true,
-          },
+          where: primaryWhere,
         });
 
         if (!isPrimaryTeacher) {
@@ -746,11 +862,18 @@ export class GradesService {
       }
     } else {
       // For primary schools, check if teacher is assigned
+      const assignmentWhere: any = {
+        teacherId: teacher.id,
+      };
+
+      if (isClassArm) {
+        assignmentWhere.classArmId = dto.classId;
+      } else {
+        assignmentWhere.classId = dto.classId;
+      }
+
       const assignment = await this.prisma.classTeacher.findFirst({
-        where: {
-          classId: dto.classId,
-          teacherId: teacher.id,
-        },
+        where: assignmentWhere,
       });
 
       if (!assignment) {
@@ -823,7 +946,7 @@ export class GradesService {
             academicYear: dto.academicYear || academicYear,
             termId: dto.termId || null,
             remarks: gradeEntry.remarks || null,
-            isPublished: false,
+            isPublished: dto.isPublished || false,
             signedAt: new Date(),
           },
           include: {

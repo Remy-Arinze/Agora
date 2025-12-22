@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
@@ -42,6 +42,7 @@ import {
 import { useSchoolType } from '@/hooks/useSchoolType';
 import { getTerminology } from '@/lib/utils/terminology';
 import { AssignTeacherToClassModal } from '@/components/modals/AssignTeacherToClassModal';
+import { FileUploadModal } from '@/components/modals/FileUploadModal';
 import { ConfirmModal } from '@/components/ui/Modal';
 import { BackButton } from '@/components/ui/BackButton';
 import { SubjectCurriculumList } from '@/components/curriculum';
@@ -72,7 +73,7 @@ export default function ClassDetailPage() {
     isOpen: false,
     resource: null,
   });
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
   // Get school ID and type
   const { data: schoolResponse } = useGetMySchoolQuery();
@@ -169,26 +170,16 @@ export default function ClassDetailPage() {
     }
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !schoolId) return;
+  const handleFileUpload = async (file: File, description?: string) => {
+    if (!schoolId) throw new Error('School not found');
 
-    try {
-      await uploadResource({
-    schoolId,
-    classId,
-        file,
-        description: file.name,
-      }).unwrap();
-      toast.success('Resource uploaded successfully');
-    } catch (error: any) {
-      toast.error(error?.data?.message || 'Failed to upload resource');
-    }
-
-    // Reset input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    await uploadResource({
+      schoolId,
+      classId,
+      file,
+      description: description || file.name,
+    }).unwrap();
+    toast.success('Resource uploaded successfully');
   };
 
   const handleDeleteResource = async () => {
@@ -304,6 +295,12 @@ export default function ClassDetailPage() {
                             {teachersByRole.formTeachers[0].firstName} {teachersByRole.formTeachers[0].lastName}
                           </Link>
                           <span className="text-light-text-muted dark:text-dark-text-muted">(Class Teacher)</span>
+                          <button
+                            onClick={() => setRemoveModal({ isOpen: true, teacher: teachersByRole.formTeachers[0] })}
+                            className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 font-medium ml-1"
+                          >
+                            Remove
+                          </button>
                         </>
                       ) : classData.teachers.length > 0 ? (
                         // Fallback: show any assigned teacher (legacy assignments without isPrimary)
@@ -315,9 +312,23 @@ export default function ClassDetailPage() {
                             {classData.teachers[0].firstName} {classData.teachers[0].lastName}
                           </Link>
                           <span className="text-light-text-muted dark:text-dark-text-muted">(Class Teacher)</span>
+                          <button
+                            onClick={() => setRemoveModal({ isOpen: true, teacher: classData.teachers[0] })}
+                            className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 font-medium ml-1"
+                          >
+                            Remove
+                          </button>
                         </>
                       ) : (
-                        <span className="text-light-text-muted dark:text-dark-text-muted italic">No teacher assigned</span>
+                        <>
+                          <span className="text-light-text-muted dark:text-dark-text-muted italic">No teacher assigned</span>
+                          <button
+                            onClick={() => setShowAssignModal(true)}
+                            className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium ml-1"
+                          >
+                            Assign Teacher
+                          </button>
+                        </>
                       )}
                     </span>
                   ) : classData.type === 'SECONDARY' ? (
@@ -332,6 +343,12 @@ export default function ClassDetailPage() {
                           {teachersByRole.formTeachers[0].firstName} {teachersByRole.formTeachers[0].lastName}
                         </Link>
                         <span className="text-light-text-muted dark:text-dark-text-muted">(Form Teacher)</span>
+                        <button
+                          onClick={() => setRemoveModal({ isOpen: true, teacher: teachersByRole.formTeachers[0] })}
+                          className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 font-medium ml-1"
+                        >
+                          Remove
+                        </button>
                         {classData.teachers.length > 1 && (
                           <span className="text-light-text-muted dark:text-dark-text-muted">
                             • +{classData.teachers.length - 1} more teacher{classData.teachers.length > 2 ? 's' : ''}
@@ -341,14 +358,40 @@ export default function ClassDetailPage() {
                     ) : (
                       <span className="flex items-center gap-1 text-light-text-muted dark:text-dark-text-muted">
                         <Users className="h-4 w-4" />
-                        {classData.teachers.length} teacher{classData.teachers.length !== 1 ? 's' : ''} assigned
+                        {classData.teachers.length > 0 ? (
+                          <>
+                            {classData.teachers.length} teacher{classData.teachers.length !== 1 ? 's' : ''} assigned
+                          </>
+                        ) : (
+                          <>
+                            <span className="italic">No form teacher assigned</span>
+                            <button
+                              onClick={() => setShowAssignModal(true)}
+                              className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium ml-1"
+                            >
+                              Assign Teacher
+                            </button>
+                          </>
+                        )}
                       </span>
                     )
                   ) : (
                     // TERTIARY
                     <span className="flex items-center gap-1 text-light-text-muted dark:text-dark-text-muted">
                       <Users className="h-4 w-4" />
-                      {classData.teachers.length} lecturer{classData.teachers.length !== 1 ? 's' : ''} assigned
+                      {classData.teachers.length > 0 ? (
+                        <>{classData.teachers.length} lecturer{classData.teachers.length !== 1 ? 's' : ''} assigned</>
+                      ) : (
+                        <>
+                          <span className="italic">No lecturer assigned</span>
+                          <button
+                            onClick={() => setShowAssignModal(true)}
+                            className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium ml-1"
+                          >
+                            Assign Lecturer
+                          </button>
+                        </>
+                      )}
                     </span>
               )}
             </div>
@@ -732,27 +775,14 @@ export default function ClassDetailPage() {
                     <FileText className="h-6 w-6 text-purple-600 dark:text-purple-400" />
                     <CardTitle>Class Resources</CardTitle>
                   </div>
-                  <div>
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileUpload}
-                      className="hidden"
-                    />
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={isUploading}
-                    >
-                      {isUploading ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                      <Upload className="h-4 w-4 mr-2" />
-                      )}
-                      Upload Resource
-                    </Button>
-                  </div>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setShowUploadModal(true)}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload Resource
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent>
@@ -766,10 +796,10 @@ export default function ClassDetailPage() {
                         <p className="text-light-text-secondary dark:text-dark-text-secondary mb-4">
                           No resources uploaded yet.
                         </p>
-                    <Button variant="primary" onClick={() => fileInputRef.current?.click()}>
-                          <Upload className="h-4 w-4 mr-2" />
+                    <Button variant="primary" onClick={() => setShowUploadModal(true)}>
+                      <Upload className="h-4 w-4 mr-2" />
                       Upload First Resource
-                        </Button>
+                    </Button>
                       </div>
                 ) : (
                   <div className="space-y-2">
@@ -897,6 +927,14 @@ export default function ClassDetailPage() {
           confirmText="Delete"
           variant="danger"
           isLoading={isDeletingResource}
+        />
+
+        <FileUploadModal
+          isOpen={showUploadModal}
+          onClose={() => setShowUploadModal(false)}
+          onUpload={handleFileUpload}
+          title="Upload Class Resource"
+          isUploading={isUploading}
         />
 
       </div>

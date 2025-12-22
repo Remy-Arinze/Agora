@@ -185,7 +185,7 @@ export default function StudentHistoryPage() {
                   >
                     <Card className="overflow-hidden">
                       <CardHeader
-                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-surface/50 transition-colors"
+                        className="cursor-pointer hover:bg-gray-50 dark:hover:bg-[var(--dark-hover)] transition-colors"
                         onClick={() => toggleSchool(schoolData.school.id)}
                       >
                         <div className="flex items-center justify-between">
@@ -240,7 +240,7 @@ export default function StudentHistoryPage() {
                                 >
                                   <Card className="border-l-4 border-l-blue-600 dark:border-l-blue-400">
                                     <CardHeader
-                                      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-surface/50 transition-colors"
+                                      className="cursor-pointer hover:bg-gray-50 dark:hover:bg-[var(--dark-hover)] transition-colors"
                                       onClick={() => toggleYear(yearKey)}
                                     >
                                       <div className="flex items-center justify-between">
@@ -295,7 +295,7 @@ export default function StudentHistoryPage() {
                                                 return (
                                                   <tr
                                                     key={gradeIndex}
-                                                    className="border-b border-light-border dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-surface/50 transition-colors"
+                                                    className="border-b border-light-border dark:border-dark-border hover:bg-gray-50 dark:hover:bg-[var(--dark-hover)] transition-colors"
                                                   >
                                                     <td className="py-3 px-4">
                                                       <p className="font-medium text-light-text-primary dark:text-dark-text-primary">
@@ -379,7 +379,7 @@ export default function StudentHistoryPage() {
                         >
                           <Card className="overflow-hidden">
                             <CardHeader
-                              className="cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-surface/50 transition-colors"
+                              className="cursor-pointer hover:bg-gray-50 dark:hover:bg-[var(--dark-hover)] transition-colors"
                               onClick={() => toggleSchool(schoolData.school.id)}
                             >
                               <div className="flex items-center justify-between">
@@ -451,7 +451,7 @@ export default function StudentHistoryPage() {
                                           >
                                             <Card className="border-l-4 border-l-blue-600 dark:border-l-blue-400">
                                               <CardHeader
-                                                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-dark-surface/50 transition-colors"
+                                                className="cursor-pointer hover:bg-gray-50 dark:hover:bg-[var(--dark-hover)] transition-colors"
                                                 onClick={() => toggleYear(yearKey)}
                                               >
                                                 <div className="flex items-center justify-between">
@@ -503,7 +503,7 @@ export default function StudentHistoryPage() {
                                                           return (
                                                             <tr
                                                               key={gradeIndex}
-                                                              className="border-b border-light-border dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-surface/50 transition-colors"
+                                                              className="border-b border-light-border dark:border-dark-border hover:bg-gray-50 dark:hover:bg-[var(--dark-hover)] transition-colors"
                                                             >
                                                               <td className="py-3 px-4">
                                                                 <p className="font-medium text-light-text-primary dark:text-dark-text-primary">

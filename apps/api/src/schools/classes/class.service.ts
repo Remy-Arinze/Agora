@@ -769,7 +769,8 @@ export class ClassService {
   }
 
   /**
-   * Remove a teacher from a class
+   * Remove a teacher from a class or ClassArm
+   * Supports both Classes (backward compatibility/TERTIARY) and ClassArms (for PRIMARY/SECONDARY)
    */
   async removeTeacherFromClass(
     schoolId: string,
@@ -783,23 +784,49 @@ export class ClassService {
       throw new BadRequestException('School not found');
     }
 
-    // Validate class exists
-    const classData = await this.classModel.findFirst({
-      where: {
-        id: classId,
-        schoolId: school.id,
+    // Check if classId is a ClassArm (for PRIMARY/SECONDARY schools using ClassArms)
+    const classArm = await (this.prisma as any).classArm.findUnique({
+      where: { id: classId },
+      include: {
+        classLevel: true,
       },
     });
 
-    if (!classData) {
-      throw new NotFoundException('Class not found');
+    let classData: any = null;
+    let isClassArm = false;
+
+    if (classArm && classArm.classLevel.schoolId === school.id) {
+      // It's a ClassArm
+      isClassArm = true;
+      classData = {
+        id: classArm.id,
+        name: `${classArm.classLevel.name} ${classArm.name}`,
+        classLevel: classArm.classLevel.name,
+      };
+    } else {
+      // It's a Class - validate it exists (for TERTIARY/backward compatibility)
+      classData = await this.classModel.findFirst({
+        where: {
+          id: classId,
+          schoolId: school.id,
+        },
+      });
+
+      if (!classData) {
+        throw new NotFoundException('Class or ClassArm not found');
+      }
     }
 
-    // Find and delete assignment
+    // Build query based on whether it's ClassArm or Class
     const where: any = {
-      classId: classId,
       teacherId: teacherId,
     };
+
+    if (isClassArm) {
+      where.classArmId = classId;
+    } else {
+      where.classId = classId;
+    }
 
     if (subject) {
       where.subject = subject;

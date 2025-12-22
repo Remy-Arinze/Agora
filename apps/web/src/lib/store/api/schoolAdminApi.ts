@@ -506,6 +506,7 @@ export interface BulkGradeEntryDto {
   maxScore: number;
   termId?: string;
   academicYear?: string;
+  isPublished?: boolean;
   grades: StudentGradeEntryDto[];
 }
 

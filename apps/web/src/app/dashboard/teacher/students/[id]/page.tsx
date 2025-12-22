@@ -21,7 +21,8 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useGetMyTeacherSchoolQuery, useGetMyTeacherProfileQuery } from '@/lib/store/api/schoolAdminApi';
-import { useGetStudentByIdQuery, useGetStudentGradesQuery } from '@/lib/store/api/schoolAdminApi';
+import { useGetStudentByIdQuery, useGetStudentGradesQuery, useUpdateGradeMutation } from '@/lib/store/api/schoolAdminApi';
+import toast from 'react-hot-toast';
 
 type TabType = 'profile' | 'grades' | 'attendance';
 
@@ -52,6 +53,24 @@ export default function TeacherStudentDetailPage() {
   );
 
   const grades = gradesResponse?.data || [];
+
+  // Mutation for updating grades
+  const [updateGrade, { isLoading: isPublishing }] = useUpdateGradeMutation();
+
+  const handlePublishGrade = async (gradeId: string) => {
+    if (!schoolId) return;
+    
+    try {
+      await updateGrade({
+        schoolId,
+        gradeId,
+        gradeData: { isPublished: true },
+      }).unwrap();
+      toast.success('Grade published successfully');
+    } catch (error: any) {
+      toast.error(error?.data?.message || 'Failed to publish grade');
+    }
+  };
 
   const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
     { id: 'profile', label: 'Profile', icon: <User className="h-4 w-4" /> },
@@ -409,9 +428,18 @@ export default function TeacherStudentDetailPage() {
                                     Published
                                   </span>
                                 ) : (
-                                  <span className="inline-block mt-2 px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400 text-xs font-medium rounded">
-                                    Draft
-                                  </span>
+                                  <div className="mt-2 flex flex-col items-end gap-1">
+                                    <span className="inline-block px-2 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400 text-xs font-medium rounded">
+                                      Draft
+                                    </span>
+                                    <button
+                                      onClick={() => handlePublishGrade(grade.id)}
+                                      disabled={isPublishing}
+                                      className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium disabled:opacity-50"
+                                    >
+                                      {isPublishing ? 'Publishing...' : 'Publish'}
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                             </div>

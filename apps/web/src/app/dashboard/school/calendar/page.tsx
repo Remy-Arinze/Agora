@@ -507,16 +507,24 @@ export default function CalendarPage() {
       </div>
 
       <style jsx global>{`
+        /* Light Mode Styles */
         .rbc-custom-calendar {
-          color: var(--light-text-primary);
+          color: #1f2937;
         }
         .rbc-custom-calendar .rbc-header {
           border-bottom: 1px solid #e5e7eb;
-          padding: 8px;
+          padding: 10px 3px;
           font-weight: 600;
-          color: var(--light-text-primary);
+          color: #1f2937;
+        }
+        .rbc-custom-calendar .rbc-month-view,
+        .rbc-custom-calendar .rbc-time-view {
+          border-color: #d1d5db;
         }
         .rbc-custom-calendar .rbc-day-bg {
+          border-color: #e5e7eb;
+        }
+        .rbc-custom-calendar .rbc-month-row {
           border-color: #e5e7eb;
         }
         .rbc-custom-calendar .rbc-time-slot {
@@ -530,9 +538,13 @@ export default function CalendarPage() {
         }
         .rbc-custom-calendar .rbc-time-gutter {
           border-right-color: #e5e7eb;
+          color: #6b7280;
         }
         .rbc-custom-calendar .rbc-day-slot .rbc-time-slot {
           border-top-color: #f3f4f6;
+        }
+        .rbc-custom-calendar .rbc-timeslot-group {
+          border-bottom-color: #e5e7eb;
         }
         .rbc-custom-calendar .rbc-today {
           background-color: #dbeafe !important;
@@ -549,45 +561,162 @@ export default function CalendarPage() {
         .rbc-custom-calendar .rbc-off-range {
           color: #9ca3af;
         }
+        .rbc-custom-calendar .rbc-date-cell {
+          color: #1f2937;
+          padding: 4px 8px;
+        }
+        .rbc-custom-calendar .rbc-label {
+          color: #6b7280;
+        }
+        .rbc-custom-calendar .rbc-show-more {
+          color: #3b82f6;
+        }
+
+        /* Dark Mode Styles */
         .dark .rbc-custom-calendar {
-          color: var(--dark-text-primary);
+          color: #f3f4f6;
         }
         .dark .rbc-custom-calendar .rbc-header {
-          border-bottom-color: #374151;
-          color: var(--dark-text-primary);
+          border-bottom: 1px solid #4b5563;
+          color: #f3f4f6 !important;
+          background-color: #1f2937;
+        }
+        .dark .rbc-custom-calendar .rbc-header span {
+          color: #f3f4f6 !important;
+        }
+        .dark .rbc-custom-calendar .rbc-month-view,
+        .dark .rbc-custom-calendar .rbc-time-view {
+          border-color: #4b5563;
+          background-color: #111827;
         }
         .dark .rbc-custom-calendar .rbc-day-bg {
-          border-color: #374151;
+          border-color: #4b5563;
+          background-color: #111827;
+        }
+        .dark .rbc-custom-calendar .rbc-month-row {
+          border-color: #4b5563;
         }
         .dark .rbc-custom-calendar .rbc-time-slot {
-          border-top-color: #374151;
+          border-top-color: #4b5563;
         }
         .dark .rbc-custom-calendar .rbc-time-header-gutter {
-          border-right-color: #374151;
+          border-right-color: #4b5563;
+          background-color: #1f2937;
+        }
+        .dark .rbc-custom-calendar .rbc-time-header-content {
+          border-left-color: #4b5563;
         }
         .dark .rbc-custom-calendar .rbc-time-content {
-          border-top-color: #374151;
+          border-top-color: #4b5563;
+          background-color: #111827;
         }
         .dark .rbc-custom-calendar .rbc-time-gutter {
-          border-right-color: #374151;
+          border-right-color: #4b5563;
+          color: #9ca3af;
+          background-color: #1f2937;
+        }
+        .dark .rbc-custom-calendar .rbc-time-gutter .rbc-timeslot-group {
+          color: #9ca3af;
         }
         .dark .rbc-custom-calendar .rbc-day-slot .rbc-time-slot {
-          border-top-color: #1f2937;
+          border-top-color: #374151;
+        }
+        .dark .rbc-custom-calendar .rbc-timeslot-group {
+          border-bottom-color: #374151;
         }
         .dark .rbc-custom-calendar .rbc-today {
-          background-color: #1e3a8a !important;
+          background-color: #1e3a5f !important;
         }
         .dark .rbc-custom-calendar .rbc-today .rbc-day-bg {
-          background-color: #1e3a8a !important;
+          background-color: #1e3a5f !important;
         }
         .dark .rbc-custom-calendar .rbc-current-time-indicator {
-          background-color: #3b82f6;
+          background-color: #ef4444;
         }
         .dark .rbc-custom-calendar .rbc-off-range-bg {
-          background-color: #111827;
+          background-color: #0d1117;
         }
         .dark .rbc-custom-calendar .rbc-off-range {
           color: #6b7280;
+        }
+        .dark .rbc-custom-calendar .rbc-date-cell {
+          color: #f3f4f6 !important;
+          padding: 4px 8px;
+        }
+        .dark .rbc-custom-calendar .rbc-date-cell a {
+          color: #f3f4f6 !important;
+        }
+        .dark .rbc-custom-calendar .rbc-date-cell.rbc-off-range {
+          color: #6b7280 !important;
+        }
+        .dark .rbc-custom-calendar .rbc-date-cell.rbc-off-range a {
+          color: #6b7280 !important;
+        }
+        .dark .rbc-custom-calendar .rbc-label {
+          color: #9ca3af !important;
+        }
+        .dark .rbc-custom-calendar .rbc-allday-cell {
+          background-color: #1f2937;
+        }
+        .dark .rbc-custom-calendar .rbc-row-bg {
+          background-color: #111827;
+        }
+        .dark .rbc-custom-calendar .rbc-row-content {
+          color: #f3f4f6;
+        }
+        .dark .rbc-custom-calendar .rbc-show-more {
+          color: #60a5fa !important;
+          background-color: #1f2937;
+        }
+        .dark .rbc-custom-calendar .rbc-event {
+          border-width: 1px;
+        }
+        .dark .rbc-custom-calendar .rbc-event-content {
+          color: inherit;
+        }
+        .dark .rbc-custom-calendar .rbc-toolbar {
+          color: #f3f4f6;
+        }
+        .dark .rbc-custom-calendar .rbc-toolbar button {
+          color: #f3f4f6;
+          border-color: #4b5563;
+          background-color: #1f2937;
+        }
+        .dark .rbc-custom-calendar .rbc-toolbar button:hover {
+          background-color: #374151;
+          color: #f3f4f6;
+        }
+        .dark .rbc-custom-calendar .rbc-toolbar button.rbc-active {
+          background-color: #3b82f6;
+          color: white;
+          border-color: #3b82f6;
+        }
+        .dark .rbc-custom-calendar .rbc-toolbar-label {
+          color: #f3f4f6;
+        }
+        .dark .rbc-custom-calendar .rbc-btn-group button {
+          color: #f3f4f6;
+        }
+        .dark .rbc-custom-calendar .rbc-agenda-view {
+          color: #f3f4f6;
+        }
+        .dark .rbc-custom-calendar .rbc-agenda-view table {
+          color: #f3f4f6;
+        }
+        .dark .rbc-custom-calendar .rbc-agenda-view table thead th {
+          color: #f3f4f6;
+          border-bottom-color: #4b5563;
+        }
+        .dark .rbc-custom-calendar .rbc-agenda-view table tbody td {
+          color: #f3f4f6;
+          border-bottom-color: #374151;
+        }
+        .dark .rbc-custom-calendar .rbc-agenda-date-cell,
+        .dark .rbc-custom-calendar .rbc-agenda-time-cell {
+          color: #9ca3af;
+        }
+        .dark .rbc-custom-calendar .rbc-agenda-event-cell {
+          color: #f3f4f6;
         }
       `}</style>
     </ProtectedRoute>
