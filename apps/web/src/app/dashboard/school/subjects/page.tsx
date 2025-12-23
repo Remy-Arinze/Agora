@@ -18,6 +18,8 @@ import {
   CheckCircle,
   AlertCircle,
   Sparkles,
+  GraduationCap,
+  Save,
 } from 'lucide-react';
 import { AutoGenerateButton } from '@/components/ui/AutoGenerateButton';
 import {
@@ -30,9 +32,12 @@ import {
   useDeleteSubjectMutation,
   useAssignTeacherToSubjectMutation,
   useRemoveTeacherFromSubjectMutation,
+  useGetSubjectClassAssignmentsQuery,
+  useBulkAssignTeachersToClassesMutation,
   type Subject,
   type CreateSubjectDto,
   type UpdateSubjectDto,
+  type SubjectClassAssignments,
 } from '@/lib/store/api/schoolAdminApi';
 import { useSchoolType } from '@/hooks/useSchoolType';
 import { useAutoGenerateSubjects } from '@/hooks/useAutoGenerateSubjects';
@@ -45,6 +50,8 @@ export default function SubjectsPage() {
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
   const [showTeacherModal, setShowTeacherModal] = useState<Subject | null>(null);
   const [selectedTeacherId, setSelectedTeacherId] = useState('');
+  const [selectedTeacherIds, setSelectedTeacherIds] = useState<string[]>([]); // Multi-select for SECONDARY
+  const [showClassAssignmentModal, setShowClassAssignmentModal] = useState<Subject | null>(null);
 
   const { data: schoolResponse } = useGetMySchoolQuery();
   const schoolId = schoolResponse?.data?.id;
@@ -218,6 +225,38 @@ export default function SubjectsPage() {
     }
   };
 
+  // Bulk assign multiple teachers at once (for SECONDARY/TERTIARY)
+  const handleBulkAssignTeachers = async () => {
+    if (!schoolId || !showTeacherModal || selectedTeacherIds.length === 0) return;
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const teacherId of selectedTeacherIds) {
+      try {
+        await assignTeacher({
+          schoolId,
+          subjectId: showTeacherModal.id,
+          teacherId,
+        }).unwrap();
+        successCount++;
+      } catch {
+        errorCount++;
+      }
+    }
+
+    if (successCount > 0) {
+      toast.success(`${successCount} teacher${successCount > 1 ? 's' : ''} assigned successfully`);
+    }
+    if (errorCount > 0) {
+      toast.error(`Failed to assign ${errorCount} teacher${errorCount > 1 ? 's' : ''}`);
+    }
+
+    setShowTeacherModal(null);
+    setSelectedTeacherIds([]);
+    refetchSubjects();
+  };
+
   const handleRemoveTeacher = async (subjectId: string, teacherId: string) => {
     if (!schoolId) return;
 
@@ -281,6 +320,7 @@ export default function SubjectsPage() {
                       onDelete={() => handleDeleteSubject(subject.id, subject.name)}
                       onAssignTeacher={() => setShowTeacherModal(subject)}
                       onRemoveTeacher={handleRemoveTeacher}
+                      onClassAssignment={() => setShowClassAssignmentModal(subject)}
                       isDeleting={isDeleting}
                       currentType={currentType}
                     />
@@ -302,6 +342,7 @@ export default function SubjectsPage() {
                       onDelete={() => handleDeleteSubject(subject.id, subject.name)}
                       onAssignTeacher={() => setShowTeacherModal(subject)}
                       onRemoveTeacher={handleRemoveTeacher}
+                      onClassAssignment={() => setShowClassAssignmentModal(subject)}
                       isDeleting={isDeleting}
                       currentType={currentType}
                     />
@@ -332,6 +373,7 @@ export default function SubjectsPage() {
                       onDelete={() => handleDeleteSubject(subject.id, subject.name)}
                       onAssignTeacher={() => setShowTeacherModal(subject)}
                       onRemoveTeacher={handleRemoveTeacher}
+                      onClassAssignment={() => setShowClassAssignmentModal(subject)}
                       isDeleting={isDeleting}
                       currentType={currentType}
                     />
@@ -412,15 +454,29 @@ export default function SubjectsPage() {
             teachers={teachers}
             assignedTeachers={showTeacherModal.teachers || []}
             selectedTeacherId={selectedTeacherId}
+            selectedTeacherIds={selectedTeacherIds}
             onSelectTeacher={setSelectedTeacherId}
+            onSelectTeachers={setSelectedTeacherIds}
             onAssign={handleAssignTeacher}
+            onBulkAssign={handleBulkAssignTeachers}
             onRemove={handleRemoveTeacher}
             onClose={() => {
               setShowTeacherModal(null);
               setSelectedTeacherId('');
+              setSelectedTeacherIds([]);
             }}
             isLoading={isAssigning || isRemoving}
             currentType={currentType}
+          />
+        )}
+
+        {/* Class Assignment Modal (SECONDARY only) */}
+        {showClassAssignmentModal && schoolId && (
+          <ClassAssignmentModal
+            schoolId={schoolId}
+            subject={showClassAssignmentModal}
+            onClose={() => setShowClassAssignmentModal(null)}
+            onSaved={() => refetchSubjects()}
           />
         )}
 
@@ -445,6 +501,7 @@ function SubjectCard({
   onDelete,
   onAssignTeacher,
   onRemoveTeacher,
+  onClassAssignment,
   isDeleting,
   currentType,
 }: {
@@ -453,6 +510,7 @@ function SubjectCard({
   onDelete: () => void;
   onAssignTeacher: () => void;
   onRemoveTeacher: (subjectId: string, teacherId: string) => void;
+  onClassAssignment?: () => void;
   isDeleting: boolean;
   currentType: 'PRIMARY' | 'SECONDARY' | 'TERTIARY' | null;
 }) {
@@ -495,17 +553,18 @@ function SubjectCard({
             {subject.description}
           </p>
         )}
+        <div className="space-y-3">
+          {/* Competent Teachers Section - All school types */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
-              Teachers:
+                {currentType === 'SECONDARY' ? 'Competent Teachers:' : 'Teachers:'}
               {currentType === 'PRIMARY' && (
                 <span className="text-xs text-light-text-muted dark:text-dark-text-muted block mt-0.5">
                   (One teacher only)
                 </span>
               )}
             </span>
-            {/* Commented out for PRIMARY schools */}
             {currentType !== 'PRIMARY' && (
               <Button 
                 variant="ghost" 
@@ -513,7 +572,7 @@ function SubjectCard({
                 onClick={onAssignTeacher}
               >
                 <Users className="h-4 w-4 mr-1" />
-                Assign
+                  {currentType === 'SECONDARY' ? 'Add' : 'Assign'}
               </Button>
             )}
           </div>
@@ -542,6 +601,27 @@ function SubjectCard({
             <p className="text-sm text-light-text-muted dark:text-dark-text-muted">
               No teachers assigned
             </p>
+            )}
+          </div>
+
+          {/* Class Assignments Section - SECONDARY only */}
+          {currentType === 'SECONDARY' && onClassAssignment && (
+            <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onClassAssignment}
+                className="w-full justify-center bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+              >
+                <GraduationCap className="h-4 w-4 mr-2" />
+                Assign to Classes
+              </Button>
+              {(!subject.teachers || subject.teachers.length === 0) && (
+                <p className="text-xs text-yellow-600 dark:text-yellow-400 text-center mt-2">
+                  Add competent teachers first before assigning to classes
+                </p>
+              )}
+            </div>
           )}
         </div>
       </CardContent>
@@ -705,8 +785,11 @@ function AssignTeacherModal({
   teachers,
   assignedTeachers,
   selectedTeacherId,
+  selectedTeacherIds,
   onSelectTeacher,
+  onSelectTeachers,
   onAssign,
+  onBulkAssign,
   onRemove,
   onClose,
   isLoading,
@@ -716,8 +799,11 @@ function AssignTeacherModal({
   teachers: Array<{ id: string; firstName: string; lastName: string; subject?: string | null }>;
   assignedTeachers: Array<{ id: string; firstName: string; lastName: string }>;
   selectedTeacherId: string;
+  selectedTeacherIds: string[];
   onSelectTeacher: (teacherId: string) => void;
+  onSelectTeachers: (teacherIds: string[]) => void;
   onAssign: () => void;
+  onBulkAssign: () => void;
   onRemove: (subjectId: string, teacherId: string) => void;
   onClose: () => void;
   isLoading: boolean;
@@ -742,6 +828,25 @@ function AssignTeacherModal({
     (t) => !assignedTeachers.some((at) => at.id === t.id)
   );
 
+  // Use multi-select for SECONDARY and TERTIARY schools
+  const useMultiSelect = currentType === 'SECONDARY' || currentType === 'TERTIARY';
+
+  const handleCheckboxChange = (teacherId: string, checked: boolean) => {
+    if (checked) {
+      onSelectTeachers([...selectedTeacherIds, teacherId]);
+    } else {
+      onSelectTeachers(selectedTeacherIds.filter(id => id !== teacherId));
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selectedTeacherIds.length === availableTeachers.length) {
+      onSelectTeachers([]);
+    } else {
+      onSelectTeachers(availableTeachers.map(t => t.id));
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <motion.div
@@ -751,10 +856,15 @@ function AssignTeacherModal({
       >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary">
-            Assign Teachers to {subject.name}
+            {currentType === 'SECONDARY' ? 'Add Competent Teachers' : 'Assign Teachers'} - {subject.name}
             {currentType === 'PRIMARY' && (
               <span className="text-sm font-normal text-light-text-muted dark:text-dark-text-muted block mt-1">
                 (Primary schools: One teacher per subject)
+              </span>
+            )}
+            {useMultiSelect && (
+              <span className="text-sm font-normal text-light-text-muted dark:text-dark-text-muted block mt-1">
+                Select multiple teachers who can teach this subject
               </span>
             )}
           </h3>
@@ -770,15 +880,15 @@ function AssignTeacherModal({
           {assignedTeachers.length > 0 && (
             <div>
               <label className="block text-sm font-medium mb-2 text-light-text-primary dark:text-dark-text-primary">
-                Assigned Teachers
+                {currentType === 'SECONDARY' ? 'Competent Teachers' : 'Assigned Teachers'} ({assignedTeachers.length})
               </label>
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-40 overflow-y-auto">
                 {assignedTeachers.map((teacher) => (
                   <div
                     key={teacher.id}
-                    className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded"
+                    className="flex items-center justify-between p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded"
                   >
-                    <span>
+                    <span className="text-green-800 dark:text-green-300">
                       {teacher.firstName} {teacher.lastName}
                     </span>
                     <Button
@@ -786,9 +896,9 @@ function AssignTeacherModal({
                       size="sm"
                       onClick={() => onRemove(subject.id, teacher.id)}
                       disabled={isLoading}
-                      className="text-red-600 hover:text-red-700"
+                      className="text-red-600 hover:text-red-700 h-6 px-2"
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-3 w-3" />
                     </Button>
                   </div>
                 ))}
@@ -798,19 +908,57 @@ function AssignTeacherModal({
 
           {availableTeachers.length > 0 && (
             <div>
-              <label className="block text-sm font-medium mb-2 text-light-text-primary dark:text-dark-text-primary">
-                Available Teachers
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
+                  Available Teachers ({availableTeachers.length})
                 {currentType === 'PRIMARY' && assignedTeachers.length > 0 && (
                   <span className="text-xs text-yellow-600 dark:text-yellow-400 block mt-1">
                     Remove the existing teacher first to assign a new one
                   </span>
                 )}
               </label>
+                {useMultiSelect && availableTeachers.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={handleSelectAll}
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    {selectedTeacherIds.length === availableTeachers.length ? 'Deselect All' : 'Select All'}
+                  </button>
+                )}
+              </div>
+
+              {/* Multi-select checkbox list for SECONDARY/TERTIARY */}
+              {useMultiSelect ? (
+                <div className="space-y-2 max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-2">
+                  {availableTeachers.map((teacher) => (
+                    <label
+                      key={teacher.id}
+                      className={`flex items-center gap-3 p-2 rounded cursor-pointer transition-colors ${
+                        selectedTeacherIds.includes(teacher.id)
+                          ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800'
+                          : 'hover:bg-gray-50 dark:hover:bg-gray-800'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedTeacherIds.includes(teacher.id)}
+                        onChange={(e) => handleCheckboxChange(teacher.id, e.target.checked)}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded dark:border-gray-600 dark:bg-gray-800"
+                      />
+                      <span className="text-light-text-primary dark:text-dark-text-primary">
+                        {teacher.firstName} {teacher.lastName}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              ) : (
+                /* Single select dropdown for PRIMARY */
               <select
                 value={selectedTeacherId}
                 onChange={(e) => onSelectTeacher(e.target.value)}
                 disabled={currentType === 'PRIMARY' && assignedTeachers.length > 0}
-                className="w-full px-3 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-surface mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full px-3 py-2 border-2 border-gray-300 dark:border-gray-600 rounded-lg bg-[var(--light-input)] dark:bg-[var(--dark-input)] text-light-text-primary dark:text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <option value="">Select a teacher...</option>
                 {availableTeachers.map((teacher) => (
@@ -819,6 +967,30 @@ function AssignTeacherModal({
                   </option>
                 ))}
               </select>
+              )}
+
+              {/* Action button */}
+              <div className="mt-3">
+                {useMultiSelect ? (
+                  <Button
+                    variant="primary"
+                    onClick={onBulkAssign}
+                    disabled={selectedTeacherIds.length === 0 || isLoading}
+                    className="w-full"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Assigning...
+                      </>
+                    ) : (
+                      <>
+                        <Users className="h-4 w-4 mr-2" />
+                        Add {selectedTeacherIds.length > 0 ? `${selectedTeacherIds.length} ` : ''}Teacher{selectedTeacherIds.length !== 1 ? 's' : ''}
+                      </>
+                    )}
+                  </Button>
+                ) : (
               <Button
                 variant="primary"
                 onClick={onAssign}
@@ -837,6 +1009,8 @@ function AssignTeacherModal({
                   </>
                 )}
               </Button>
+                )}
+              </div>
             </div>
           )}
 
@@ -938,6 +1112,234 @@ function AutoGenerateModal({
               Cancel
             </Button>
           </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+// Class Assignment Modal (SECONDARY only)
+// Allows assigning teachers to teach this subject in specific classes
+function ClassAssignmentModal({
+  schoolId,
+  subject,
+  onClose,
+  onSaved,
+}: {
+  schoolId: string;
+  subject: Subject;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [localAssignments, setLocalAssignments] = useState<Record<string, string>>({});
+  const [hasChanges, setHasChanges] = useState(false);
+
+  // Fetch class assignments for this subject
+  const { data: assignmentsResponse, isLoading, refetch } = useGetSubjectClassAssignmentsQuery(
+    { schoolId, subjectId: subject.id },
+    { skip: !schoolId || !subject.id }
+  );
+
+  const [bulkAssign, { isLoading: isSaving }] = useBulkAssignTeachersToClassesMutation();
+
+  const assignmentsData = assignmentsResponse?.data;
+
+  // Initialize local assignments when data loads
+  useMemo(() => {
+    if (assignmentsData) {
+      const initial: Record<string, string> = {};
+      Object.entries(assignmentsData.assignments).forEach(([classArmId, assignment]) => {
+        initial[classArmId] = assignment.teacherId;
+      });
+      setLocalAssignments(initial);
+    }
+  }, [assignmentsData]);
+
+  const handleTeacherChange = (classArmId: string, teacherId: string) => {
+    setLocalAssignments(prev => ({
+      ...prev,
+      [classArmId]: teacherId,
+    }));
+    setHasChanges(true);
+  };
+
+  const handleSave = async () => {
+    if (!assignmentsData) return;
+
+    try {
+      // Build assignments array from local state
+      const assignments = assignmentsData.classArms.map(arm => ({
+        classArmId: arm.id,
+        teacherId: localAssignments[arm.id] || undefined,
+      }));
+
+      await bulkAssign({
+        schoolId,
+        subjectId: subject.id,
+        data: { assignments },
+      }).unwrap();
+
+      toast.success('Class assignments saved successfully');
+      setHasChanges(false);
+      refetch();
+      onSaved();
+    } catch (error: any) {
+      toast.error(error?.data?.message || 'Failed to save assignments');
+    }
+  };
+
+  // Group class arms by class level
+  const groupedClassArms = useMemo(() => {
+    if (!assignmentsData?.classArms) return {};
+    
+    const grouped: Record<string, typeof assignmentsData.classArms> = {};
+    assignmentsData.classArms.forEach(arm => {
+      if (!grouped[arm.classLevelName]) {
+        grouped[arm.classLevelName] = [];
+      }
+      grouped[arm.classLevelName].push(arm);
+    });
+    return grouped;
+  }, [assignmentsData]);
+
+  if (isLoading) {
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-white dark:bg-dark-surface rounded-lg p-6 w-full max-w-2xl mx-4"
+        >
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <span className="ml-2 text-light-text-secondary dark:text-dark-text-secondary">
+              Loading class assignments...
+            </span>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  const hasCompetentTeachers = (assignmentsData?.competentTeachers?.length || 0) > 0;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-white dark:bg-dark-surface rounded-lg p-6 w-full max-w-3xl mx-4 max-h-[90vh] overflow-y-auto"
+      >
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary">
+              Assign {subject.name} to Classes
+            </h3>
+            <p className="text-sm text-light-text-muted dark:text-dark-text-muted mt-1">
+              Select which teacher will teach this subject in each class
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-light-text-muted dark:text-dark-text-muted hover:text-light-text-primary dark:hover:text-dark-text-primary"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {!hasCompetentTeachers ? (
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-4">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm text-yellow-800 dark:text-yellow-300 font-medium">
+                  No competent teachers assigned
+                </p>
+                <p className="text-sm text-yellow-700 dark:text-yellow-400 mt-1">
+                  Please add teachers who can teach {subject.name} first, then come back to assign them to classes.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Competent Teachers Summary */}
+            <div className="mb-6 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <p className="text-sm text-blue-800 dark:text-blue-300">
+                <strong>Competent Teachers:</strong>{' '}
+                {assignmentsData?.competentTeachers.map((t, i) => (
+                  <span key={t.id}>
+                    {t.firstName} {t.lastName}
+                    {i < (assignmentsData.competentTeachers.length - 1) ? ', ' : ''}
+                  </span>
+                ))}
+              </p>
+            </div>
+
+            {/* Class Assignment Table */}
+            <div className="space-y-6">
+              {Object.entries(groupedClassArms).map(([levelName, arms]) => (
+                <div key={levelName}>
+                  <h4 className="text-sm font-semibold text-light-text-primary dark:text-dark-text-primary mb-3">
+                    {levelName}
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {arms.map((arm) => {
+                      const currentAssignment = assignmentsData?.assignments[arm.id];
+                      return (
+                        <div
+                          key={arm.id}
+                          className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg"
+                        >
+                          <span className="font-medium text-light-text-primary dark:text-dark-text-primary">
+                            {arm.fullName}
+                          </span>
+                          <select
+                            value={localAssignments[arm.id] || ''}
+                            onChange={(e) => handleTeacherChange(arm.id, e.target.value)}
+                            className="ml-3 px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-[var(--light-input)] dark:bg-[var(--dark-input)] text-light-text-primary dark:text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="">Not assigned</option>
+                            {assignmentsData?.competentTeachers.map((teacher) => (
+                              <option key={teacher.id} value={teacher.id}>
+                                {teacher.firstName} {teacher.lastName}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* Actions */}
+        <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <Button variant="ghost" onClick={onClose}>
+            {hasChanges ? 'Discard' : 'Close'}
+          </Button>
+          {hasCompetentTeachers && (
+            <Button
+              variant="primary"
+              onClick={handleSave}
+              disabled={!hasChanges || isSaving}
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Assignments
+                </>
+              )}
+            </Button>
+          )}
         </div>
       </motion.div>
     </div>

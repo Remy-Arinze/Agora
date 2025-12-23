@@ -7,27 +7,32 @@ import { Button } from '@/components/ui/Button';
 import { motion } from 'framer-motion';
 import { Clock, Calendar, Loader2, AlertCircle, ChevronDown } from 'lucide-react';
 import { 
-  useGetMyTeacherSchoolQuery, 
-  useGetMyTeacherProfileQuery,
-  useGetActiveSessionQuery,
   useGetSessionsQuery,
   useGetTimetableForTeacherQuery,
 } from '@/lib/store/api/schoolAdminApi';
 import { TeacherTimetableGrid } from '@/components/timetable/TeacherTimetableGrid';
-import { useSchoolType } from '@/hooks/useSchoolType';
+import { useTeacherDashboard } from '@/hooks/useTeacherDashboard';
 import { getTerminology } from '@/lib/utils/terminology';
 
 export default function TeacherTimetablesPage() {
   const [selectedTermId, setSelectedTermId] = useState<string>('');
 
-  // Get teacher's school and profile
-  const { data: schoolResponse } = useGetMyTeacherSchoolQuery();
-  const { data: teacherResponse } = useGetMyTeacherProfileQuery();
-  const schoolId = schoolResponse?.data?.id;
-  const teacherId = teacherResponse?.data?.id; // Database ID
+  // Use unified teacher dashboard hook for core data
+  const {
+    teacher,
+    school,
+    schoolType,
+    activeTerm,
+    timetable: dashboardTimetable,
+    isLoading: isDashboardLoading,
+    hasError,
+    errorMessage,
+  } = useTeacherDashboard();
 
-  const { currentType } = useSchoolType();
-  const terminology = getTerminology(currentType) || {
+  const schoolId = school?.id;
+  const teacherId = teacher?.id;
+  
+  const terminology = getTerminology(schoolType) || {
     courses: 'Classes',
     courseSingular: 'Class',
     staff: 'Teachers',
@@ -38,33 +43,34 @@ export default function TeacherTimetablesPage() {
     subjectSingular: 'Subject',
   };
 
-  // Get active session
-  const { data: activeSessionResponse } = useGetActiveSessionQuery(
-    { schoolId: schoolId! },
-    { skip: !schoolId }
-  );
-  const activeSession = activeSessionResponse?.data;
-
   // Get all sessions to populate term selector
   const { data: sessionsResponse } = useGetSessionsQuery(
     { schoolId: schoolId! },
     { skip: !schoolId }
   );
 
-  // Determine which term to use (selected or active)
-  const currentTermId = selectedTermId || activeSession?.term?.id || '';
+  // Determine which term to use (selected or active from dashboard)
+  const currentTermId = selectedTermId || activeTerm?.id || '';
 
-  // Get timetable for teacher
-  const { data: timetableResponse, isLoading, error } = useGetTimetableForTeacherQuery(
+  // If user selected a different term, fetch that timetable
+  // Otherwise use the dashboard's timetable (which is for the active term)
+  const needsSeparateFetch = selectedTermId && selectedTermId !== activeTerm?.id;
+  
+  const { data: selectedTermTimetableResponse, isLoading: isLoadingSelectedTerm, error } = useGetTimetableForTeacherQuery(
     {
       schoolId: schoolId!,
       teacherId: teacherId!,
-      termId: currentTermId,
+      termId: selectedTermId,
     },
-    { skip: !schoolId || !teacherId || !currentTermId }
+    { skip: !needsSeparateFetch || !schoolId || !teacherId || !selectedTermId }
   );
 
-  const timetable = timetableResponse?.data || [];
+  // Use selected term's timetable if fetched, otherwise use dashboard's timetable
+  const timetable = needsSeparateFetch 
+    ? (selectedTermTimetableResponse?.data || [])
+    : dashboardTimetable;
+  
+  const isLoading = isDashboardLoading || (needsSeparateFetch && isLoadingSelectedTerm);
 
   // Get all terms from sessions for term selector - filtered by school type and deduplicated
   const allTerms = useMemo(() => {
@@ -72,8 +78,8 @@ export default function TeacherTimetablesPage() {
     
     // Filter sessions by current school type to avoid duplicates
     const filteredSessions = sessionsResponse.data.filter((session) => {
-      if (!currentType) return !session.schoolType;
-      return session.schoolType === currentType;
+      if (!schoolType) return !session.schoolType;
+      return session.schoolType === schoolType;
     });
     
     // Deduplicate sessions by name (keep first/latest)
@@ -103,14 +109,7 @@ export default function TeacherTimetablesPage() {
       if (sessionCompare !== 0) return sessionCompare;
       return a.name.localeCompare(b.name);
     });
-  }, [sessionsResponse, currentType]);
-
-  // Set default term to active term when available
-  useMemo(() => {
-    if (!selectedTermId && activeSession?.term?.id) {
-      setSelectedTermId(activeSession.term.id);
-    }
-  }, [activeSession, selectedTermId]);
+  }, [sessionsResponse, schoolType]);
 
   return (
     <ProtectedRoute roles={['TEACHER']}>
@@ -163,12 +162,12 @@ export default function TeacherTimetablesPage() {
         {!isLoading && !error && (
           <TeacherTimetableGrid
             timetable={timetable}
-            schoolType={currentType}
+            schoolType={schoolType}
             isLoading={isLoading}
             allTerms={allTerms}
             selectedTermId={currentTermId}
             onTermChange={setSelectedTermId}
-            activeTermId={activeSession?.term?.id}
+            activeTermId={activeTerm?.id}
             terminology={terminology}
           />
         )}

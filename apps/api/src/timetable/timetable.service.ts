@@ -296,6 +296,20 @@ export class TimetableService {
       }
     }
 
+    // Debug logging for PRIMARY teacher timetable issues
+    console.log('[getTimetableForTeacher] Debug:', {
+      teacherId: teacher.id,
+      teacherName: `${teacher.firstName} ${teacher.lastName}`,
+      termId,
+      classTeachersCount: teacher.classTeachers.length,
+      classTeachers: teacher.classTeachers.map(ct => ({
+        classArmId: ct.classArmId,
+        classId: ct.classId,
+        className: ct.classArm?.classLevel?.name || ct.class?.name || 'N/A',
+      })),
+      orConditions,
+    });
+
     // Get all periods for this teacher
     const periods = await this.timetablePeriodModel.findMany({
       where: {
@@ -320,6 +334,9 @@ export class TimetableService {
         { startTime: 'asc' },
       ],
     });
+
+    // Debug: log the result
+    console.log('[getTimetableForTeacher] Found', periods.length, 'periods');
 
     return periods.map((p: any) => this.mapToPeriodDto(p));
   }
@@ -799,13 +816,29 @@ export class TimetableService {
       throw new BadRequestException('School not found');
     }
 
-    // Validate class exists and belongs to school
-    const classData = await this.prisma.class.findUnique({
+    // Check if this is a ClassArm ID first
+    const classArm = await this.prisma.classArm.findUnique({
       where: { id: classId },
+      include: { classLevel: true },
     });
 
-    if (!classData || classData.schoolId !== school.id) {
-      throw new NotFoundException('Class not found');
+    let isClassArm = false;
+    
+    if (classArm) {
+      // Validate ClassArm belongs to school
+      if (classArm.classLevel.schoolId !== school.id) {
+        throw new NotFoundException('Class not found');
+      }
+      isClassArm = true;
+    } else {
+      // Check if it's a Class ID
+      const classData = await this.prisma.class.findUnique({
+        where: { id: classId },
+      });
+
+      if (!classData || classData.schoolId !== school.id) {
+        throw new NotFoundException('Class not found');
+      }
     }
 
     // Validate term exists and belongs to school
@@ -820,13 +853,22 @@ export class TimetableService {
       throw new NotFoundException('Term not found');
     }
 
-    // Delete all periods for this class and term
-    await this.timetablePeriodModel.deleteMany({
-      where: {
-        classId: classId,
-        termId: termId,
-      },
-    });
+    // Delete all periods for this class/classArm and term
+    if (isClassArm) {
+      await this.timetablePeriodModel.deleteMany({
+        where: {
+          classArmId: classId,
+          termId: termId,
+        },
+      });
+    } else {
+      await this.timetablePeriodModel.deleteMany({
+        where: {
+          classId: classId,
+          termId: termId,
+        },
+      });
+    }
   }
 
   /**

@@ -9,14 +9,14 @@ import { Button } from '@/components/ui/Button';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { Alert } from '@/components/ui/Alert';
 import { motion } from 'framer-motion';
-import { Users, Plus, FileSpreadsheet, ChevronLeft, ChevronRight, Loader2, AlertCircle } from 'lucide-react';
-import { useGetStaffListQuery } from '@/lib/store/api/schoolAdminApi';
+import { Users, Plus, FileSpreadsheet, ChevronLeft, ChevronRight, Loader2, AlertCircle, Mail, CheckCircle, Clock, Ban } from 'lucide-react';
+import { useGetStaffListQuery, useGetMySchoolQuery, useResendPasswordResetForStaffMutation } from '@/lib/store/api/schoolAdminApi';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useSchoolType } from '@/hooks/useSchoolType';
 import { getTerminology } from '@/lib/utils/terminology';
 import { PermissionAssignmentModal } from '@/components/permissions/PermissionAssignmentModal';
 import { StaffImportModal } from '@/components/modals/StaffImportModal';
-import { useGetMySchoolQuery } from '@/lib/store/api/schoolAdminApi';
+import toast from 'react-hot-toast';
 
 export default function StaffPage() {
   const router = useRouter();
@@ -38,6 +38,10 @@ export default function StaffPage() {
   // Get school type and terminology
   const { currentType } = useSchoolType();
   const terminology = getTerminology(currentType);
+
+  // Resend invitation mutation
+  const [resendInvitation, { isLoading: isResending }] = useResendPasswordResetForStaffMutation();
+  const [resendingStaffId, setResendingStaffId] = useState<string | null>(null);
 
   // Debounce search query to avoid too many API calls
   const debouncedSearch = useDebounce(searchQuery, 500);
@@ -113,6 +117,58 @@ export default function StaffPage() {
         {getInitials(firstName, lastName)}
       </div>
     );
+  };
+
+  // Handle resend invitation
+  const handleResendInvitation = async (staffId: string, staffName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!schoolId) return;
+    
+    setResendingStaffId(staffId);
+    try {
+      await resendInvitation({ schoolId, staffId }).unwrap();
+      toast.success(`Invitation email resent to ${staffName}`);
+    } catch (error: any) {
+      toast.error(error?.data?.message || 'Failed to resend invitation');
+    } finally {
+      setResendingStaffId(null);
+    }
+  };
+
+  // Get status badge config based on account status
+  const getStatusBadge = (accountStatus: string) => {
+    switch (accountStatus) {
+      case 'ACTIVE':
+        return {
+          icon: CheckCircle,
+          label: 'Active',
+          className: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+        };
+      case 'SHADOW':
+        return {
+          icon: Clock,
+          label: 'Pending',
+          className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+        };
+      case 'SUSPENDED':
+        return {
+          icon: Ban,
+          label: 'Suspended',
+          className: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+        };
+      case 'ARCHIVED':
+        return {
+          icon: Ban,
+          label: 'Archived',
+          className: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400',
+        };
+      default:
+        return {
+          icon: Clock,
+          label: 'Unknown',
+          className: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400',
+        };
+    }
   };
 
   return (
@@ -300,15 +356,18 @@ export default function StaffPage() {
                             {formatPhone(staffMember.phone)}
                           </td>
                           <td className="py-4 px-4">
-                            <span
-                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                staffMember.status === 'active'
-                                  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                  : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
-                              }`}
-                            >
-                              {staffMember.status}
-                            </span>
+                            {(() => {
+                              const statusConfig = getStatusBadge(staffMember.accountStatus);
+                              const StatusIcon = statusConfig.icon;
+                              return (
+                                <span
+                                  className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${statusConfig.className}`}
+                                >
+                                  <StatusIcon className="h-3 w-3" />
+                                  {statusConfig.label}
+                                </span>
+                              );
+                            })()}
                           </td>
                           <td className="py-4 px-4" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center space-x-2">
@@ -317,6 +376,29 @@ export default function StaffPage() {
                                   View
                                 </Button>
                               </Link>
+                              {/* Resend invitation button for pending accounts */}
+                              {staffMember.accountStatus === 'SHADOW' && staffMember.email && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => handleResendInvitation(
+                                    staffMember.id, 
+                                    `${staffMember.firstName} ${staffMember.lastName}`,
+                                    e
+                                  )}
+                                  disabled={resendingStaffId === staffMember.id}
+                                  className="text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                                >
+                                  {resendingStaffId === staffMember.id ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <>
+                                      <Mail className="h-4 w-4 mr-1" />
+                                      Resend
+                                    </>
+                                  )}
+                                </Button>
+                              )}
                               {staffMember.type === 'admin' && staffMember.role?.toLowerCase() !== 'principal' && (
                                 <Button
                                   variant="ghost"

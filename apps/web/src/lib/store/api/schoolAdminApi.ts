@@ -43,6 +43,8 @@ export interface SchoolDashboard {
 }
 
 // Staff list types
+export type AccountStatus = 'SHADOW' | 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
+
 export interface StaffListItem {
   id: string;
   type: 'teacher' | 'admin';
@@ -55,6 +57,7 @@ export interface StaffListItem {
   employeeId: string | null;
   isTemporary: boolean;
   status: 'active' | 'inactive';
+  accountStatus: AccountStatus; // SHADOW=pending activation, ACTIVE=activated
   profileImage: string | null;
   createdAt: string;
   user?: {
@@ -62,7 +65,7 @@ export interface StaffListItem {
     email: string | null;
     phone: string | null;
     role: string;
-    accountStatus: 'SHADOW' | 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
+    accountStatus: AccountStatus;
   };
   userId?: string; // For backward compatibility
 }
@@ -736,6 +739,15 @@ export interface ClassArm {
   isActive: boolean;
 }
 
+// Teacher with workload information
+export interface TeacherWithWorkload {
+  id: string;
+  firstName: string;
+  lastName: string;
+  periodCount?: number;  // Periods assigned in current term
+  classCount?: number;   // Unique classes teaching
+}
+
 export interface Subject {
   id: string;
   name: string;
@@ -750,11 +762,143 @@ export interface Subject {
   } | null;
   description?: string;
   isActive: boolean;
-  teachers?: Array<{
+  teachers?: TeacherWithWorkload[];
+}
+
+// ============================================
+// TEACHER WORKLOAD TYPES
+// ============================================
+
+export type WorkloadStatus = 'LOW' | 'NORMAL' | 'HIGH' | 'OVERLOADED';
+
+export interface TeacherWorkload {
+  teacherId: string;
+  firstName: string;
+  lastName: string;
+  totalPeriods: number;
+  classCount: number;
+  subjectCount: number;
+  periodsBySubject: Record<string, { name: string; count: number }>;
+  periodsByClass: Record<string, { name: string; count: number }>;
+  status: WorkloadStatus;
+}
+
+export interface WorkloadWarning {
+  teacherId: string;
+  teacherName: string;
+  periodCount: number;
+  status: string;
+  message: string;
+}
+
+export interface UnassignedSubjectWarning {
+  subjectId: string;
+  subjectName: string;
+  message: string;
+}
+
+export interface TeacherWorkloadSummary {
+  teachers: TeacherWorkload[];
+  averagePeriods: number;
+  warnings: WorkloadWarning[];
+  unassignedSubjects: UnassignedSubjectWarning[];
+}
+
+// Teacher's class assignments from timetable (for SECONDARY schools)
+export interface TeacherTimetableClassSubject {
+  subjectId: string;
+  subjectName: string;
+  periodCount: number;
+}
+
+export interface TeacherTimetableClassAssignment {
+  classId: string;
+  className: string;
+  classLevel: string;
+  subjects: TeacherTimetableClassSubject[];
+  totalPeriods: number;
+}
+
+export interface TeacherTimetableClasses {
+  classes: TeacherTimetableClassAssignment[];
+  totalPeriods: number;
+  totalClasses: number;
+  totalSubjects: number;
+}
+
+// ============================================
+// TIMETABLE GENERATION TYPES
+// ============================================
+
+export interface GeneratedPeriodWithTeacher {
+  dayOfWeek: DayOfWeek;
+  startTime: string;
+  endTime: string;
+  type: 'LESSON' | 'BREAK' | 'LUNCH' | 'ASSEMBLY';
+  subjectId?: string;
+  subjectName?: string;
+  courseId?: string;
+  courseName?: string;
+  teacherId?: string;
+  teacherName?: string;
+  hasTeacherWarning?: boolean;
+  warningMessage?: string;
+}
+
+export interface TimetableGenerationStats {
+  totalPeriods: number;
+  assignedPeriods: number;
+  unassignedPeriods: number;
+  subjectsUsed: number;
+  teachersInvolved: number;
+}
+
+export interface SubjectWithoutTeacher {
+  subjectId: string;
+  subjectName: string;
+  periodCount: number;
+}
+
+export interface TeacherAssignmentSummary {
+  teacherId: string;
+  teacherName: string;
+  subjectId: string;
+  subjectName: string;
+  periodCount: number;
+}
+
+// Class-Subject-Teacher Assignment Types (for SECONDARY schools)
+export interface SubjectClassAssignments {
+  subjectId: string;
+  subjectName: string;
+  schoolType: string;
+  classArms: Array<{
+    id: string;
+    name: string;
+    classLevelId: string;
+    classLevelName: string;
+    fullName: string;
+  }>;
+  assignments: Record<string, {
+    assignmentId: string;
+    teacherId: string;
+    teacherName: string;
+  }>;
+  competentTeachers: Array<{
     id: string;
     firstName: string;
     lastName: string;
   }>;
+}
+
+export interface ClassAssignmentEntry {
+  classArmId: string;
+  teacherId?: string;
+}
+
+export interface BulkClassSubjectAssignment {
+  sessionId?: string;
+  assignments: ClassAssignmentEntry[];
 }
 
 export interface CreateSubjectDto {
@@ -1610,16 +1754,75 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
       providesTags: (result, error, { levelId }) => [{ type: 'Class', id: levelId }, 'ClassResource'],
     }),
 
-    getSubjects: builder.query<ResponseDto<Subject[]>, { schoolId: string; schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY'; classLevelId?: string }>({
-      query: ({ schoolId, schoolType, classLevelId }) => {
+    getSubjects: builder.query<ResponseDto<Subject[]>, { 
+      schoolId: string; 
+      schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY'; 
+      classLevelId?: string;
+      termId?: string;  // Include teacher workload data for SECONDARY
+    }>({
+      query: ({ schoolId, schoolType, classLevelId, termId }) => {
         const queryParams = new URLSearchParams();
         if (schoolType) queryParams.append('schoolType', schoolType);
         if (classLevelId) queryParams.append('classLevelId', classLevelId);
+        if (termId) queryParams.append('termId', termId);
         const queryString = queryParams.toString();
         return `/schools/${schoolId}/timetable/subjects${queryString ? `?${queryString}` : ''}`;
       },
       providesTags: ['Timetable', 'Subject'],
     }),
+    
+    // ============================================
+    // TEACHER WORKLOAD ENDPOINTS
+    // ============================================
+    
+    getTeacherWorkloads: builder.query<ResponseDto<TeacherWorkloadSummary>, {
+      schoolId: string;
+      termId: string;
+      schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY';
+    }>({
+      query: ({ schoolId, termId, schoolType }) => {
+        const queryParams = new URLSearchParams();
+        queryParams.append('termId', termId);
+        if (schoolType) queryParams.append('schoolType', schoolType);
+        return `/schools/${schoolId}/timetable/teacher-workloads?${queryParams.toString()}`;
+      },
+      providesTags: ['Timetable', 'TeacherWorkload'],
+    }),
+    
+    getLeastLoadedTeacher: builder.query<ResponseDto<TeacherWithWorkload | null>, {
+      schoolId: string;
+      subjectId: string;
+      termId: string;
+      excludeTeacherIds?: string[];
+    }>({
+      query: ({ schoolId, subjectId, termId, excludeTeacherIds }) => {
+        const queryParams = new URLSearchParams();
+        queryParams.append('termId', termId);
+        if (excludeTeacherIds?.length) {
+          queryParams.append('excludeTeacherIds', excludeTeacherIds.join(','));
+        }
+        return `/schools/${schoolId}/timetable/subjects/${subjectId}/least-loaded-teacher?${queryParams.toString()}`;
+      },
+    }),
+    
+    // Get teacher's class assignments from timetable (for SECONDARY schools)
+    getTeacherTimetableClasses: builder.query<ResponseDto<TeacherTimetableClasses>, {
+      schoolId: string;
+      teacherId: string;
+      termId?: string;
+    }>({
+      query: ({ schoolId, teacherId, termId }) => {
+        const queryParams = new URLSearchParams();
+        if (termId) queryParams.append('termId', termId);
+        const qs = queryParams.toString();
+        return `/schools/${schoolId}/timetable/teachers/${teacherId}/classes${qs ? `?${qs}` : ''}`;
+      },
+      providesTags: (result, error, { teacherId }) => [
+        { type: 'Timetable' as const, id: teacherId },
+        'TeacherWorkload',
+      ],
+    }),
+    
     createSubject: builder.mutation<ResponseDto<Subject>, { schoolId: string; data: CreateSubjectDto }>({
       query: ({ schoolId, data }) => ({
         url: `/schools/${schoolId}/timetable/subjects`,
@@ -1669,6 +1872,41 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['Timetable', 'Subject'],
     }),
+
+    // Class-Subject-Teacher Assignment endpoints (for SECONDARY schools)
+    getSubjectClassAssignments: builder.query<
+      ResponseDto<SubjectClassAssignments>,
+      { schoolId: string; subjectId: string; sessionId?: string }
+    >({
+      query: ({ schoolId, subjectId, sessionId }) => {
+        let url = `/schools/${schoolId}/timetable/subjects/${subjectId}/class-assignments`;
+        if (sessionId) url += `?sessionId=${sessionId}`;
+        return url;
+      },
+      providesTags: ['Subject', 'Timetable'],
+    }),
+    bulkAssignTeachersToClasses: builder.mutation<
+      ResponseDto<{ updated: number; removed: number }>,
+      { schoolId: string; subjectId: string; data: BulkClassSubjectAssignment }
+    >({
+      query: ({ schoolId, subjectId, data }) => ({
+        url: `/schools/${schoolId}/timetable/subjects/${subjectId}/class-assignments`,
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['Subject', 'Timetable'],
+    }),
+    removeClassSubjectAssignment: builder.mutation<
+      ResponseDto<void>,
+      { schoolId: string; subjectId: string; classArmId: string; sessionId?: string }
+    >({
+      query: ({ schoolId, subjectId, classArmId, sessionId }) => ({
+        url: `/schools/${schoolId}/timetable/subjects/${subjectId}/class-assignments/${classArmId}${sessionId ? `?sessionId=${sessionId}` : ''}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Subject', 'Timetable'],
+    }),
+
     getRooms: builder.query<ResponseDto<Room[]>, { schoolId: string }>({
       query: ({ schoolId }) => `/schools/${schoolId}/timetable/rooms`,
       providesTags: ['Timetable'],
@@ -2766,6 +3004,13 @@ export const {
   useAssignTeacherToSubjectMutation,
   useRemoveTeacherFromSubjectMutation,
   useAutoGenerateSubjectsMutation,
+  useGetSubjectClassAssignmentsQuery,
+  useBulkAssignTeachersToClassesMutation,
+  useRemoveClassSubjectAssignmentMutation,
+  // Teacher workload endpoints
+  useGetTeacherWorkloadsQuery,
+  useGetLeastLoadedTeacherQuery,
+  useGetTeacherTimetableClassesQuery,
   useGetRoomsQuery,
   useCreateRoomMutation,
   useGetCoursesQuery,

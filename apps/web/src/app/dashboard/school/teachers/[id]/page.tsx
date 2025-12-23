@@ -30,6 +30,7 @@ import {
   useGetMySchoolQuery,
   useResendPasswordResetForStaffMutation,
   useGetClassesQuery,
+  useGetTeacherTimetableClassesQuery,
   PermissionResource,
   PermissionType,
 } from '@/lib/store/api/schoolAdminApi';
@@ -133,24 +134,36 @@ export default function StaffDetailPage() {
   );
 
   // Get classes assigned to teacher (only if teacher, not admin)
-  const { data: classesResponse } = useGetClassesQuery(
+  // Always fetch ClassTeacher-based assignments (for PRIMARY/TERTIARY form teacher/assistant roles)
+  const { data: classesResponse, isLoading: isLoadingClasses } = useGetClassesQuery(
     { schoolId: schoolId!, teacherId: isTeacher ? staffId : undefined },
     { skip: !schoolId || !staffId || !isTeacher }
   );
 
-  const teacherClasses = classesResponse?.data || [];
+  // Always fetch timetable-based assignments (for SECONDARY schools)
+  // The backend has fallback logic to get the active term if termId is not provided
+  const { data: timetableClassesResponse, isLoading: isLoadingTimetableClasses } = useGetTeacherTimetableClassesQuery(
+    { schoolId: schoolId!, teacherId: staffId },
+    { skip: !schoolId || !staffId || !isTeacher }
+  );
+
+  // Filter ClassTeacher-based classes to PRIMARY/TERTIARY only (SECONDARY uses timetable)
+  const allTeacherClasses = classesResponse?.data || [];
+  const teacherClasses = allTeacherClasses.filter(
+    (c: any) => c.type === 'PRIMARY' || c.type === 'TERTIARY'
+  );
+  const timetableClasses = timetableClassesResponse?.data;
   const permissions = permissionsResponse?.data?.permissions || [];
   const isPrincipal = isAdmin && staff?.role?.toLowerCase() === 'principal';
 
-  // Get teacher subjects (only for SECONDARY school teachers)
-  const isSecondaryTeacher = isTeacher && schoolType === 'SECONDARY';
+  // Get teacher subjects (for teachers with subject competencies - mainly SECONDARY, but can include PRIMARY/TERTIARY)
   const {
     subjects: teacherSubjects,
     isLoading: isLoadingSubjects,
   } = useTeacherSubjects({
     schoolId,
     teacherId: staffId,
-    skip: !isSecondaryTeacher || !schoolId,
+    skip: !isTeacher || !schoolId,
   });
   
   // Resend password reset mutation
@@ -376,82 +389,180 @@ export default function StaffDetailPage() {
                 {staff.type === 'teacher' && (
                   <Card>
                     <CardHeader>
-                      <div className="flex items-center gap-3">
-                        <BookOpen className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                        <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
-                          Classes Assigned
-                        </CardTitle>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <BookOpen className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                          <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
+                            Classes Assigned
+                          </CardTitle>
+                        </div>
+                        {/* Show summary stats */}
+                        <div className="flex items-center gap-4 text-sm">
+                          {teacherClasses.length > 0 && (
+                            <span className="text-light-text-secondary dark:text-dark-text-secondary">
+                              <span className="font-semibold text-purple-600 dark:text-purple-400">{teacherClasses.length}</span> form class{teacherClasses.length !== 1 ? 'es' : ''}
+                            </span>
+                          )}
+                          {timetableClasses && timetableClasses.totalClasses > 0 && (
+                            <>
+                              <span className="text-light-text-secondary dark:text-dark-text-secondary">
+                                <span className="font-semibold text-blue-600 dark:text-blue-400">{timetableClasses.totalClasses}</span> teaching class{timetableClasses.totalClasses !== 1 ? 'es' : ''}
+                              </span>
+                              <span className="text-light-text-secondary dark:text-dark-text-secondary">
+                                <span className="font-semibold text-green-600 dark:text-green-400">{timetableClasses.totalPeriods}</span> periods/week
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent>
-                      {teacherClasses.length === 0 ? (
+                      {/* Loading State */}
+                      {(isLoadingClasses || isLoadingTimetableClasses) && (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
+                        </div>
+                      )}
+
+                      {/* Empty State - No classes at all */}
+                      {!isLoadingClasses && !isLoadingTimetableClasses && 
+                       teacherClasses.length === 0 && 
+                       (!timetableClasses || timetableClasses.classes.length === 0) && (
                         <div className="text-center py-8">
                           <BookOpen className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
                           <p className="text-light-text-secondary dark:text-dark-text-secondary">
                             This teacher is not assigned to any classes yet.
                           </p>
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          {teacherClasses.map((classItem) => {
-                            // Find the teacher's assignment for this class
-                            const assignment = classItem.teachers?.find(
-                              (t) => t.teacherId === staffId
-                            );
-                            return (
-                              <Link
-                                key={classItem.id}
-                                href={`/dashboard/school/courses/${classItem.id}`}
-                                className="block border border-light-border dark:border-dark-border rounded-lg p-4 hover:bg-light-surface dark:hover:bg-[var(--dark-hover)] hover:border-blue-300 dark:hover:border-blue-700 transition-colors cursor-pointer"
-                              >
-                                <div className="flex items-start justify-between">
-                                  <div className="flex-1">
-                                    <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary mb-1 hover:text-blue-600 dark:hover:text-blue-400">
-                                      {classItem.name}
-                                    </h3>
-                                    <div className="space-y-1 text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                                      {classItem.classLevel && (
-                                        <p>
-                                          <span className="font-medium">Level:</span> {classItem.classLevel}
-                                        </p>
-                                      )}
-                                      {assignment?.subject && (
-                                        <p>
-                                          <span className="font-medium">Subject:</span> {assignment.subject}
-                                        </p>
-                                      )}
-                                      {assignment?.isPrimary && (
-                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">
-                                          Primary Teacher
-                                        </span>
-                                      )}
-                                      <p>
-                                        <span className="font-medium">Academic Year:</span> {classItem.academicYear}
-                                      </p>
-                                      <p>
-                                        <span className="font-medium">Students:</span> {classItem.studentsCount || 0}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </div>
-                              </Link>
-                            );
-                          })}
+                          <p className="text-sm text-light-text-muted dark:text-dark-text-muted mt-2">
+                            Assign them as a form teacher, or add them to class timetables.
+                          </p>
                         </div>
                       )}
+
+                      <div className="space-y-6">
+                        {/* PRIMARY/TERTIARY Classes - Form Teacher/Assistant Roles */}
+                        {teacherClasses.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-3 flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                              Form Teacher Assignments
+                            </h4>
+                            <div className="space-y-3">
+                              {teacherClasses.map((classItem: any) => {
+                                const assignment = classItem.teachers?.find(
+                                  (t: any) => t.teacherId === staffId
+                                );
+                                return (
+                                  <Link
+                                    key={classItem.id}
+                                    href={`/dashboard/school/courses/${classItem.id}`}
+                                    className="block border border-light-border dark:border-dark-border rounded-lg p-4 hover:bg-light-surface dark:hover:bg-[var(--dark-hover)] hover:border-blue-300 dark:hover:border-blue-700 transition-colors cursor-pointer"
+                                  >
+                                    <div className="flex items-start justify-between">
+                                      <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-2">
+                                          <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary">
+                                            {classItem.name}
+                                          </h3>
+                                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                            classItem.type === 'TERTIARY'
+                                              ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400'
+                                              : 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400'
+                                          }`}>
+                                            {classItem.type === 'TERTIARY' ? 'Course' : classItem.type}
+                                          </span>
+                                          {assignment?.isPrimary && (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">
+                                              Form Teacher
+                                            </span>
+                                          )}
+                                          {!assignment?.isPrimary && (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                                              Assistant
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="flex flex-wrap gap-4 text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                                          <span>{classItem.studentsCount || 0} students</span>
+                                          {classItem.academicYear && <span>{classItem.academicYear}</span>}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </Link>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* SECONDARY Classes - Timetable-based Subject Teaching */}
+                        {timetableClasses && timetableClasses.classes.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-3 flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                              Subject Teaching (via Timetable)
+                            </h4>
+                            <div className="space-y-3">
+                              {timetableClasses.classes.map((classAssignment: any) => (
+                                <Link
+                                  key={classAssignment.classId}
+                                  href={`/dashboard/school/courses/${classAssignment.classId}`}
+                                  className="block border border-light-border dark:border-dark-border rounded-lg p-4 hover:bg-light-surface dark:hover:bg-[var(--dark-hover)] hover:border-blue-300 dark:hover:border-blue-700 transition-colors cursor-pointer"
+                                >
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary">
+                                          {classAssignment.className}
+                                        </h3>
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400">
+                                          SECONDARY
+                                        </span>
+                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                                          {classAssignment.totalPeriods} periods
+                                        </span>
+                                      </div>
+                                      <div className="flex flex-wrap gap-2 mt-2">
+                                        {classAssignment.subjects.map((subject: any) => (
+                                          <span
+                                            key={subject.subjectId}
+                                            className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                                          >
+                                            {subject.subjectName}
+                                            <span className="ml-1.5 text-blue-500 dark:text-blue-400">
+                                              ({subject.periodCount})
+                                            </span>
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </Link>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </CardContent>
                   </Card>
                 )}
 
-                {/* Subjects Teacher Can Teach (only for SECONDARY school teachers) */}
-                {isSecondaryTeacher && (
+                {/* Subjects Teacher Can Teach (for SECONDARY and PRIMARY school teachers with subject competencies) */}
+                {isTeacher && (schoolType === 'SECONDARY' || (teacherSubjects && teacherSubjects.length > 0)) && (
                   <Card>
                     <CardHeader>
-                      <div className="flex items-center gap-3">
-                        <GraduationCap className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-                        <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
-                          Subject Competencies
-                        </CardTitle>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <GraduationCap className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                          <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
+                            Subject Competencies
+                          </CardTitle>
+                        </div>
+                        {teacherSubjects && teacherSubjects.length > 0 && (
+                          <span className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                            <span className="font-semibold text-purple-600 dark:text-purple-400">{teacherSubjects.length}</span> subject{teacherSubjects.length !== 1 ? 's' : ''}
+                          </span>
+                        )}
                       </div>
                     </CardHeader>
                     <CardContent>
@@ -459,18 +570,18 @@ export default function StaffDetailPage() {
                         <div className="flex items-center justify-center py-8">
                           <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
                         </div>
-                      ) : teacherSubjects.length === 0 ? (
+                      ) : !teacherSubjects || teacherSubjects.length === 0 ? (
                         <div className="text-center py-8">
                           <GraduationCap className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
                           <p className="text-light-text-secondary dark:text-dark-text-secondary">
-                            No subjects assigned yet.
+                            No subject competencies assigned yet.
                           </p>
                           <p className="text-sm text-light-text-muted dark:text-dark-text-muted mt-1">
-                            Edit the teacher profile to add subjects they can teach.
+                            Add subjects this teacher is qualified to teach on the Subjects page.
                           </p>
                         </div>
                       ) : (
-                        <div className="space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {teacherSubjects.map((subject) => (
                             <div
                               key={subject.id}
@@ -478,10 +589,10 @@ export default function StaffDetailPage() {
                             >
                               <div className="flex items-start justify-between">
                                 <div className="flex-1">
-                                  <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary mb-1">
+                                  <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary mb-2">
                                     {subject.name}
                                   </h3>
-                                  <div className="flex flex-wrap gap-2 mt-2">
+                                  <div className="flex flex-wrap gap-2">
                                     {subject.code && (
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300">
                                         {subject.code}
@@ -495,9 +606,11 @@ export default function StaffDetailPage() {
                                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                                       subject.assignedClassCount > 0
                                         ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                        : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                                        : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
                                     }`}>
-                                      {subject.assignedClassCount} class{subject.assignedClassCount !== 1 ? 'es' : ''}
+                                      {subject.assignedClassCount > 0 
+                                        ? `Teaching ${subject.assignedClassCount} class${subject.assignedClassCount !== 1 ? 'es' : ''}`
+                                        : 'Not assigned'}
                                     </span>
                                   </div>
                                 </div>
@@ -675,7 +788,7 @@ export default function StaffDetailPage() {
             }}
             schoolId={schoolId!}
             staffType={staff.type}
-            schoolType={schoolType}
+            schoolType={schoolType ?? undefined}
             onSuccess={() => {
               // Refetch staff data
               refetchStaff();

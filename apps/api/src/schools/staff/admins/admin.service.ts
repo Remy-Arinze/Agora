@@ -108,7 +108,7 @@ export class AdminService {
               email: adminData.email,
               phone: adminData.phone,
               passwordHash: defaultPassword,
-              accountStatus: 'ACTIVE',
+              accountStatus: 'SHADOW', // User needs to activate via email
               role: 'SCHOOL_ADMIN',
             },
           });
@@ -117,7 +117,7 @@ export class AdminService {
             where: { id: adminUser.id },
             data: {
               passwordHash: defaultPassword,
-              accountStatus: 'ACTIVE',
+              // Don't change accountStatus if user already exists - they may already be active
               role: 'SCHOOL_ADMIN',
             },
           });

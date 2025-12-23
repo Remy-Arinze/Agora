@@ -164,8 +164,8 @@ export class SessionService {
       throw new BadRequestException('School not found');
     }
 
-    // Find active session for the specified school type
-    const session = await this.prisma.academicSession.findFirst({
+    // First, try to find active session for the specified school type
+    let session = await this.prisma.academicSession.findFirst({
       where: {
         schoolId: school.id,
         status: SessionStatus.ACTIVE,
@@ -183,6 +183,33 @@ export class SessionService {
         },
       },
     });
+
+    // Fallback: If no session found with specific schoolType, try without schoolType filter
+    // This handles cases where sessions were created before schoolType was required
+    if (!session && schoolType) {
+      session = await this.prisma.academicSession.findFirst({
+        where: {
+          schoolId: school.id,
+          status: SessionStatus.ACTIVE,
+          // Also check for null or undefined schoolType
+          OR: [
+            { schoolType: null },
+            { schoolType: undefined },
+          ],
+        },
+        include: {
+          terms: {
+            where: {
+              status: TermStatus.ACTIVE,
+            },
+            orderBy: {
+              number: 'desc',
+            },
+            take: 1,
+          },
+        },
+      });
+    }
 
     if (!session) {
       return { session: undefined, term: undefined };

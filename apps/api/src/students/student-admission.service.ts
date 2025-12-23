@@ -94,7 +94,7 @@ export class StudentAdmissionService {
             email: studentData.email || null,
             phone: studentData.phone,
             passwordHash: defaultPassword,
-            accountStatus: 'ACTIVE',
+            accountStatus: 'SHADOW', // User needs to activate via email
             role: 'STUDENT',
           },
         });

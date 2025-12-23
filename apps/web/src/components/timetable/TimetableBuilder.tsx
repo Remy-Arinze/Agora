@@ -34,6 +34,7 @@ import {
 } from '@/lib/store/api/schoolAdminApi';
 import { getScheduleForSchoolType, getLessonPeriods, type SchedulePeriod } from '@/lib/utils/nigerianSchoolSchedule';
 import { useAutoGenerateTimetable } from '@/hooks/useAutoGenerateTimetable';
+import { useAutoGenerateWithTeachers } from '@/hooks/useAutoGenerateWithTeachers';
 
 const DAYS: DayOfWeek[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'];
 const DAY_LABELS: Record<DayOfWeek, string> = {
@@ -68,6 +69,39 @@ interface GeneratedPeriod {
   subjectName?: string;
   courseId?: string;
   courseName?: string;
+  // Teacher fields (for SECONDARY)
+  teacherId?: string;
+  teacherName?: string;
+  hasTeacherWarning?: boolean;
+  warningMessage?: string;
+}
+
+// Extended subject type that includes teachers (for SECONDARY)
+interface SubjectWithTeachers {
+  id: string;
+  name: string;
+  code?: string;
+  type: 'subject' | 'course' | 'free';
+  teachers?: Array<{
+    id: string;
+    firstName: string;
+    lastName: string;
+    periodCount?: number;
+    classCount?: number;
+  }>;
+}
+
+// Callback for teacher selection in SECONDARY schools
+interface TeacherSelectionRequest {
+  slot: TimetableSlot;
+  subject: { id: string; name: string; code?: string };
+  teachers: Array<{
+    id: string;
+    firstName: string;
+    lastName: string;
+    periodCount?: number;
+    classCount?: number;
+  }>;
 }
 
 interface TimetableBuilderProps {
@@ -77,11 +111,15 @@ interface TimetableBuilderProps {
   timetable: TimetablePeriod[];
   classArmId: string;
   termId: string;
-  onPeriodUpdate: (slot: TimetableSlot, subjectId?: string, courseId?: string) => Promise<void>;
+  onPeriodUpdate: (slot: TimetableSlot, subjectId?: string, courseId?: string, teacherId?: string) => Promise<void>;
   onPeriodDelete: (periodId: string) => Promise<void>;
   onAutoGenerate?: (periods: GeneratedPeriod[]) => Promise<void>;
   isLoading?: boolean;
   readOnly?: boolean; // If true, disable drag-and-drop and editing
+  // SECONDARY-specific props
+  subjectsWithTeachers?: SubjectWithTeachers[]; // Subjects with teacher info for SECONDARY
+  onTeacherSelectionNeeded?: (request: TeacherSelectionRequest) => void; // Callback when teacher selection is needed
+  onEditPeriodTeacher?: (period: TimetablePeriod, teachers: TeacherSelectionRequest['teachers']) => void; // Edit existing period's teacher
 }
 
 // Draggable Subject/Course Item
@@ -129,11 +167,15 @@ function DraggableItem({ item }: { item: DraggableSubject }) {
 function TimetableCell({
   slot,
   onCellClick,
+  onEditTeacher,
   readOnly = false,
+  showEditTeacher = false,
 }: {
   slot: TimetableSlot;
   onCellClick: () => void;
+  onEditTeacher?: () => void;
   readOnly?: boolean;
+  showEditTeacher?: boolean; // For SECONDARY: show edit teacher option
 }) {
   const { period, periodData } = slot;
   const slotId = `${slot.dayOfWeek}-${period.startTime}`;
@@ -147,6 +189,9 @@ function TimetableCell({
   if (period.type !== 'LESSON') {
     return null; // Will be handled in parent row
   }
+
+  const hasSubject = periodData?.subjectId || periodData?.courseId;
+  const isFree = periodData?.subjectName === 'Free Period' || (periodData && !hasSubject);
 
   return (
     <td
@@ -169,11 +214,30 @@ function TimetableCell({
           <p className="text-sm font-semibold text-light-text-primary dark:text-dark-text-primary">
             {periodData.subjectName || periodData.courseName || 'Free Period'}
           </p>
-          {periodData.teacherName && (
+          {/* Show teacher or "No teacher" for SECONDARY */}
+          {showEditTeacher && hasSubject && !isFree ? (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEditTeacher?.();
+              }}
+              className="flex items-center gap-1 text-sm hover:underline transition-colors group"
+            >
+              {periodData.teacherName ? (
+                <span className="text-light-text-secondary dark:text-dark-text-secondary group-hover:text-blue-600 dark:group-hover:text-blue-400">
+                  {periodData.teacherName}
+                </span>
+              ) : (
+                <span className="text-amber-600 dark:text-amber-400 group-hover:text-amber-700 dark:group-hover:text-amber-300">
+                  + Assign teacher
+                </span>
+              )}
+            </button>
+          ) : periodData.teacherName ? (
             <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
               {periodData.teacherName}
             </p>
-          )}
+          ) : null}
           {periodData.roomName && (
             <p className="text-xs text-light-text-muted dark:text-dark-text-muted">
               {periodData.roomName}
@@ -201,18 +265,43 @@ export function TimetableBuilder({
   onAutoGenerate,
   isLoading = false,
   readOnly = false,
+  // SECONDARY-specific props
+  subjectsWithTeachers,
+  onTeacherSelectionNeeded,
+  onEditPeriodTeacher,
 }: TimetableBuilderProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [showAutoGenerateModal, setShowAutoGenerateModal] = useState(false);
   const [isAutoGenerating, setIsAutoGenerating] = useState(false);
 
-  // Auto-generate hook
-  const { generateTimetable, canGenerate } = useAutoGenerateTimetable({
+  // Basic auto-generate hook (for PRIMARY/TERTIARY)
+  const { 
+    generateTimetable: generateBasic, 
+    canGenerate: canGenerateBasic 
+  } = useAutoGenerateTimetable({
     schoolType,
     subjects: subjects.filter(s => s.type !== 'free').map(s => ({ id: s.id, name: s.name, code: s.code })),
     courses: courses.filter(c => c.type !== 'free').map(c => ({ id: c.id, name: c.name, code: c.code })),
     existingPeriods: timetable,
   });
+
+  // Enhanced auto-generate hook with teacher assignment (for SECONDARY)
+  const { 
+    generateTimetable: generateWithTeachers, 
+    canGenerate: canGenerateWithTeachers 
+  } = useAutoGenerateWithTeachers({
+    schoolType,
+    subjects: subjectsWithTeachers || subjects.filter(s => s.type !== 'free').map(s => ({ 
+      id: s.id, 
+      name: s.name, 
+      code: s.code 
+    })),
+    existingPeriods: timetable,
+  });
+
+  // Use appropriate generator based on school type
+  const generateTimetable = schoolType === 'SECONDARY' ? generateWithTeachers : generateBasic;
+  const canGenerate = schoolType === 'SECONDARY' ? canGenerateWithTeachers : canGenerateBasic;
 
   const handleAutoGenerate = async () => {
     if (!onAutoGenerate) return;
@@ -337,7 +426,31 @@ export function TimetableBuilder({
         await onPeriodUpdate(slot, undefined, undefined);
       } else if (schoolType === 'TERTIARY') {
         await onPeriodUpdate(slot, undefined, draggedItem.id);
+      } else if (schoolType === 'SECONDARY' && subjectsWithTeachers && onTeacherSelectionNeeded) {
+        // SECONDARY: Find subject with teachers and request selection
+        const subjectWithTeachers = subjectsWithTeachers.find(s => s.id === draggedItem.id);
+        const teachers = subjectWithTeachers?.teachers || [];
+        
+        if (teachers.length === 0) {
+          // No teachers available - show warning via callback
+          onTeacherSelectionNeeded({
+            slot,
+            subject: { id: draggedItem.id, name: draggedItem.name, code: draggedItem.code },
+            teachers: [],
+          });
+        } else if (teachers.length === 1) {
+          // Only one teacher - auto-assign
+          await onPeriodUpdate(slot, draggedItem.id, undefined, teachers[0].id);
+        } else {
+          // Multiple teachers - request selection via callback
+          onTeacherSelectionNeeded({
+            slot,
+            subject: { id: draggedItem.id, name: draggedItem.name, code: draggedItem.code },
+            teachers,
+          });
+        }
       } else {
+        // PRIMARY or SECONDARY without teacher info: direct update
         await onPeriodUpdate(slot, draggedItem.id, undefined);
       }
     }
@@ -596,6 +709,11 @@ export function TimetableBuilder({
                                 periodData,
                               };
 
+                              // Get teachers for this subject (for SECONDARY edit)
+                              const subjectTeachers = periodData?.subjectId && subjectsWithTeachers
+                                ? subjectsWithTeachers.find(s => s.id === periodData.subjectId)?.teachers || []
+                                : [];
+
                               return (
                                 <TimetableCell
                                   key={`${day}-${timePeriod.startTime}`}
@@ -603,7 +721,13 @@ export function TimetableBuilder({
                                   onCellClick={() => {
                                     // Cell click handler (no time editing)
                                   }}
+                                  onEditTeacher={
+                                    schoolType === 'SECONDARY' && periodData && onEditPeriodTeacher
+                                      ? () => onEditPeriodTeacher(periodData, subjectTeachers)
+                                      : undefined
+                                  }
                                   readOnly={readOnly}
+                                  showEditTeacher={schoolType === 'SECONDARY' && !readOnly}
                                 />
                               );
                             })}

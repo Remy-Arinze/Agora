@@ -130,12 +130,36 @@ export class StaffImportService {
               }
             }
 
+            // Look up subject by name to get the ID for SubjectTeacher relationship
+            let subjectIds: string[] | undefined;
+            if (subject) {
+              const foundSubject = await this.prisma.subject.findFirst({
+                where: {
+                  schoolId,
+                  name: {
+                    equals: subject,
+                    mode: 'insensitive', // Case-insensitive match
+                  },
+                  isActive: true,
+                },
+                select: { id: true },
+              });
+              
+              if (foundSubject) {
+                subjectIds = [foundSubject.id];
+              } else {
+                // Log warning but continue - subject might be added later
+                console.warn(`Subject "${subject}" not found for school ${schoolId}, row ${rowNumber}. Teacher will be created without subject assignment.`);
+              }
+            }
+
             const result = await this.teacherService.addTeacher(schoolId, {
               firstName,
               lastName,
               email,
               phone,
-              subject: subject || undefined,
+              subject: subject || undefined, // Keep legacy field for display
+              subjectIds, // Pass subject IDs for SubjectTeacher creation
               employeeId: employeeId || undefined,
               isTemporary,
             });

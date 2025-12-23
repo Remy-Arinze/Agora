@@ -65,7 +65,7 @@ export class TeacherService {
               email: teacherData.email,
               phone: teacherData.phone,
               passwordHash: defaultPassword,
-              accountStatus: 'ACTIVE',
+              accountStatus: 'SHADOW', // User needs to activate via email
               role: 'TEACHER',
             },
           });
@@ -74,7 +74,7 @@ export class TeacherService {
             where: { id: teacherUser.id },
             data: {
               passwordHash: defaultPassword,
-              accountStatus: 'ACTIVE',
+              // Don't change accountStatus if user already exists - they may already be active
               role: 'TEACHER',
             },
           });

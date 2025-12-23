@@ -212,6 +212,8 @@ export function SidebarNew() {
               (link.href === '/dashboard/student/overview' &&
                 (pathname === '/dashboard/student' || pathname === '/dashboard')) ||
               (link.href === '/dashboard/teacher/timetables' &&
+                (pathname === '/dashboard/teacher' || pathname === '/dashboard')) ||
+              (link.href === '/dashboard/teacher/overview' &&
                 (pathname === '/dashboard/teacher' || pathname === '/dashboard'));
             return (
               <SidebarLink

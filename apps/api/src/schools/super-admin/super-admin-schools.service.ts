@@ -354,7 +354,7 @@ export class SuperAdminSchoolsService {
           email,
           phone,
           passwordHash: password,
-          accountStatus: 'ACTIVE',
+          accountStatus: 'SHADOW', // User needs to activate via email
           role: 'SCHOOL_ADMIN',
         },
       });
@@ -363,7 +363,7 @@ export class SuperAdminSchoolsService {
         where: { id: user.id },
         data: {
           passwordHash: password,
-          accountStatus: 'ACTIVE',
+          // Don't change accountStatus if user already exists
           role: 'SCHOOL_ADMIN',
         },
       });

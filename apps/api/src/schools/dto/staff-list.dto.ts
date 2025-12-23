@@ -31,8 +31,11 @@ export class StaffListItemDto {
   @ApiProperty({ description: 'Is temporary (for teachers)' })
   isTemporary: boolean;
 
-  @ApiProperty({ description: 'Account status' })
+  @ApiProperty({ description: 'Account status (simplified)' })
   status: 'active' | 'inactive';
+
+  @ApiProperty({ description: 'Account activation status (SHADOW=pending, ACTIVE=activated, SUSPENDED, ARCHIVED)' })
+  accountStatus: 'SHADOW' | 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED';
 
   @ApiProperty({ description: 'Profile image URL', nullable: true })
   profileImage: string | null;

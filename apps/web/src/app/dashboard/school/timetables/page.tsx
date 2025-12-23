@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -16,6 +16,7 @@ import {
   Trash2,
   MousePointerClick,
   GripVertical,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   useGetMySchoolQuery,
@@ -37,15 +38,26 @@ import {
   type Class,
   type DayOfWeek,
   type PeriodType,
+  type TeacherWithWorkload,
 } from '@/lib/store/api/schoolAdminApi';
 import { useSchoolType } from '@/hooks/useSchoolType';
-import { TimetableBuilder } from '@/components/timetable/TimetableBuilder';
+import { TimetableBuilder, type TimetableSlot } from '@/components/timetable/TimetableBuilder';
 import { EditableTimetableTable } from '@/components/timetable/EditableTimetableTable';
+import { TeacherSelectionPopup } from '@/components/timetable/TeacherSelectionPopup';
+import { TimetablePreviewModal } from '@/components/timetable/TimetablePreviewModal';
 import { getScheduleForSchoolType } from '@/lib/utils/nigerianSchoolSchedule';
 import { ConfirmModal } from '@/components/ui/Modal';
+import { useAutoGenerateWithTeachers, type GeneratedPeriodWithTeacher } from '@/hooks/useAutoGenerateWithTeachers';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+
+// Types for teacher selection state
+interface TeacherSelectionState {
+  slot: TimetableSlot;
+  subject: { id: string; name: string; code?: string };
+  teachers: TeacherWithWorkload[];
+}
 
 export default function TimetablesPage() {
   const router = useRouter();
@@ -95,12 +107,15 @@ export default function TimetablesPage() {
     { skip: !schoolId || !selectedClassId || !selectedTermId }
   );
 
-  const { data: subjectsResponse } = useGetSubjectsQuery(
+  // For SECONDARY, include termId to get teacher workload data
+  // Skip until termId is selected for SECONDARY to ensure we get workload data
+  const { data: subjectsResponse, refetch: refetchSubjects } = useGetSubjectsQuery(
     {
       schoolId: schoolId!,
       schoolType: currentType || undefined,
+      termId: currentType === 'SECONDARY' ? selectedTermId : undefined,
     },
-    { skip: !schoolId }
+    { skip: !schoolId || (currentType === 'SECONDARY' && !selectedTermId) }
   );
 
   const { data: coursesResponse } = useGetCoursesQuery(
@@ -126,6 +141,12 @@ export default function TimetablesPage() {
   
   const [deleteConfirmModal, setDeleteConfirmModal] = useState<{ classId: string; className: string; termId: string } | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
+  
+  // SECONDARY-specific state for teacher assignment
+  const [teacherSelectionState, setTeacherSelectionState] = useState<TeacherSelectionState | null>(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewPeriods, setPreviewPeriods] = useState<GeneratedPeriodWithTeacher[]>([]);
+  const [isApplyingPreview, setIsApplyingPreview] = useState(false);
 
   const classes = classesResponse?.data || [];
   const subjects = subjectsResponse?.data || [];
@@ -246,8 +267,7 @@ export default function TimetablesPage() {
     slot: { dayOfWeek: DayOfWeek; period: { startTime: string; endTime: string; type: string }; periodData?: TimetablePeriod },
     subjectId?: string,
     courseId?: string,
-    startTime?: string,
-    endTime?: string
+    teacherId?: string  // NEW: Teacher ID for SECONDARY schools
   ) => {
     if (!schoolId || !selectedClassId || !selectedTermId) return;
 
@@ -267,7 +287,10 @@ export default function TimetablesPage() {
             courseId: currentType === 'TERTIARY' 
               ? (isFreeperiod ? null : courseId) 
               : undefined,
-            teacherId: slot.periodData.teacherId || undefined,
+            // For SECONDARY, use the provided teacherId; otherwise keep existing
+            teacherId: currentType === 'SECONDARY' 
+              ? (teacherId || null) 
+              : (slot.periodData.teacherId || undefined),
             roomId: slot.periodData.roomId || undefined,
             startTime: slot.periodData.startTime,
             endTime: slot.periodData.endTime,
@@ -287,6 +310,8 @@ export default function TimetablesPage() {
             type: slot.period.type as PeriodType,
             subjectId: currentType !== 'TERTIARY' ? subjectId : undefined,
             courseId: currentType === 'TERTIARY' ? courseId : undefined,
+            // Include teacherId for SECONDARY schools
+            teacherId: currentType === 'SECONDARY' ? teacherId : undefined,
             // Use classArmId if the class has one, otherwise use classId
             ...(hasClassArmId 
               ? { classArmId: selectedClassId }
@@ -409,6 +434,228 @@ export default function TimetablesPage() {
       }
     }
   };
+
+  // ============================================
+  // SECONDARY-SPECIFIC HANDLERS
+  // ============================================
+
+  /**
+   * Handle teacher selection request from TimetableBuilder
+   * Shows the teacher selection popup
+   */
+  const handleTeacherSelectionNeeded = useCallback((request: TeacherSelectionState) => {
+    if (request.teachers.length === 0) {
+      // No teachers - show warning
+      toast.error(
+        `No teachers assigned to "${request.subject.name}". Add teachers in the Subjects page first.`,
+        { duration: 5000 }
+      );
+      return;
+    }
+    setTeacherSelectionState(request);
+  }, []);
+
+  /**
+   * Handle teacher selection from popup
+   */
+  const handleTeacherSelect = useCallback(async (teacherId: string, applyToAllSubjectPeriods: boolean) => {
+    if (!teacherSelectionState || !schoolId) return;
+    
+    const { slot, subject } = teacherSelectionState;
+    
+    // Close popup first
+    setTeacherSelectionState(null);
+    
+    if (applyToAllSubjectPeriods) {
+      // Apply teacher to ALL periods of this subject in the timetable
+      const periodsToUpdate = timetable.filter(
+        (period) => period.subjectId === subject.id && period.teacherId !== teacherId
+      );
+      
+      if (periodsToUpdate.length === 0) {
+        // Only the current period needs updating
+        await handlePeriodUpdate(slot, subject.id, undefined, teacherId);
+      } else {
+        // Update all periods with this subject
+        let updatedCount = 0;
+        for (const period of periodsToUpdate) {
+          try {
+            await updatePeriod({
+              schoolId,
+              periodId: period.id,
+              data: { teacherId },
+            }).unwrap();
+            updatedCount++;
+          } catch (error) {
+            console.error(`Failed to update period ${period.id}:`, error);
+          }
+        }
+        
+        // Also update the current slot if it's new (no periodId)
+        if (!slot.periodData?.id) {
+          await handlePeriodUpdate(slot, subject.id, undefined, teacherId);
+        }
+        
+        toast.success(`Assigned teacher to ${updatedCount + 1} ${subject.name} periods`);
+        await refetchTimetable();
+      }
+    } else {
+      // Apply only to this period
+      await handlePeriodUpdate(slot, subject.id, undefined, teacherId);
+    }
+    
+    // Refetch subjects to update teacher workload counts
+    if (currentType === 'SECONDARY') {
+      refetchSubjects();
+    }
+  }, [teacherSelectionState, handlePeriodUpdate, currentType, refetchSubjects, timetable, schoolId, updatePeriod, refetchTimetable]);
+
+  /**
+   * Handle editing teacher for an existing period (SECONDARY)
+   */
+  const handleEditPeriodTeacher = useCallback((period: TimetablePeriod, teachers: TeacherWithWorkload[]) => {
+    if (!period.subjectId || !period.subjectName) return;
+    
+    // Create a "slot" from the period for reusing the teacher selection popup
+    const slot: TimetableSlot = {
+      dayOfWeek: period.dayOfWeek,
+      period: {
+        startTime: period.startTime,
+        endTime: period.endTime,
+        type: period.type || 'LESSON',
+      },
+      periodData: period,
+    };
+    
+    setTeacherSelectionState({
+      slot,
+      subject: { id: period.subjectId, name: period.subjectName },
+      teachers,
+    });
+  }, []);
+
+  /**
+   * Handle auto-generate with teacher preview (SECONDARY)
+   */
+  const handleAutoGenerateWithPreview = useCallback(async (generatedPeriods: GeneratedPeriodWithTeacher[]) => {
+    if (currentType === 'SECONDARY') {
+      // Show preview modal instead of directly applying
+      setPreviewPeriods(generatedPeriods);
+      setShowPreviewModal(true);
+    } else {
+      // PRIMARY/TERTIARY: Apply directly (existing behavior)
+      await handleAutoGenerate(generatedPeriods);
+    }
+  }, [currentType, handleAutoGenerate]);
+
+  /**
+   * Apply previewed timetable (from preview modal)
+   */
+  const handleApplyPreview = useCallback(async (periods: GeneratedPeriodWithTeacher[]) => {
+    if (!schoolId || !selectedClassId || !selectedTermId) return;
+    
+    setIsApplyingPreview(true);
+    
+    try {
+      const existingMap = new Map<string, TimetablePeriod>();
+      timetable.forEach((period) => {
+        const key = `${period.dayOfWeek}-${period.startTime}-${period.endTime}`;
+        existingMap.set(key, period);
+      });
+
+      let createdCount = 0;
+      let updatedCount = 0;
+      
+      // Get selected class to check if it has classArmId
+      const currentSelectedClass = classes.find((c) => c.id === selectedClassId);
+      const hasClassArmId = currentSelectedClass?.classArmId;
+      
+      for (const period of periods) {
+        if (period.type !== 'LESSON') continue;
+        
+        const key = `${period.dayOfWeek}-${period.startTime}-${period.endTime}`;
+        const existingPeriod = existingMap.get(key);
+        
+        if (existingPeriod) {
+          const existingHasSubject = existingPeriod.subjectId || existingPeriod.courseId;
+          const newHasSubject = period.subjectId || period.courseId;
+          
+          // Only update if existing is empty or we have new data
+          if (!existingHasSubject && newHasSubject) {
+            await updatePeriod({
+              schoolId,
+              periodId: existingPeriod.id,
+              data: {
+                type: period.type as PeriodType,
+                subjectId: period.subjectId,
+                teacherId: period.teacherId,
+              },
+            }).unwrap();
+            updatedCount++;
+          }
+        } else if (period.subjectId) {
+          await createPeriod({
+            schoolId,
+            data: {
+              dayOfWeek: period.dayOfWeek,
+              startTime: period.startTime,
+              endTime: period.endTime,
+              type: period.type as PeriodType,
+              subjectId: period.subjectId,
+              teacherId: period.teacherId,
+              ...(hasClassArmId 
+                ? { classArmId: selectedClassId }
+                : { classId: selectedClassId }
+              ),
+              termId: selectedTermId,
+            },
+          }).unwrap();
+          createdCount++;
+        }
+      }
+
+      const totalChanges = createdCount + updatedCount;
+      if (totalChanges > 0) {
+        toast.success(`Timetable applied! ${createdCount} created, ${updatedCount} updated.`);
+      } else {
+        toast.success('Timetable is already up to date!');
+      }
+      
+      await refetchTimetable();
+      refetchTimetables();
+      setShowPreviewModal(false);
+      setPreviewPeriods([]);
+    } catch (error: any) {
+      if (error?.status === 409) {
+        toast.error(error?.data?.message || 'Conflict detected');
+      } else {
+        toast.error(error?.data?.message || 'Failed to apply timetable');
+      }
+    } finally {
+      setIsApplyingPreview(false);
+    }
+  }, [
+    schoolId, selectedClassId, selectedTermId, timetable, classes,
+    updatePeriod, createPeriod, refetchTimetable, refetchTimetables
+  ]);
+
+  // Use enhanced auto-generate hook for SECONDARY
+  const { 
+    generateTimetable: generateWithTeachers, 
+    analyzeGeneration,
+    subjectsWithoutTeachers,
+    requiresTeacherAssignment,
+  } = useAutoGenerateWithTeachers({
+    schoolType: currentType,
+    subjects: subjects.map(s => ({
+      id: s.id,
+      name: s.name,
+      code: s.code,
+      type: 'subject' as const,
+      teachers: s.teachers,
+    })),
+    existingPeriods: timetable,
+  });
 
   const handleDeleteTimetable = async () => {
     if (!schoolId || !deleteConfirmModal) return;
@@ -708,6 +955,29 @@ export default function TimetablesPage() {
                       <span className="font-medium">Tip:</span> Drag subjects from the left panel and drop them onto the timetable slots to assign them.
                     </p>
                   </div>
+                  {/* Show warning for SECONDARY if subjects have no teachers */}
+                  {currentType === 'SECONDARY' && subjectsWithoutTeachers.length > 0 && (
+                    <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                            Some subjects have no teachers assigned
+                          </p>
+                          <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                            {subjectsWithoutTeachers.map(s => s.name).join(', ')}
+                          </p>
+                          <Link 
+                            href="/dashboard/school/subjects" 
+                            className="text-xs text-amber-700 dark:text-amber-400 underline hover:no-underline mt-1 inline-block"
+                          >
+                            Go to Subjects page to add teachers →
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
                   <TimetableBuilder
                     schoolType={currentType}
                     subjects={subjects.map((s) => ({ id: s.id, name: s.name, code: s.code, type: 'subject' as const }))}
@@ -717,8 +987,18 @@ export default function TimetablesPage() {
                     termId={selectedTermId}
                     onPeriodUpdate={handlePeriodUpdate}
                     onPeriodDelete={handlePeriodDelete}
-                    onAutoGenerate={handleAutoGenerate}
+                    onAutoGenerate={currentType === 'SECONDARY' ? handleAutoGenerateWithPreview : handleAutoGenerate}
                     isLoading={isCreating || isUpdating || isDeleting}
+                    // SECONDARY-specific props
+                    subjectsWithTeachers={currentType === 'SECONDARY' ? subjects.map(s => ({
+                      id: s.id,
+                      name: s.name,
+                      code: s.code,
+                      type: 'subject' as const,
+                      teachers: s.teachers,
+                    })) : undefined}
+                    onTeacherSelectionNeeded={currentType === 'SECONDARY' ? handleTeacherSelectionNeeded : undefined}
+                    onEditPeriodTeacher={currentType === 'SECONDARY' ? handleEditPeriodTeacher : undefined}
                   />
                   {isEditMode && (
                     <EditableTimetableTable
@@ -823,6 +1103,42 @@ export default function TimetablesPage() {
           variant="danger"
           isLoading={isDeletingTimetable}
         />
+
+        {/* SECONDARY: Teacher Selection Popup */}
+        {teacherSelectionState && (
+          <TeacherSelectionPopup
+            subject={teacherSelectionState.subject}
+            slot={{
+              dayOfWeek: teacherSelectionState.slot.dayOfWeek,
+              startTime: teacherSelectionState.slot.period.startTime,
+              endTime: teacherSelectionState.slot.period.endTime,
+            }}
+            teachers={teacherSelectionState.teachers}
+            onSelect={handleTeacherSelect}
+            onCancel={() => setTeacherSelectionState(null)}
+            isLoading={isCreating || isUpdating}
+          />
+        )}
+
+        {/* SECONDARY: Timetable Preview Modal */}
+        {showPreviewModal && previewPeriods.length > 0 && (
+          <TimetablePreviewModal
+            className={selectedClass?.name || 'Unknown Class'}
+            periods={previewPeriods}
+            analysis={analyzeGeneration(previewPeriods)}
+            subjects={subjects.map(s => ({
+              id: s.id,
+              name: s.name,
+              teachers: s.teachers,
+            }))}
+            onApply={handleApplyPreview}
+            onCancel={() => {
+              setShowPreviewModal(false);
+              setPreviewPeriods([]);
+            }}
+            isLoading={isApplyingPreview}
+          />
+        )}
       </div>
     </ProtectedRoute>
   );

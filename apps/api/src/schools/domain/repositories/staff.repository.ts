@@ -262,14 +262,50 @@ export class StaffRepository {
 
   /**
    * Get count of class assignments for a teacher-subject combination
+   * Counts from both ClassTeacher (PRIMARY) and TimetablePeriod (SECONDARY) tables
    */
-  async getTeacherSubjectAssignmentCount(teacherId: string, subjectName: string): Promise<number> {
-    return this.prisma.classTeacher.count({
+  async getTeacherSubjectAssignmentCount(
+    teacherId: string, 
+    subjectName: string,
+    subjectId?: string
+  ): Promise<number> {
+    // Count from ClassTeacher (legacy/PRIMARY school assignments)
+    const classTeacherCount = await this.prisma.classTeacher.count({
       where: {
         teacherId,
         subject: subjectName,
       },
     });
+
+    // Count unique classes from TimetablePeriod (SECONDARY school assignments)
+    let timetablePeriodClassCount = 0;
+    if (subjectId) {
+      const timetablePeriods = await this.prisma.timetablePeriod.findMany({
+        where: {
+          teacherId,
+          subjectId,
+        },
+        select: {
+          classArmId: true,
+          classId: true,
+        },
+        distinct: ['classArmId', 'classId'],
+      });
+      
+      // Count unique classes (either classArmId or classId)
+      const uniqueClasses = new Set<string>();
+      timetablePeriods.forEach(period => {
+        if (period.classArmId) {
+          uniqueClasses.add(period.classArmId);
+        } else if (period.classId) {
+          uniqueClasses.add(period.classId);
+        }
+      });
+      timetablePeriodClassCount = uniqueClasses.size;
+    }
+
+    // Return the higher count (a teacher is either assigned via ClassTeacher or TimetablePeriod, not both)
+    return Math.max(classTeacherCount, timetablePeriodClassCount);
   }
 
   /**

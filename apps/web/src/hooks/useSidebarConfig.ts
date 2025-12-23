@@ -108,11 +108,12 @@ export function useSidebarConfig(): {
       return [{ items: baseItems }];
     }
 
-    // Teacher sidebar
+    // Teacher sidebar - Overview available for all teacher types
     if (role === 'TEACHER') {
       return [
         {
           items: [
+            { label: 'Overview', href: '/dashboard/teacher/overview', icon: LayoutDashboard },
             { label: 'Timetables', href: '/dashboard/teacher/timetables', icon: Clock },
             { label: 'Classes', href: '/dashboard/teacher/classes', icon: BookOpen },
             { label: 'Calendar', href: '/dashboard/teacher/calendar', icon: Calendar },

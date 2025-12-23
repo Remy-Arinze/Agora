@@ -53,7 +53,8 @@ export class TeacherSubjectsService {
       subjectTeachers.map(async (st: any) => {
         const assignedClassCount = await this.staffRepository.getTeacherSubjectAssignmentCount(
           teacherId,
-          st.subject.name
+          st.subject.name,
+          st.subject.id  // Pass subjectId for TimetablePeriod lookup
         );
 
         return {
@@ -95,7 +96,8 @@ export class TeacherSubjectsService {
       (teacher.subjectTeachers || []).map(async (st: any) => {
         const assignedClassCount = await this.staffRepository.getTeacherSubjectAssignmentCount(
           teacherId,
-          st.subject.name
+          st.subject.name,
+          st.subject.id  // Pass subjectId for TimetablePeriod lookup
         );
 
         return {
@@ -204,10 +206,11 @@ export class TeacherSubjectsService {
     // Add subject to teacher
     const subjectTeacher = await this.staffRepository.addTeacherSubject(teacherId, subjectId);
 
-    // Get assignment count
+    // Get assignment count (includes TimetablePeriod for SECONDARY schools)
     const assignedClassCount = await this.staffRepository.getTeacherSubjectAssignmentCount(
       teacherId,
-      subject.name
+      subject.name,
+      subjectId  // Pass subjectId for TimetablePeriod lookup
     );
 
     return {
@@ -258,10 +261,11 @@ export class TeacherSubjectsService {
       );
     }
 
-    // Check if teacher is currently teaching this subject in any class
+    // Check if teacher is currently teaching this subject in any class (includes TimetablePeriod)
     const assignmentCount = await this.staffRepository.getTeacherSubjectAssignmentCount(
       teacherId,
-      subject.name
+      subject.name,
+      subjectId  // Pass subjectId for TimetablePeriod lookup
     );
     if (assignmentCount > 0) {
       throw new ConflictException(

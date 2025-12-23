@@ -122,7 +122,8 @@ export class ClassService {
 
   /**
    * Get classes assigned to a teacher
-   * For PRIMARY/SECONDARY: Returns ClassArms if school uses ClassArms
+   * For PRIMARY: Returns ClassArms from ClassTeacher records (form teacher)
+   * For SECONDARY: Returns ClassArms from TimetablePeriod records (timetable-based assignments)
    * For TERTIARY: Returns Classes (backward compatibility)
    */
   async getTeacherClasses(schoolId: string, teacherId: string): Promise<ClassDto[]> {
@@ -132,9 +133,17 @@ export class ClassService {
       throw new BadRequestException('School not found');
     }
 
-    // Validate teacher exists in school
-    const teacher = await this.staffRepository.findTeacherById(teacherId);
-    if (!teacher || teacher.schoolId !== school.id) {
+    // Validate teacher exists in school - check both id and teacherId fields
+    let teacher = await this.prisma.teacher.findFirst({
+      where: {
+        OR: [
+          { id: teacherId },
+          { teacherId: teacherId },
+        ],
+        schoolId: school.id,
+      },
+    });
+    if (!teacher) {
       throw new NotFoundException('Teacher not found in this school');
     }
 
@@ -145,43 +154,77 @@ export class ClassService {
     const usesClassArms = await this.schoolUsesClassArms(school.id, academicYear);
 
     if (usesClassArms) {
-      // School uses ClassArms - return ClassArms assigned to teacher
-      const classArmAssignments = await (this.prisma as any).classTeacher.findMany({
+      // Get unique ClassArm IDs from multiple sources:
+      // 1. ClassTeacher records (form teacher assignments - PRIMARY)
+      // 2. TimetablePeriod records (timetable-based assignments - SECONDARY)
+      const classArmIds = new Set<string>();
+      
+      // 1. Get ClassArms from ClassTeacher records (form teacher for PRIMARY)
+      const classTeacherAssignments = await (this.prisma as any).classTeacher.findMany({
         where: {
-          teacherId: teacherId,
+          teacherId: teacher.id,
           classArmId: { not: null },
           classArm: {
             isActive: true,
             classLevel: {
               schoolId: school.id,
-              type: { in: ['PRIMARY', 'SECONDARY'] },
             },
+          },
+        },
+        select: {
+          classArmId: true,
+        },
+      });
+      classTeacherAssignments.forEach((ct: any) => {
+        if (ct.classArmId) classArmIds.add(ct.classArmId);
+      });
+
+      // 2. Get ClassArms from TimetablePeriod records (for SECONDARY schools)
+      // This is where teachers are assigned via timetable
+      const timetablePeriods = await this.prisma.timetablePeriod.findMany({
+        where: {
+          teacherId: teacher.id,
+          classArmId: { not: null },
+          type: 'LESSON',
+        },
+        select: {
+          classArmId: true,
+        },
+        distinct: ['classArmId'],
+      });
+      timetablePeriods.forEach((period: any) => {
+        if (period.classArmId) classArmIds.add(period.classArmId);
+      });
+
+      // If no classes found, return empty array
+      if (classArmIds.size === 0) {
+        return [];
+      }
+
+      // Fetch full ClassArm data for all collected IDs
+      const classArms = await (this.prisma as any).classArm.findMany({
+        where: {
+          id: { in: Array.from(classArmIds) },
+          isActive: true,
+          classLevel: {
+            schoolId: school.id,
           },
         },
         include: {
-          classArm: {
+          classLevel: true,
+          classTeachers: {
             include: {
-              classLevel: true,
-              classTeachers: {
-                include: {
-                  teacher: true,
-                },
-              },
+              teacher: true,
             },
           },
         },
+        orderBy: [
+          { classLevel: { level: 'asc' } },
+          { name: 'asc' },
+        ],
       });
 
-      // Get unique ClassArms and map to DTOs
-      const classArmMap = new Map<string, any>();
-      classArmAssignments.forEach((assignment: any) => {
-        const classArm = assignment.classArm;
-        if (classArm && !classArmMap.has(classArm.id)) {
-          classArmMap.set(classArm.id, classArm);
-        }
-      });
-
-      const classArms = Array.from(classArmMap.values());
+      // Get student counts and subject info for each ClassArm
       const classArmsWithCounts = await Promise.all(
         classArms.map(async (arm: any) => {
           const studentsCount = await this.prisma.enrollment.count({
@@ -192,6 +235,30 @@ export class ClassService {
               academicYear,
             },
           });
+
+          // For SECONDARY, get the subjects this teacher teaches in this class from timetable
+          const subjectsInClass = await this.prisma.timetablePeriod.findMany({
+            where: {
+              teacherId: teacher.id,
+              classArmId: arm.id,
+              type: 'LESSON',
+            },
+            select: {
+              subject: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+            distinct: ['subjectId'],
+          });
+
+          // Build teacher info - include subjects from timetable
+          const teacherSubjects = subjectsInClass
+            .filter((p: any) => p.subject)
+            .map((p: any) => p.subject.name)
+            .join(', ');
 
           return {
             id: arm.id,
@@ -206,16 +273,32 @@ export class ClassService {
             updatedAt: arm.updatedAt,
             schoolId: school.id,
             studentsCount,
-            teachers: arm.classTeachers.map((ct: any) => ({
-              id: ct.id,
-              teacherId: ct.teacher.id,
-              firstName: ct.teacher.firstName,
-              lastName: ct.teacher.lastName,
-              email: ct.teacher.email,
-              subject: ct.subject || ct.teacher.subject,
-              isPrimary: ct.isPrimary,
-              createdAt: ct.createdAt,
-            })),
+            teachers: [
+              // Include the current teacher with their subjects in this class
+              {
+                id: `timetable-${teacher.id}-${arm.id}`,
+                teacherId: teacher.id,
+                firstName: teacher.firstName,
+                lastName: teacher.lastName,
+                email: teacher.email,
+                subject: teacherSubjects || null,
+                isPrimary: arm.classTeachers?.some((ct: any) => ct.teacherId === teacher.id && ct.isPrimary) || false,
+                createdAt: arm.createdAt,
+              },
+              // Include other form teachers if any
+              ...arm.classTeachers
+                .filter((ct: any) => ct.teacherId !== teacher.id)
+                .map((ct: any) => ({
+                  id: ct.id,
+                  teacherId: ct.teacher.id,
+                  firstName: ct.teacher.firstName,
+                  lastName: ct.teacher.lastName,
+                  email: ct.teacher.email,
+                  subject: ct.subject || ct.teacher.subject,
+                  isPrimary: ct.isPrimary,
+                  createdAt: ct.createdAt,
+                })),
+            ],
             classArmId: arm.id,
             classLevelId: arm.classLevelId,
           };

@@ -8,10 +8,11 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { motion } from 'framer-motion';
-import { GraduationCap, Plus, FileSpreadsheet, Loader2 } from 'lucide-react';
-import { useGetStudentsQuery, useGetMySchoolQuery } from '@/lib/store/api/schoolAdminApi';
+import { GraduationCap, Plus, FileSpreadsheet, Loader2, Mail, CheckCircle, Clock, Ban } from 'lucide-react';
+import { useGetStudentsQuery, useGetMySchoolQuery, useResendPasswordResetForStudentMutation } from '@/lib/store/api/schoolAdminApi';
 import { useSchoolType } from '@/hooks/useSchoolType';
 import { StudentImportModal } from '@/components/modals/StudentImportModal';
+import toast from 'react-hot-toast';
 
 // Avatar component for students
 const StudentAvatar = ({ 
@@ -57,11 +58,15 @@ export default function StudentsPage() {
   const [page, setPage] = useState(1);
   const limit = 20;
   const [showImportModal, setShowImportModal] = useState(false);
+  const [resendingStudentId, setResendingStudentId] = useState<string | null>(null);
 
   // Get school ID and school type
   const { data: schoolResponse } = useGetMySchoolQuery();
   const schoolId = schoolResponse?.data?.id;
   const { currentType } = useSchoolType();
+
+  // Resend invitation mutation
+  const [resendInvitation] = useResendPasswordResetForStudentMutation();
 
   const { data: studentsResponse, isLoading, error } = useGetStudentsQuery(
     { schoolId: schoolId!, page, limit, schoolType: currentType || undefined },
@@ -84,6 +89,59 @@ export default function StudentsPage() {
         student.uid.toLowerCase().includes(query)
     );
   }, [students, searchQuery]);
+
+  // Handle resend invitation
+  const handleResendInvitation = async (studentId: string, studentName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!schoolId) return;
+    
+    setResendingStudentId(studentId);
+    try {
+      await resendInvitation({ schoolId, studentId }).unwrap();
+      toast.success(`Invitation email resent to ${studentName}`);
+    } catch (error: any) {
+      toast.error(error?.data?.message || 'Failed to resend invitation');
+    } finally {
+      setResendingStudentId(null);
+    }
+  };
+
+  // Get status badge config based on account status
+  const getStatusBadge = (accountStatus: string | undefined) => {
+    switch (accountStatus) {
+      case 'ACTIVE':
+        return {
+          icon: CheckCircle,
+          label: 'Active',
+          className: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+        };
+      case 'SHADOW':
+        return {
+          icon: Clock,
+          label: 'Pending',
+          className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+        };
+      case 'SUSPENDED':
+        return {
+          icon: Ban,
+          label: 'Suspended',
+          className: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+        };
+      case 'ARCHIVED':
+        return {
+          icon: Ban,
+          label: 'Archived',
+          className: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400',
+        };
+      default:
+        // Default to Active if no email (students without email can't activate)
+        return {
+          icon: CheckCircle,
+          label: 'Active',
+          className: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+        };
+    }
+  };
 
   return (
     <ProtectedRoute roles={['SCHOOL_ADMIN']}>
@@ -217,15 +275,18 @@ export default function StudentsPage() {
                           {new Date(student.dateOfBirth).toLocaleDateString()}
                         </td>
                         <td className="py-4 px-4">
-                          <span
-                            className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              !student.profileLocked
-                                ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
-                                : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
-                            }`}
-                          >
-                            {student.profileLocked ? 'Locked' : 'Active'}
-                          </span>
+                          {(() => {
+                            const statusConfig = getStatusBadge(student.user?.accountStatus);
+                            const StatusIcon = statusConfig.icon;
+                            return (
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${statusConfig.className}`}
+                              >
+                                <StatusIcon className="h-3 w-3" />
+                                {statusConfig.label}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="py-4 px-4" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center space-x-2">
@@ -234,6 +295,29 @@ export default function StudentsPage() {
                                 View
                               </Button>
                             </Link>
+                            {/* Resend invitation button for pending accounts with email */}
+                            {student.user?.accountStatus === 'SHADOW' && student.user?.email && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => handleResendInvitation(
+                                  student.id, 
+                                  `${student.firstName} ${student.lastName}`,
+                                  e
+                                )}
+                                disabled={resendingStudentId === student.id}
+                                className="text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                              >
+                                {resendingStudentId === student.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <>
+                                    <Mail className="h-4 w-4 mr-1" />
+                                    Resend
+                                  </>
+                                )}
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </motion.tr>

@@ -25,7 +25,7 @@ export class StaffBulkImportRowDto {
 
   @ApiProperty({ 
     example: 'Mathematics', 
-    description: 'Subject taught (optional for teacher type, ignored for admin type)',
+    description: 'Subject name to assign teacher to (must match an existing subject in the school, case-insensitive). If found, creates SubjectTeacher relationship for competency tracking.',
     required: false 
   })
   subject?: string;

@@ -8,6 +8,7 @@ import {
   useGetStaffListQuery,
   useAssignTeacherToClassMutation,
   useGetSubjectsQuery,
+  useGetClassesQuery,
   StaffListItem,
   Subject,
 } from '@/lib/store/api/schoolAdminApi';
@@ -47,6 +48,12 @@ export function AssignTeacherToClassModal({
     { skip: !isOpen }
   );
 
+  // Fetch all PRIMARY classes to get already-assigned teachers (only for PRIMARY schools)
+  const { data: allClassesResponse, isLoading: isLoadingClasses } = useGetClassesQuery(
+    { schoolId, type: 'PRIMARY' },
+    { skip: !isOpen || schoolType !== 'PRIMARY' }
+  );
+
   // Fetch subjects (for SECONDARY schools)
   const { data: subjectsResponse, isLoading: isLoadingSubjects } = useGetSubjectsQuery(
     { schoolId, schoolType },
@@ -70,9 +77,34 @@ export function AssignTeacherToClassModal({
 
   const subjects = useMemo(() => subjectsResponse?.data || [], [subjectsResponse]);
 
-  // Filter teachers by search and exclude already assigned (for same subject)
+  // Get teacher IDs who are already assigned as form teachers in OTHER PRIMARY classes
+  const teachersAssignedToOtherClasses = useMemo(() => {
+    if (schoolType !== 'PRIMARY' || !allClassesResponse?.data) return new Set<string>();
+    
+    const assignedIds = new Set<string>();
+    allClassesResponse.data.forEach((cls) => {
+      // Skip the current class - we only want to filter teachers from OTHER classes
+      if (cls.id === classId) return;
+      
+      // Get form teachers (isPrimary = true) from each class
+      cls.teachers?.forEach((teacher) => {
+        if (teacher.isPrimary) {
+          assignedIds.add(teacher.teacherId);
+        }
+      });
+    });
+    
+    return assignedIds;
+  }, [schoolType, allClassesResponse, classId]);
+
+  // Filter teachers by search and exclude already assigned (for PRIMARY schools)
   const filteredTeachers = useMemo(() => {
     let result = teachers;
+
+    // For PRIMARY schools, exclude teachers who are already form teachers in other classes
+    if (schoolType === 'PRIMARY') {
+      result = result.filter((t) => !teachersAssignedToOtherClasses.has(t.id));
+    }
 
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -85,7 +117,7 @@ export function AssignTeacherToClassModal({
     }
 
     return result;
-  }, [teachers, searchQuery]);
+  }, [teachers, searchQuery, schoolType, teachersAssignedToOtherClasses]);
 
   // Get subjects teacher can teach that aren't already assigned
   const availableSubjectsForTeacher = useMemo(() => {
@@ -190,7 +222,7 @@ export function AssignTeacherToClassModal({
 
             {/* Teacher List */}
             <div className="max-h-[400px] overflow-y-auto scrollbar-hide space-y-2">
-              {isLoadingStaff ? (
+              {(isLoadingStaff || (schoolType === 'PRIMARY' && isLoadingClasses)) ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
                 </div>

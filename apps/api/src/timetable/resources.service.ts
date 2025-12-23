@@ -12,6 +12,8 @@ import {
   UpdateSubjectDto,
   AutoGenerateSubjectsDto,
   AutoGenerateSubjectsResponseDto,
+  SubjectClassAssignmentsDto,
+  BulkClassSubjectAssignmentDto,
 } from './dto/resource.dto';
 
 @Injectable()
@@ -403,7 +405,8 @@ export class ResourcesService {
   async getSubjects(
     schoolId: string,
     schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY',
-    classLevelId?: string
+    classLevelId?: string,
+    termId?: string
   ): Promise<SubjectDto[]> {
     const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
     if (!school) {
@@ -438,6 +441,76 @@ export class ResourcesService {
       },
     });
 
+    // If termId is provided, fetch teacher workloads for that term
+    let teacherWorkloads: Map<string, { periodCount: number; classCount: number }> = new Map();
+    
+    if (termId && schoolType === 'SECONDARY') {
+      // Get all teacher IDs from subjects
+      const teacherIds = new Set<string>();
+      subjects.forEach((s: any) => {
+        s.subjectTeachers?.forEach((st: any) => {
+          teacherIds.add(st.teacher.id);
+        });
+      });
+
+      if (teacherIds.size > 0) {
+        // Count periods per teacher for this term
+        const periodCounts = await this.prisma.timetablePeriod.groupBy({
+          by: ['teacherId'],
+          where: {
+            termId,
+            teacherId: { in: Array.from(teacherIds) },
+          },
+          _count: { id: true },
+        });
+
+        // Count unique classes per teacher
+        const classCountsRaw = await this.prisma.timetablePeriod.findMany({
+          where: {
+            termId,
+            teacherId: { in: Array.from(teacherIds) },
+            OR: [
+              { classId: { not: null } },
+              { classArmId: { not: null } },
+            ],
+          },
+          select: {
+            teacherId: true,
+            classId: true,
+            classArmId: true,
+          },
+          distinct: ['teacherId', 'classId', 'classArmId'],
+        });
+
+        // Build workload map
+        periodCounts.forEach((pc: any) => {
+          teacherWorkloads.set(pc.teacherId, {
+            periodCount: pc._count.id,
+            classCount: 0,
+          });
+        });
+
+        // Count unique classes per teacher
+        const classCountsByTeacher = new Map<string, Set<string>>();
+        classCountsRaw.forEach((row: any) => {
+          if (!row.teacherId) return;
+          if (!classCountsByTeacher.has(row.teacherId)) {
+            classCountsByTeacher.set(row.teacherId, new Set());
+          }
+          const classKey = row.classArmId || row.classId;
+          if (classKey) {
+            classCountsByTeacher.get(row.teacherId)!.add(classKey);
+          }
+        });
+
+        classCountsByTeacher.forEach((classes, teacherId) => {
+          const existing = teacherWorkloads.get(teacherId) || { periodCount: 0, classCount: 0 };
+          existing.classCount = classes.size;
+          teacherWorkloads.set(teacherId, existing);
+        });
+      }
+    }
+
     return subjects.map((s: any) => ({
       id: s.id,
       name: s.name,
@@ -448,11 +521,16 @@ export class ResourcesService {
       classLevelName: s.classLevel?.name,
       description: s.description,
       isActive: s.isActive,
-      teachers: s.subjectTeachers?.map((st: any) => ({
-        id: st.teacher.id,
-        firstName: st.teacher.firstName,
-        lastName: st.teacher.lastName,
-      })) || [],
+      teachers: s.subjectTeachers?.map((st: any) => {
+        const workload = teacherWorkloads.get(st.teacher.id);
+        return {
+          id: st.teacher.id,
+          firstName: st.teacher.firstName,
+          lastName: st.teacher.lastName,
+          periodCount: workload?.periodCount,
+          classCount: workload?.classCount,
+        };
+      }) || [],
     }));
   }
 
@@ -954,6 +1032,786 @@ export class ResourcesService {
       created: createdSubjects.length,
       skipped,
       subjects: createdSubjects,
+    };
+  }
+
+  // ============================================
+  // CLASS SUBJECT TEACHER ASSIGNMENTS (SECONDARY)
+  // ============================================
+
+  /**
+   * Get all class arms for a subject with current teacher assignments
+   * Used by SECONDARY schools to see which teacher teaches a subject in each class
+   */
+  async getSubjectClassAssignments(
+    schoolId: string,
+    subjectId: string,
+    sessionId?: string
+  ): Promise<SubjectClassAssignmentsDto> {
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    const subject = await this.subjectModel.findUnique({
+      where: { id: subjectId },
+      include: {
+        subjectTeachers: {
+          include: {
+            teacher: true,
+          },
+        },
+      },
+    });
+
+    if (!subject || subject.schoolId !== school.id) {
+      throw new NotFoundException('Subject not found');
+    }
+
+    // Only relevant for SECONDARY schools
+    if (subject.schoolType !== 'SECONDARY') {
+      throw new BadRequestException('Class assignments are only available for SECONDARY school subjects');
+    }
+
+    // Get active session if not provided
+    let activeSessionId = sessionId;
+    if (!activeSessionId) {
+      const activeSession = await this.prisma.academicSession.findFirst({
+        where: {
+          schoolId: school.id,
+          schoolType: 'SECONDARY',
+          status: 'ACTIVE',
+        },
+      });
+      activeSessionId = activeSession?.id;
+    }
+
+    // Get all class arms for SECONDARY school type
+    const classArms = await this.prisma.classArm.findMany({
+      where: {
+        classLevel: {
+          schoolId: school.id,
+          type: 'SECONDARY',
+          isActive: true,
+        },
+        isActive: true,
+      },
+      include: {
+        classLevel: true,
+      },
+      orderBy: [
+        { classLevel: { level: 'asc' } },
+        { name: 'asc' },
+      ],
+    });
+
+    // Get current assignments for this subject
+    const assignments = await this.prisma.classTeacher.findMany({
+      where: {
+        subjectId: subjectId,
+        classArmId: { not: null },
+        ...(activeSessionId ? { sessionId: activeSessionId } : {}),
+      },
+      include: {
+        teacher: true,
+        classArm: {
+          include: {
+            classLevel: true,
+          },
+        },
+      },
+    });
+
+    // Build assignments map: classArmId -> assignment details
+    const assignmentsMap: Record<string, { assignmentId: string; teacherId: string; teacherName: string }> = {};
+    for (const assignment of assignments) {
+      if (assignment.classArmId) {
+        assignmentsMap[assignment.classArmId] = {
+          assignmentId: assignment.id,
+          teacherId: assignment.teacherId,
+          teacherName: `${assignment.teacher.firstName} ${assignment.teacher.lastName}`,
+        };
+      }
+    }
+
+    // Get competent teachers (teachers who can teach this subject)
+    const competentTeachers = subject.subjectTeachers?.map((st: any) => ({
+      id: st.teacher.id,
+      firstName: st.teacher.firstName,
+      lastName: st.teacher.lastName,
+    })) || [];
+
+    return {
+      subjectId: subject.id,
+      subjectName: subject.name,
+      schoolType: subject.schoolType || 'SECONDARY',
+      classArms: classArms.map((arm: any) => ({
+        id: arm.id,
+        name: arm.name,
+        classLevelId: arm.classLevelId,
+        classLevelName: arm.classLevel.name,
+        fullName: `${arm.classLevel.name} ${arm.name}`,
+      })),
+      assignments: assignmentsMap,
+      competentTeachers,
+    };
+  }
+
+  /**
+   * Bulk assign teachers to classes for a subject
+   * For SECONDARY schools: assign which teacher teaches a subject in each class
+   */
+  async bulkAssignTeachersToClasses(
+    schoolId: string,
+    subjectId: string,
+    dto: BulkClassSubjectAssignmentDto
+  ): Promise<{ updated: number; removed: number }> {
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    const subject = await this.subjectModel.findUnique({
+      where: { id: subjectId },
+      include: {
+        subjectTeachers: true,
+      },
+    });
+
+    if (!subject || subject.schoolId !== school.id) {
+      throw new NotFoundException('Subject not found');
+    }
+
+    if (subject.schoolType !== 'SECONDARY') {
+      throw new BadRequestException('Class assignments are only available for SECONDARY school subjects');
+    }
+
+    // Get or determine session
+    let sessionId = dto.sessionId;
+    if (!sessionId) {
+      const activeSession = await this.prisma.academicSession.findFirst({
+        where: {
+          schoolId: school.id,
+          schoolType: 'SECONDARY',
+          status: 'ACTIVE',
+        },
+      });
+      sessionId = activeSession?.id;
+    }
+
+    // Validate all class arms belong to this school
+    const classArmIds = dto.assignments.map(a => a.classArmId);
+    const validClassArms = await this.prisma.classArm.findMany({
+      where: {
+        id: { in: classArmIds },
+        classLevel: {
+          schoolId: school.id,
+          type: 'SECONDARY',
+        },
+      },
+    });
+
+    const validClassArmIdSet = new Set(validClassArms.map(ca => ca.id));
+    for (const assignment of dto.assignments) {
+      if (!validClassArmIdSet.has(assignment.classArmId)) {
+        throw new BadRequestException(`Invalid class arm: ${assignment.classArmId}`);
+      }
+    }
+
+    // Get competent teacher IDs
+    const competentTeacherIds = new Set(subject.subjectTeachers?.map((st: any) => st.teacherId) || []);
+
+    let updated = 0;
+    let removed = 0;
+
+    for (const assignment of dto.assignments) {
+      // Find existing assignment for this subject + classArm + session
+      const existing = await this.prisma.classTeacher.findFirst({
+        where: {
+          subjectId: subjectId,
+          classArmId: assignment.classArmId,
+          ...(sessionId ? { sessionId } : {}),
+        },
+      });
+
+      if (!assignment.teacherId) {
+        // Remove assignment
+        if (existing) {
+          await this.prisma.classTeacher.delete({
+            where: { id: existing.id },
+          });
+          removed++;
+        }
+      } else {
+        // Validate teacher is competent to teach this subject
+        if (!competentTeacherIds.has(assignment.teacherId)) {
+          throw new BadRequestException(
+            `Teacher ${assignment.teacherId} is not marked as competent to teach ${subject.name}. Please add them as a subject teacher first.`
+          );
+        }
+
+        if (existing) {
+          // Update existing assignment
+          await this.prisma.classTeacher.update({
+            where: { id: existing.id },
+            data: {
+              teacherId: assignment.teacherId,
+            },
+          });
+          updated++;
+        } else {
+          // Create new assignment
+          await this.prisma.classTeacher.create({
+            data: {
+              classArmId: assignment.classArmId,
+              teacherId: assignment.teacherId,
+              subjectId: subjectId,
+              sessionId: sessionId,
+              isPrimary: false,
+              isFormTeacher: false,
+            },
+          });
+          updated++;
+        }
+      }
+    }
+
+    return { updated, removed };
+  }
+
+  /**
+   * Remove a specific class-subject-teacher assignment
+   */
+  async removeClassSubjectAssignment(
+    schoolId: string,
+    subjectId: string,
+    classArmId: string,
+    sessionId?: string
+  ): Promise<void> {
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    const subject = await this.subjectModel.findUnique({
+      where: { id: subjectId },
+    });
+
+    if (!subject || subject.schoolId !== school.id) {
+      throw new NotFoundException('Subject not found');
+    }
+
+    // Delete the assignment
+    await this.prisma.classTeacher.deleteMany({
+      where: {
+        subjectId: subjectId,
+        classArmId: classArmId,
+        ...(sessionId ? { sessionId } : {}),
+      },
+    });
+  }
+
+  // ============================================
+  // TEACHER WORKLOAD ANALYSIS
+  // ============================================
+
+  /**
+   * Workload thresholds (periods per week)
+   * These can be configured per school in the future
+   */
+  private readonly WORKLOAD_THRESHOLDS = {
+    LOW: 10,      // Less than 10 periods = underutilized
+    NORMAL: 25,   // 10-25 periods = normal
+    HIGH: 30,     // 25-30 periods = high
+    OVERLOADED: 30, // More than 30 = overloaded
+  };
+
+  /**
+   * Get comprehensive teacher workload summary for a school and term
+   * Used by admin to monitor and balance teacher assignments
+   */
+  async getTeacherWorkloadSummary(
+    schoolId: string,
+    termId: string,
+    schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY'
+  ): Promise<{
+    teachers: Array<{
+      teacherId: string;
+      firstName: string;
+      lastName: string;
+      totalPeriods: number;
+      classCount: number;
+      subjectCount: number;
+      periodsBySubject: Record<string, { name: string; count: number }>;
+      periodsByClass: Record<string, { name: string; count: number }>;
+      status: 'LOW' | 'NORMAL' | 'HIGH' | 'OVERLOADED';
+    }>;
+    averagePeriods: number;
+    warnings: Array<{
+      teacherId: string;
+      teacherName: string;
+      periodCount: number;
+      status: string;
+      message: string;
+    }>;
+    unassignedSubjects: Array<{
+      subjectId: string;
+      subjectName: string;
+      message: string;
+    }>;
+  }> {
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    // Verify term exists
+    const term = await this.prisma.term.findUnique({
+      where: { id: termId },
+      include: { academicSession: true },
+    });
+
+    if (!term || term.academicSession?.schoolId !== school.id) {
+      throw new NotFoundException('Term not found');
+    }
+
+    // Build school type filter
+    const typeFilter: any = {};
+    if (schoolType) {
+      typeFilter.type = schoolType;
+    }
+
+    // Get all teachers for this school (filtered by school type via their class/subject assignments)
+    const teachers = await this.prisma.teacher.findMany({
+      where: {
+        schoolId: school.id,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+      },
+    });
+
+    // Get all periods for this term with subject and class info
+    const periods = await this.prisma.timetablePeriod.findMany({
+      where: {
+        termId,
+        teacherId: { not: null },
+        ...(schoolType ? {
+          OR: [
+            { classArm: { classLevel: { type: schoolType } } },
+            { class: { type: schoolType } },
+          ],
+        } : {}),
+      },
+      include: {
+        subject: { select: { id: true, name: true } },
+        classArm: { 
+          include: { 
+            classLevel: { select: { name: true } } 
+          } 
+        },
+        class: { select: { id: true, name: true } },
+      },
+    });
+
+    // Build workload data per teacher
+    const teacherWorkloads = new Map<string, {
+      totalPeriods: number;
+      subjectPeriods: Map<string, { name: string; count: number }>;
+      classPeriods: Map<string, { name: string; count: number }>;
+      subjectIds: Set<string>;
+      classIds: Set<string>;
+    }>();
+
+    periods.forEach((period: any) => {
+      if (!period.teacherId) return;
+
+      if (!teacherWorkloads.has(period.teacherId)) {
+        teacherWorkloads.set(period.teacherId, {
+          totalPeriods: 0,
+          subjectPeriods: new Map(),
+          classPeriods: new Map(),
+          subjectIds: new Set(),
+          classIds: new Set(),
+        });
+      }
+
+      const workload = teacherWorkloads.get(period.teacherId)!;
+      workload.totalPeriods++;
+
+      // Track subject periods
+      if (period.subject) {
+        const subjectKey = period.subject.id;
+        workload.subjectIds.add(subjectKey);
+        const existing = workload.subjectPeriods.get(subjectKey) || { name: period.subject.name, count: 0 };
+        existing.count++;
+        workload.subjectPeriods.set(subjectKey, existing);
+      }
+
+      // Track class periods
+      const className = period.classArm 
+        ? `${period.classArm.classLevel.name} ${period.classArm.name}`
+        : period.class?.name || 'Unknown';
+      const classKey = period.classArmId || period.classId || 'unknown';
+      
+      workload.classIds.add(classKey);
+      const existingClass = workload.classPeriods.get(classKey) || { name: className, count: 0 };
+      existingClass.count++;
+      workload.classPeriods.set(classKey, existingClass);
+    });
+
+    // Determine workload status
+    const getStatus = (periods: number): 'LOW' | 'NORMAL' | 'HIGH' | 'OVERLOADED' => {
+      if (periods < this.WORKLOAD_THRESHOLDS.LOW) return 'LOW';
+      if (periods <= this.WORKLOAD_THRESHOLDS.NORMAL) return 'NORMAL';
+      if (periods <= this.WORKLOAD_THRESHOLDS.HIGH) return 'HIGH';
+      return 'OVERLOADED';
+    };
+
+    // Build result
+    const teacherResults = teachers
+      .map((teacher) => {
+        const workload = teacherWorkloads.get(teacher.id);
+        const totalPeriods = workload?.totalPeriods || 0;
+        
+        return {
+          teacherId: teacher.id,
+          firstName: teacher.firstName,
+          lastName: teacher.lastName,
+          totalPeriods,
+          classCount: workload?.classIds.size || 0,
+          subjectCount: workload?.subjectIds.size || 0,
+          periodsBySubject: Object.fromEntries(workload?.subjectPeriods || new Map()),
+          periodsByClass: Object.fromEntries(workload?.classPeriods || new Map()),
+          status: getStatus(totalPeriods),
+        };
+      })
+      .filter(t => t.totalPeriods > 0) // Only include teachers with assignments
+      .sort((a, b) => b.totalPeriods - a.totalPeriods); // Sort by workload desc
+
+    // Calculate average
+    const totalPeriods = teacherResults.reduce((sum, t) => sum + t.totalPeriods, 0);
+    const averagePeriods = teacherResults.length > 0 ? totalPeriods / teacherResults.length : 0;
+
+    // Build warnings
+    const warnings = teacherResults
+      .filter(t => t.status === 'HIGH' || t.status === 'OVERLOADED')
+      .map(t => ({
+        teacherId: t.teacherId,
+        teacherName: `${t.firstName} ${t.lastName}`,
+        periodCount: t.totalPeriods,
+        status: t.status,
+        message: t.status === 'OVERLOADED'
+          ? `${t.firstName} ${t.lastName} has ${t.totalPeriods} periods - consider redistributing workload`
+          : `${t.firstName} ${t.lastName} has ${t.totalPeriods} periods - approaching maximum capacity`,
+      }));
+
+    // Find subjects without competent teachers
+    const subjectsWhere: any = {
+      schoolId: school.id,
+      isActive: true,
+    };
+    if (schoolType) {
+      subjectsWhere.schoolType = schoolType;
+    }
+
+    const subjectsWithoutTeachers = await this.subjectModel.findMany({
+      where: {
+        ...subjectsWhere,
+        subjectTeachers: {
+          none: {},
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+
+    const unassignedSubjects = subjectsWithoutTeachers.map((s: any) => ({
+      subjectId: s.id,
+      subjectName: s.name,
+      message: `No teachers assigned to ${s.name}. Add competent teachers before generating timetables.`,
+    }));
+
+    return {
+      teachers: teacherResults,
+      averagePeriods: Math.round(averagePeriods * 10) / 10,
+      warnings,
+      unassignedSubjects,
+    };
+  }
+
+  /**
+   * Get the least loaded teacher for a subject (for auto-assignment)
+   * Used by timetable auto-generation to balance workload
+   */
+  async getLeastLoadedTeacherForSubject(
+    schoolId: string,
+    subjectId: string,
+    termId: string,
+    excludeTeacherIds: string[] = []
+  ): Promise<{ id: string; firstName: string; lastName: string; periodCount: number } | null> {
+    const school = await this.schoolRepository.findByIdOrSubdomain(schoolId);
+    if (!school) {
+      throw new BadRequestException('School not found');
+    }
+
+    // Get competent teachers for this subject
+    const subjectTeachers = await this.prisma.subjectTeacher.findMany({
+      where: {
+        subjectId,
+        teacherId: { notIn: excludeTeacherIds },
+        teacher: {
+          schoolId: school.id,
+          isActive: true,
+        },
+      },
+      include: {
+        teacher: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+    });
+
+    if (subjectTeachers.length === 0) {
+      return null;
+    }
+
+    // Get period counts for these teachers
+    const teacherIds = subjectTeachers.map((st: any) => st.teacher.id);
+    
+    const periodCounts = await this.prisma.timetablePeriod.groupBy({
+      by: ['teacherId'],
+      where: {
+        termId,
+        teacherId: { in: teacherIds },
+      },
+      _count: { id: true },
+    });
+
+    const periodCountMap = new Map<string, number>();
+    periodCounts.forEach((pc: any) => {
+      periodCountMap.set(pc.teacherId, pc._count.id);
+    });
+
+    // Find teacher with lowest workload
+    let leastLoaded = subjectTeachers[0];
+    let minPeriods = periodCountMap.get(leastLoaded.teacher.id) || 0;
+
+    subjectTeachers.forEach((st: any) => {
+      const periods = periodCountMap.get(st.teacher.id) || 0;
+      if (periods < minPeriods) {
+        minPeriods = periods;
+        leastLoaded = st;
+      }
+    });
+
+    return {
+      id: leastLoaded.teacher.id,
+      firstName: leastLoaded.teacher.firstName,
+      lastName: leastLoaded.teacher.lastName,
+      periodCount: minPeriods,
+    };
+  }
+
+  /**
+   * Get classes assigned to a teacher based on timetable periods
+   * This is used for SECONDARY schools where class assignment is derived from timetable
+   */
+  async getTeacherTimetableClasses(
+    schoolId: string,
+    teacherId: string,
+    termId?: string
+  ): Promise<{
+    classes: Array<{
+      classId: string;
+      className: string;
+      classLevel: string;
+      subjects: Array<{
+        subjectId: string;
+        subjectName: string;
+        periodCount: number;
+      }>;
+      totalPeriods: number;
+    }>;
+    totalPeriods: number;
+    totalClasses: number;
+    totalSubjects: number;
+  }> {
+    // Validate school
+    const school = await this.prisma.school.findUnique({
+      where: { id: schoolId },
+    });
+    if (!school) {
+      throw new NotFoundException('School not found');
+    }
+
+    // Validate teacher - teacherId can be either the database id or the public teacherId field
+    const teacher = await this.prisma.teacher.findFirst({
+      where: {
+        OR: [
+          { id: teacherId },
+          { teacherId: teacherId },
+        ],
+        schoolId,
+      },
+    });
+    if (!teacher) {
+      throw new NotFoundException('Teacher not found in this school');
+    }
+
+    // Get term filter
+    let termFilter: any = {};
+    if (termId) {
+      termFilter.termId = termId;
+    } else {
+      // Get current active term - try SECONDARY first, then any active term
+      let activeTerm = await this.prisma.term.findFirst({
+        where: {
+          academicSession: {
+            is: {
+              schoolId,
+              status: 'ACTIVE',
+              schoolType: 'SECONDARY',
+            },
+          },
+          status: 'ACTIVE',
+        },
+        orderBy: { startDate: 'desc' },
+      });
+      
+      // If no SECONDARY-specific term, get any active term for the school
+      if (!activeTerm) {
+        activeTerm = await this.prisma.term.findFirst({
+          where: {
+            academicSession: {
+              is: {
+                schoolId,
+                status: 'ACTIVE',
+              },
+            },
+            status: 'ACTIVE',
+          },
+          orderBy: { startDate: 'desc' },
+        });
+      }
+      
+      if (activeTerm) {
+        termFilter.termId = activeTerm.id;
+      }
+    }
+
+    // Get all periods for this teacher using the database ID
+    const periods = await this.prisma.timetablePeriod.findMany({
+      where: {
+        teacherId: teacher.id,  // Use database ID, not the public ID
+        type: 'LESSON',
+        ...termFilter,
+      },
+      include: {
+        subject: { select: { id: true, name: true } },
+        classArm: {
+          include: {
+            classLevel: { select: { id: true, name: true, type: true } },
+          },
+        },
+        class: { select: { id: true, name: true, classLevel: true, type: true } },
+      },
+    });
+
+    // Group by class, then by subject
+    const classMap = new Map<string, {
+      classId: string;
+      className: string;
+      classLevel: string;
+      classType: string;
+      subjects: Map<string, { subjectId: string; subjectName: string; count: number }>;
+    }>();
+
+    periods.forEach((period: any) => {
+      // Determine class info
+      let classId: string;
+      let className: string;
+      let classLevel: string;
+      let classType: string;
+
+      if (period.classArm) {
+        classId = period.classArm.id;
+        className = `${period.classArm.classLevel.name} ${period.classArm.name}`;
+        classLevel = period.classArm.classLevel.name;
+        classType = period.classArm.classLevel.type;
+      } else if (period.class) {
+        classId = period.class.id;
+        className = period.class.name;
+        classLevel = period.class.classLevel || period.class.name;
+        classType = period.class.type;
+      } else {
+        return; // Skip periods without class info
+      }
+
+      // Only include SECONDARY classes
+      if (classType !== 'SECONDARY') return;
+
+      if (!classMap.has(classId)) {
+        classMap.set(classId, {
+          classId,
+          className,
+          classLevel,
+          classType,
+          subjects: new Map(),
+        });
+      }
+
+      const classData = classMap.get(classId)!;
+
+      // Add subject
+      if (period.subject) {
+        const subjectId = period.subject.id;
+        if (!classData.subjects.has(subjectId)) {
+          classData.subjects.set(subjectId, {
+            subjectId,
+            subjectName: period.subject.name,
+            count: 0,
+          });
+        }
+        classData.subjects.get(subjectId)!.count++;
+      }
+    });
+
+    // Convert to array format
+    const classes = Array.from(classMap.values()).map((classData) => ({
+      classId: classData.classId,
+      className: classData.className,
+      classLevel: classData.classLevel,
+      subjects: Array.from(classData.subjects.values()).map((s) => ({
+        subjectId: s.subjectId,
+        subjectName: s.subjectName,
+        periodCount: s.count,
+      })),
+      totalPeriods: Array.from(classData.subjects.values()).reduce((sum, s) => sum + s.count, 0),
+    }));
+
+    // Sort by class name
+    classes.sort((a, b) => a.className.localeCompare(b.className));
+
+    // Calculate totals
+    const totalPeriods = classes.reduce((sum, c) => sum + c.totalPeriods, 0);
+    const allSubjectIds = new Set<string>();
+    classes.forEach((c) => c.subjects.forEach((s) => allSubjectIds.add(s.subjectId)));
+
+    return {
+      classes,
+      totalPeriods,
+      totalClasses: classes.length,
+      totalSubjects: allSubjectIds.size,
     };
   }
 }

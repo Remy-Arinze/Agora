@@ -33,11 +33,12 @@ export default function TeacherClassesPage() {
   const school = schoolResponse?.data;
   const teacher = teacherResponse?.data;
 
-  // Get teacher's classes
+  // Get teacher's classes (pass school type for proper filtering)
   const { data: classesResponse, isLoading: isLoadingClasses, error } = useGetMyClassesQuery(
     {
       schoolId: school?.id || '',
       teacherId: teacher?.id || '',
+      type: currentType,
     },
     { 
       skip: !school?.id || !teacher?.id,

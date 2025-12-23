@@ -235,17 +235,16 @@ export class SchoolsService {
                 email: principal.email,
                 phone: principal.phone,
                 passwordHash: defaultPassword,
-                accountStatus: 'ACTIVE',
+                accountStatus: 'SHADOW', // User needs to activate via email
                 role: 'SCHOOL_ADMIN',
               },
             });
           } else {
-            // User exists, update password and status if needed
+            // User exists, update password but don't change accountStatus
             principalUser = await tx.user.update({
               where: { id: principalUser.id },
               data: {
                 passwordHash: defaultPassword,
-                accountStatus: 'ACTIVE',
                 role: 'SCHOOL_ADMIN',
               },
             });
@@ -312,17 +311,16 @@ export class SchoolsService {
                   email: admin.email,
                   phone: admin.phone,
                   passwordHash: defaultPassword,
-                  accountStatus: 'ACTIVE',
+                  accountStatus: 'SHADOW', // User needs to activate via email
                   role: 'SCHOOL_ADMIN',
                 },
               });
             } else {
-              // User exists, update password and status if needed
+              // User exists, update password but don't change accountStatus
               adminUser = await tx.user.update({
                 where: { id: adminUser.id },
                 data: {
                   passwordHash: defaultPassword,
-                  accountStatus: 'ACTIVE',
                   role: 'SCHOOL_ADMIN',
                 },
               });
@@ -813,18 +811,17 @@ export class SchoolsService {
               email: adminData.email,
               phone: adminData.phone,
               passwordHash: defaultPassword,
-              accountStatus: 'ACTIVE',
+              accountStatus: 'SHADOW', // User needs to activate via email
               role: 'SCHOOL_ADMIN',
             },
           });
         } else {
-          // User exists - update password and status if needed
+          // User exists - update password but don't change accountStatus
           // Note: User can now be admin in multiple schools, so we don't check for existing SchoolAdmin
           adminUser = await tx.user.update({
             where: { id: adminUser.id },
             data: {
               passwordHash: defaultPassword,
-              accountStatus: 'ACTIVE',
               role: 'SCHOOL_ADMIN',
             },
           });
@@ -988,17 +985,16 @@ export class SchoolsService {
               email: teacherData.email,
               phone: teacherData.phone,
               passwordHash: defaultPassword,
-              accountStatus: 'ACTIVE',
+              accountStatus: 'SHADOW', // User needs to activate via email
               role: 'TEACHER',
             },
           });
         } else {
-          // User exists, update password and status if needed
+          // User exists, update password but don't change accountStatus
           teacherUser = await tx.user.update({
             where: { id: teacherUser.id },
             data: {
               passwordHash: defaultPassword,
-              accountStatus: 'ACTIVE',
               role: 'TEACHER',
             },
           });

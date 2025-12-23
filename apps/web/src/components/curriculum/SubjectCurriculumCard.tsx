@@ -73,10 +73,10 @@ export function SubjectCurriculumCard({
 
   return (
     <div 
-      className={`relative bg-white dark:bg-dark-card border rounded-lg p-4 transition-all ${
+      className={`relative bg-[var(--light-card)] dark:bg-[var(--dark-surface)] border rounded-lg p-4 transition-all ${
         isSelected 
           ? 'border-blue-500 dark:border-blue-400 ring-2 ring-blue-500/20' 
-          : 'border-light-border dark:border-dark-border hover:shadow-md'
+          : 'border-light-border dark:border-dark-border hover:shadow-md hover:bg-[var(--light-hover)] dark:hover:bg-[var(--dark-hover)]'
       } ${isSelectionMode && hasCurriculum ? 'cursor-pointer' : ''}`}
       onClick={handleCardClick}
       onContextMenu={handleContextMenu}
@@ -92,7 +92,7 @@ export function SubjectCurriculumCard({
             className={`w-6 h-6 rounded-md border-2 flex items-center justify-center transition-all ${
               isSelected
                 ? 'bg-blue-500 border-blue-500 text-white'
-                : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 hover:border-blue-400'
+                : 'border-gray-300 dark:border-gray-600 bg-[var(--light-card)] dark:bg-[var(--dark-surface)] hover:border-blue-400'
             }`}
           >
             {isSelected && <Check className="h-4 w-4" />}
@@ -192,13 +192,13 @@ export function SubjectCurriculumCard({
                         className="fixed inset-0 z-10" 
                         onClick={() => setShowMenu(false)}
                       />
-                      <div className="absolute right-0 top-full mt-1 z-20 w-36 bg-white dark:bg-dark-card border border-light-border dark:border-dark-border rounded-lg shadow-lg py-1">
+                      <div className="absolute right-0 top-full mt-1 z-20 w-36 bg-[var(--light-card)] dark:bg-[var(--dark-surface)] border border-light-border dark:border-dark-border rounded-lg shadow-lg py-1">
                         <button
                           onClick={() => {
                             setShowMenu(false);
                             onEdit?.(subject.curriculumId!);
                           }}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-light-text-primary dark:text-dark-text-primary hover:bg-gray-100 dark:hover:bg-gray-800"
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-light-text-primary dark:text-dark-text-primary hover:bg-[var(--light-hover)] dark:hover:bg-[var(--dark-hover)]"
                         >
                           <Edit2 className="h-4 w-4" />
                           Edit

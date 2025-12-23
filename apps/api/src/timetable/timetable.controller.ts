@@ -26,6 +26,8 @@ import {
   AssignTeacherToSubjectDto,
   AutoGenerateSubjectsDto,
   AutoGenerateSubjectsResponseDto,
+  SubjectClassAssignmentsDto,
+  BulkClassSubjectAssignmentDto,
 } from './dto/resource.dto';
 import { ResponseDto } from '../common/dto/response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -266,12 +268,14 @@ export class TimetableController {
     description: 'Subjects retrieved successfully',
     type: [SubjectDto],
   })
+  @ApiQuery({ name: 'termId', required: false, description: 'Term ID to include teacher workload data (SECONDARY only)' })
   async getSubjects(
     @Param('schoolId') schoolId: string,
     @Query('schoolType') schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY',
-    @Query('classLevelId') classLevelId?: string
+    @Query('classLevelId') classLevelId?: string,
+    @Query('termId') termId?: string
   ): Promise<ResponseDto<SubjectDto[]>> {
-    const data = await this.resourcesService.getSubjects(schoolId, schoolType, classLevelId);
+    const data = await this.resourcesService.getSubjects(schoolId, schoolType, classLevelId, termId);
     return ResponseDto.ok(data, 'Subjects retrieved successfully');
   }
 
@@ -365,6 +369,117 @@ export class TimetableController {
   ): Promise<ResponseDto<AutoGenerateSubjectsResponseDto>> {
     const data = await this.resourcesService.autoGenerateSubjects(schoolId, dto);
     return ResponseDto.ok(data, `Generated ${data.created} subjects, ${data.skipped} already existed`);
+  }
+
+  // ============================================
+  // CLASS SUBJECT TEACHER ASSIGNMENTS (SECONDARY)
+  // ============================================
+
+  @Get('subjects/:subjectId/class-assignments')
+  @ApiOperation({ summary: 'Get class assignments for a subject (SECONDARY schools)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Class assignments retrieved successfully',
+    type: SubjectClassAssignmentsDto,
+  })
+  async getSubjectClassAssignments(
+    @Param('schoolId') schoolId: string,
+    @Param('subjectId') subjectId: string,
+    @Query('sessionId') sessionId?: string
+  ): Promise<ResponseDto<SubjectClassAssignmentsDto>> {
+    const data = await this.resourcesService.getSubjectClassAssignments(schoolId, subjectId, sessionId);
+    return ResponseDto.ok(data, 'Class assignments retrieved successfully');
+  }
+
+  @Post('subjects/:subjectId/class-assignments')
+  @ApiOperation({ summary: 'Bulk assign teachers to classes for a subject (SECONDARY schools)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Assignments updated successfully',
+  })
+  async bulkAssignTeachersToClasses(
+    @Param('schoolId') schoolId: string,
+    @Param('subjectId') subjectId: string,
+    @Body() dto: BulkClassSubjectAssignmentDto
+  ): Promise<ResponseDto<{ updated: number; removed: number }>> {
+    const data = await this.resourcesService.bulkAssignTeachersToClasses(schoolId, subjectId, dto);
+    return ResponseDto.ok(data, `Updated ${data.updated} assignments, removed ${data.removed}`);
+  }
+
+  @Delete('subjects/:subjectId/class-assignments/:classArmId')
+  @ApiOperation({ summary: 'Remove a class-subject-teacher assignment' })
+  @ApiResponse({
+    status: 200,
+    description: 'Assignment removed successfully',
+  })
+  async removeClassSubjectAssignment(
+    @Param('schoolId') schoolId: string,
+    @Param('subjectId') subjectId: string,
+    @Param('classArmId') classArmId: string,
+    @Query('sessionId') sessionId?: string
+  ): Promise<ResponseDto<void>> {
+    await this.resourcesService.removeClassSubjectAssignment(schoolId, subjectId, classArmId, sessionId);
+    return ResponseDto.ok(undefined, 'Assignment removed successfully');
+  }
+
+  // ============================================
+  // TEACHER WORKLOAD ANALYSIS ENDPOINTS
+  // ============================================
+
+  @Get('teacher-workloads')
+  @ApiOperation({ summary: 'Get teacher workload summary for balancing assignments' })
+  @ApiQuery({ name: 'termId', required: true, description: 'Term ID to analyze workloads for' })
+  @ApiQuery({ name: 'schoolType', required: false, description: 'Filter by school type' })
+  @ApiResponse({
+    status: 200,
+    description: 'Teacher workloads retrieved successfully',
+  })
+  async getTeacherWorkloads(
+    @Param('schoolId') schoolId: string,
+    @Query('termId') termId: string,
+    @Query('schoolType') schoolType?: 'PRIMARY' | 'SECONDARY' | 'TERTIARY'
+  ): Promise<ResponseDto<any>> {
+    const data = await this.resourcesService.getTeacherWorkloadSummary(schoolId, termId, schoolType);
+    return ResponseDto.ok(data, 'Teacher workloads retrieved successfully');
+  }
+
+  @Get('subjects/:subjectId/least-loaded-teacher')
+  @ApiOperation({ summary: 'Get the least loaded teacher for a subject (for auto-assignment)' })
+  @ApiQuery({ name: 'termId', required: true, description: 'Term ID to check workloads' })
+  @ApiQuery({ name: 'excludeTeacherIds', required: false, description: 'Comma-separated teacher IDs to exclude' })
+  @ApiResponse({
+    status: 200,
+    description: 'Least loaded teacher retrieved',
+  })
+  async getLeastLoadedTeacher(
+    @Param('schoolId') schoolId: string,
+    @Param('subjectId') subjectId: string,
+    @Query('termId') termId: string,
+    @Query('excludeTeacherIds') excludeTeacherIds?: string
+  ): Promise<ResponseDto<any>> {
+    const excludeIds = excludeTeacherIds ? excludeTeacherIds.split(',').map(id => id.trim()) : [];
+    const data = await this.resourcesService.getLeastLoadedTeacherForSubject(schoolId, subjectId, termId, excludeIds);
+    return ResponseDto.ok(data, data ? 'Least loaded teacher found' : 'No competent teachers available');
+  }
+
+  // ============================================
+  // TEACHER CLASS ASSIGNMENTS (FROM TIMETABLE)
+  // ============================================
+
+  @Get('teachers/:teacherId/classes')
+  @ApiOperation({ summary: 'Get classes assigned to a teacher from timetable (for SECONDARY schools)' })
+  @ApiQuery({ name: 'termId', required: false, description: 'Term ID (defaults to current active term)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Teacher class assignments retrieved successfully',
+  })
+  async getTeacherTimetableClasses(
+    @Param('schoolId') schoolId: string,
+    @Param('teacherId') teacherId: string,
+    @Query('termId') termId?: string
+  ): Promise<ResponseDto<any>> {
+    const data = await this.resourcesService.getTeacherTimetableClasses(schoolId, teacherId, termId);
+    return ResponseDto.ok(data, 'Teacher class assignments retrieved successfully');
   }
 
   @Get('rooms')

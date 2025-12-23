@@ -580,6 +580,7 @@ export class SchoolAdminSchoolsService {
               subject: {
                 select: {
                   id: true,
+                  name: true,
                   schoolType: true,
                 },
               },
@@ -626,24 +627,36 @@ export class SchoolAdminSchoolsService {
         employeeId: null,
         isTemporary: false,
         status: (admin.user?.accountStatus === 'ACTIVE' ? 'active' : 'inactive') as 'active' | 'inactive',
+        accountStatus: (admin.user?.accountStatus || 'SHADOW') as 'SHADOW' | 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED',
         profileImage: admin.profileImage,
         createdAt: admin.createdAt,
       })),
-      ...filteredTeachers.map((teacher) => ({
-        id: teacher.id,
-        type: 'teacher' as const,
-        firstName: teacher.firstName,
-        lastName: teacher.lastName,
-        email: teacher.email,
-        phone: teacher.phone,
-        role: 'Teacher',
-        subject: teacher.subject,
-        employeeId: teacher.employeeId,
-        isTemporary: teacher.isTemporary,
-        status: (teacher.user?.accountStatus === 'ACTIVE' ? 'active' : 'inactive') as 'active' | 'inactive',
-        profileImage: teacher.profileImage,
-        createdAt: teacher.createdAt,
-      })),
+      ...filteredTeachers.map((teacher) => {
+        // Get subject names from SubjectTeacher relationships, fallback to legacy subject field
+        const subjectNames = teacher.subjectTeachers
+          ?.map((st: any) => st.subject?.name)
+          .filter(Boolean) || [];
+        const displaySubject = subjectNames.length > 0 
+          ? subjectNames.join(', ') 
+          : teacher.subject;
+        
+        return {
+          id: teacher.id,
+          type: 'teacher' as const,
+          firstName: teacher.firstName,
+          lastName: teacher.lastName,
+          email: teacher.email,
+          phone: teacher.phone,
+          role: 'Teacher',
+          subject: displaySubject,
+          employeeId: teacher.employeeId,
+          isTemporary: teacher.isTemporary,
+          status: (teacher.user?.accountStatus === 'ACTIVE' ? 'active' : 'inactive') as 'active' | 'inactive',
+          accountStatus: (teacher.user?.accountStatus || 'SHADOW') as 'SHADOW' | 'ACTIVE' | 'SUSPENDED' | 'ARCHIVED',
+          profileImage: teacher.profileImage,
+          createdAt: teacher.createdAt,
+        };
+      }),
     ];
 
     // Apply additional search on subject field (for teachers)

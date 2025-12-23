@@ -81,15 +81,7 @@ export default function ClassDetailPage() {
   const { currentType: schoolType } = useSchoolType();
   const terminology = getTerminology(schoolType || 'SECONDARY');
 
-  // Get active session for timetable
-  const { data: sessionResponse } = useGetActiveSessionQuery(
-    { schoolId: schoolId! },
-    { skip: !schoolId }
-  );
-  const activeSession = sessionResponse?.data;
-  const activeTerm = activeSession?.term;
-
-  // Get class data
+  // Get class data first (to know the school type for session query)
   const {
     data: classResponse,
     isLoading,
@@ -101,6 +93,14 @@ export default function ClassDetailPage() {
   );
 
   const classData = classResponse?.data;
+
+  // Get active session for timetable - use class's school type
+  const { data: sessionResponse } = useGetActiveSessionQuery(
+    { schoolId: schoolId!, schoolType: classData?.type || schoolType || undefined },
+    { skip: !schoolId || !classData?.type }
+  );
+  const activeSession = sessionResponse?.data;
+  const activeTerm = activeSession?.term;
 
   // Build tabs array - include Teachers tab only for SECONDARY schools
   // Must be defined before early returns to follow React hooks rules
@@ -130,12 +130,55 @@ export default function ClassDetailPage() {
   );
   const resources = resourcesResponse?.data || [];
 
-  // Get timetable
+  // Get timetable (also needed for SECONDARY Teachers tab)
+  const shouldFetchTimetable = activeTab === 'timetable' || (activeTab === 'teachers' && classData?.type === 'SECONDARY');
   const { data: timetableResponse, isLoading: isLoadingTimetable } = useGetTimetableForClassQuery(
     { schoolId: schoolId!, classId, termId: activeTerm?.id || '' },
-    { skip: !schoolId || !classId || !activeTerm?.id || activeTab !== 'timetable' }
+    { skip: !schoolId || !classId || !activeTerm?.id || !shouldFetchTimetable }
   );
   const timetable = timetableResponse?.data || [];
+
+  // Extract unique teacher-subject pairs from timetable (for SECONDARY)
+  const timetableTeachers = useMemo(() => {
+    if (!timetable || timetable.length === 0) return [];
+    
+    const teacherSubjectMap = new Map<string, {
+      teacherId: string;
+      teacherName: string;
+      subjects: Map<string, { subjectId: string; subjectName: string; periodCount: number }>;
+    }>();
+    
+    timetable.forEach((period) => {
+      if (!period.teacherId || !period.teacherName) return;
+      if (!period.subjectId || !period.subjectName) return;
+      
+      if (!teacherSubjectMap.has(period.teacherId)) {
+        teacherSubjectMap.set(period.teacherId, {
+          teacherId: period.teacherId,
+          teacherName: period.teacherName,
+          subjects: new Map(),
+        });
+      }
+      
+      const teacherData = teacherSubjectMap.get(period.teacherId)!;
+      if (!teacherData.subjects.has(period.subjectId)) {
+        teacherData.subjects.set(period.subjectId, {
+          subjectId: period.subjectId,
+          subjectName: period.subjectName,
+          periodCount: 0,
+        });
+      }
+      teacherData.subjects.get(period.subjectId)!.periodCount++;
+    });
+    
+    // Convert to array
+    return Array.from(teacherSubjectMap.values()).map((teacher) => ({
+      teacherId: teacher.teacherId,
+      teacherName: teacher.teacherName,
+      subjects: Array.from(teacher.subjects.values()),
+      totalPeriods: Array.from(teacher.subjects.values()).reduce((sum, s) => sum + s.periodCount, 0),
+    })).sort((a, b) => b.totalPeriods - a.totalPeriods);
+  }, [timetable]);
 
   // Get students in class
   const { data: studentsResponse, isLoading: isLoadingStudents } = useGetClassStudentsQuery(
@@ -574,30 +617,37 @@ export default function ClassDetailPage() {
                   </div>
                   <Button variant="primary" size="sm" onClick={() => setShowAssignModal(true)}>
                     <Plus className="h-4 w-4 mr-2" />
-                    Assign Teacher
-                    </Button>
+                    Assign Form Teacher
+                  </Button>
                 </div>
               </CardHeader>
               <CardContent>
-                {classData.teachers.length === 0 ? (
+                {isLoadingTimetable ? (
+                  <div className="flex justify-center py-12">
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                  </div>
+                ) : teachersByRole.formTeachers.length === 0 && timetableTeachers.length === 0 ? (
                   <div className="text-center py-12">
                     <Users className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
                     <p className="text-light-text-secondary dark:text-dark-text-secondary mb-4">
                       No teachers assigned to this class yet.
                     </p>
-                    <Button variant="primary" onClick={() => setShowAssignModal(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Assign First Teacher
-                      </Button>
+                    <p className="text-sm text-light-text-muted dark:text-dark-text-muted mb-4">
+                      Teachers are assigned through the timetable. Create a timetable and assign teachers to subject periods.
+                    </p>
+                    <Button variant="ghost" onClick={() => setActiveTab('timetable')}>
+                      <Calendar className="h-4 w-4 mr-2" />
+                      Go to Timetable
+                    </Button>
                   </div>
                 ) : (
                   <div className="space-y-6">
                     {/* Form Teacher */}
                     {teachersByRole.formTeachers.length > 0 && (
-                          <div>
+                      <div>
                         <h4 className="text-xs font-semibold text-light-text-muted dark:text-dark-text-muted uppercase tracking-wider mb-3">
                           Form Teacher
-                            </h4>
+                        </h4>
                         <div className="space-y-2">
                           {teachersByRole.formTeachers.map((teacher) => (
                             <TeacherCard
@@ -608,14 +658,63 @@ export default function ClassDetailPage() {
                             />
                           ))}
                         </div>
-                  </div>
+                      </div>
                     )}
                     
-                    {/* Subject Teachers */}
+                    {/* Subject Teachers from Timetable */}
+                    {timetableTeachers.length > 0 && (
+                      <div>
+                        <h4 className="text-xs font-semibold text-light-text-muted dark:text-dark-text-muted uppercase tracking-wider mb-3">
+                          Subject Teachers (from Timetable)
+                        </h4>
+                        <div className="space-y-3">
+                          {timetableTeachers.map((teacher) => (
+                            <div 
+                              key={teacher.teacherId}
+                              className="p-4 rounded-lg border border-light-border dark:border-dark-border bg-[var(--light-surface)] dark:bg-[var(--dark-surface)] hover:bg-[var(--light-hover)] dark:hover:bg-[var(--dark-hover)] transition-colors"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className="h-10 w-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                                    <GraduationCap className="h-5 w-5 text-green-600 dark:text-green-400" />
+                                  </div>
+                                  <div>
+                                    <Link 
+                                      href={`/dashboard/school/teachers/${teacher.teacherId}`}
+                                      className="font-medium text-light-text-primary dark:text-dark-text-primary hover:text-blue-600 dark:hover:text-blue-400 hover:underline"
+                                    >
+                                      {teacher.teacherName}
+                                    </Link>
+                                    <div className="flex flex-wrap gap-2 mt-1">
+                                      {teacher.subjects.map((subject) => (
+                                        <span 
+                                          key={subject.subjectId}
+                                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-xs"
+                                        >
+                                          {subject.subjectName}
+                                          <span className="text-blue-500 dark:text-blue-300">
+                                            ({subject.periodCount})
+                                          </span>
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                                <span className="text-xs text-light-text-muted dark:text-dark-text-muted">
+                                  {teacher.totalPeriods} period{teacher.totalPeriods !== 1 ? 's' : ''}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Legacy Subject Teachers (if any still exist) */}
                     {teachersByRole.subjectTeachers.length > 0 && (
                       <div>
                         <h4 className="text-xs font-semibold text-light-text-muted dark:text-dark-text-muted uppercase tracking-wider mb-3">
-                          Subject Teachers
+                          Other Subject Teachers
                         </h4>
                         <div className="space-y-2">
                           {teachersByRole.subjectTeachers.map((teacher) => (
@@ -626,12 +725,12 @@ export default function ClassDetailPage() {
                             />
                           ))}
                         </div>
-                                </div>
-                              )}
+                      </div>
+                    )}
                     
                     {/* Other Teachers */}
                     {teachersByRole.otherTeachers.length > 0 && (
-                                <div>
+                      <div>
                         <h4 className="text-xs font-semibold text-light-text-muted dark:text-dark-text-muted uppercase tracking-wider mb-3">
                           Other Teachers
                         </h4>
@@ -642,9 +741,9 @@ export default function ClassDetailPage() {
                               teacher={teacher}
                               onRemove={() => setRemoveModal({ isOpen: true, teacher })}
                             />
-                                    ))}
-                                  </div>
-                                </div>
+                          ))}
+                        </div>
+                      </div>
                               )}
                     </div>
                   )}

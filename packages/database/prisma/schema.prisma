@@ -323,21 +323,29 @@ model ClassTeacher {
   classId    String? // For TERTIARY or schools without ClassArms
   classArmId String? // For PRIMARY/SECONDARY schools using ClassArms
   teacherId  String
-  subject    String? // For secondary: subject name (e.g., "Mathematics", "English")
+  subjectId  String? // NEW: Proper relation to Subject (for SECONDARY)
+  subject    String? // DEPRECATED: Keep for backward compatibility, use subjectId instead
+  sessionId  String? // NEW: Scope assignment to academic session
   // For tertiary: course module/topic the teacher handles
   // For primary: can be "Class Teacher" or null
-  isPrimary  Boolean  @default(false) // For primary schools, marks the main class teacher
+  isPrimary  Boolean  @default(false) // For primary: main class teacher, For secondary: form teacher
+  isFormTeacher Boolean @default(false) // NEW: Explicit form teacher flag for SECONDARY
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  class    Class?    @relation(fields: [classId], references: [id], onDelete: Cascade)
-  classArm ClassArm? @relation(fields: [classArmId], references: [id], onDelete: Cascade)
-  teacher  Teacher   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  class    Class?           @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classArm ClassArm?        @relation(fields: [classArmId], references: [id], onDelete: Cascade)
+  teacher  Teacher          @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  subjectRef Subject?       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  session  AcademicSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
-  @@unique([classId, classArmId, teacherId, subject]) // Allows same teacher in multiple arms
+  @@unique([classArmId, subjectId, sessionId]) // One teacher per subject per class per session
+  @@unique([classId, classArmId, teacherId, subject]) // Legacy: Allows same teacher in multiple arms
   @@index([classId])
   @@index([classArmId])
   @@index([teacherId])
+  @@index([subjectId])
+  @@index([sessionId])
 }
 
 model AcademicSession {
@@ -351,9 +359,10 @@ model AcademicSession {
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
 
-  school      School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  terms       Term[]
-  enrollments Enrollment[]
+  school        School         @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  terms         Term[]
+  enrollments   Enrollment[]
+  classTeachers ClassTeacher[] // NEW: Teacher assignments scoped to this session
 
   // Note: Uniqueness for active sessions is enforced at the application level
   // This allows reusing session names after a session is COMPLETED (e.g., fixing mistakes)
@@ -503,6 +512,7 @@ model Subject {
   classLevel          ClassLevel?          @relation(fields: [classLevelId], references: [id], onDelete: SetNull)
   timetablePeriods    TimetablePeriod[]
   subjectTeachers     SubjectTeacher[]
+  classTeachers       ClassTeacher[]       // NEW: Teachers assigned to teach this subject in specific classes
   courseRegistrations CourseRegistration[] // For TERTIARY: Students registered for this subject
   curricula           Curriculum[]         // Curricula for this subject
 

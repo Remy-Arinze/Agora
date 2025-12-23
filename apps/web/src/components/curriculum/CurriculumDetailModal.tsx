@@ -189,7 +189,7 @@ export function CurriculumDetailModal({
                     onClick={() => setExpandedWeek(isExpanded ? null : weekNumber)}
                     className="w-full flex items-center gap-4 p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
                   >
-                    <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-white dark:bg-gray-800 border border-light-border dark:border-dark-border flex items-center justify-center shadow-sm">
+                    <div className="flex-shrink-0 w-12 h-12 rounded-lg bg-[var(--light-card)] dark:bg-[var(--dark-surface)] border border-light-border dark:border-dark-border flex items-center justify-center shadow-sm">
                       <span className="text-sm font-bold text-light-text-primary dark:text-dark-text-primary">
                         W{weekNumber}
                       </span>
@@ -214,7 +214,7 @@ export function CurriculumDetailModal({
 
                   {/* Week Details */}
                   {isExpanded && (
-                    <div className="px-4 pb-4 pt-2 space-y-4 bg-white dark:bg-gray-900/50">
+                    <div className="px-4 pb-4 pt-2 space-y-4 bg-[var(--light-surface)] dark:bg-[var(--dark-bg)]">
                       {/* Sub-topics */}
                       {item.subTopics && item.subTopics.length > 0 && (
                         <div>
@@ -225,7 +225,7 @@ export function CurriculumDetailModal({
                             {item.subTopics.map((topic, idx) => (
                               <span
                                 key={idx}
-                                className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-xs text-light-text-secondary dark:text-dark-text-secondary"
+                                className="px-2 py-1 bg-gray-100 dark:bg-[var(--dark-surface)] rounded text-xs text-light-text-secondary dark:text-dark-text-secondary"
                               >
                                 {topic}
                               </span>
@@ -325,7 +325,7 @@ export function CurriculumDetailModal({
                                 placeholder="Add notes (optional)"
                                 value={notes}
                                 onChange={(e) => setNotes(e.target.value)}
-                                className="flex-1 px-3 py-1.5 text-sm border border-light-border dark:border-dark-border rounded-lg bg-white dark:bg-gray-800"
+                                className="flex-1 px-3 py-1.5 text-sm border border-light-border dark:border-dark-border rounded-lg bg-[var(--light-input)] dark:bg-[var(--dark-input)]"
                               />
                               <Button
                                 variant="primary"
