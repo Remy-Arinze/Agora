@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { StudentDto, StudentWithEnrollmentDto } from './dto/student.dto';
 import { PaginationDto, PaginatedResponseDto } from '../common/dto/pagination.dto';
@@ -11,6 +11,8 @@ import { CloudinaryService } from '../storage/cloudinary/cloudinary.service';
 
 @Injectable()
 export class StudentsService {
+  private readonly logger = new Logger(StudentsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly timetableService: TimetableService,
@@ -553,12 +555,12 @@ export class StudentsService {
       const activeSession = await this.prisma.academicSession.findFirst({
         where: {
           schoolId: actualSchoolId,
-          isActive: true,
+          status: 'ACTIVE',
         },
         include: {
           terms: {
             where: {
-              isActive: true,
+              status: 'ACTIVE',
             },
             orderBy: { startDate: 'desc' },
             take: 1,
@@ -1164,7 +1166,7 @@ export class StudentsService {
           try {
             await this.cloudinaryService.deleteRawFile(publicId);
           } catch (error) {
-            console.error('Error deleting file from Cloudinary:', error);
+            this.logger.error('Error deleting file from Cloudinary:', error instanceof Error ? error.stack : error);
             // Continue with database deletion even if Cloudinary deletion fails
           }
         }
@@ -1175,7 +1177,7 @@ export class StudentsService {
           try {
             fs.unlinkSync(resource.filePath);
           } catch (error) {
-            console.error('Error deleting file from local storage:', error);
+            this.logger.error('Error deleting file from local storage:', error instanceof Error ? error.stack : error);
             // Continue with database deletion even if file deletion fails
           }
         }
@@ -1259,7 +1261,7 @@ export class StudentsService {
           },
         };
       } catch (error) {
-        console.error('Error fetching file from Cloudinary:', error);
+        this.logger.error('Error fetching file from Cloudinary:', error instanceof Error ? error.stack : error);
         throw new NotFoundException('Failed to fetch file from Cloudinary');
       }
     } else {
@@ -1314,12 +1316,37 @@ export class StudentsService {
    */
   async getMyCalendar(
     user: UserWithContext,
-    schoolId: string,
+    schoolId: string | null,
     startDate?: string,
     endDate?: string,
   ): Promise<any> {
     if (user.role !== 'STUDENT') {
       throw new ForbiddenException('Access denied. Student role required.');
+    }
+
+    // If schoolId not provided, get from student's active enrollment
+    let actualSchoolId = schoolId;
+    if (!actualSchoolId) {
+      const student = await this.prisma.student.findFirst({
+        where: { userId: user.id },
+        include: {
+          enrollments: {
+            where: { isActive: true },
+            orderBy: { enrollmentDate: 'desc' },
+            take: 1,
+          },
+        },
+      });
+
+      if (!student || student.enrollments.length === 0) {
+        return { events: [], timetable: [] };
+      }
+
+      actualSchoolId = student.enrollments[0].schoolId;
+    }
+
+    if (!actualSchoolId) {
+      return { events: [], timetable: [] };
     }
 
     const start = startDate ? new Date(startDate) : new Date();
@@ -1328,7 +1355,7 @@ export class StudentsService {
 
     // Get school to determine school type
     const school = await this.prisma.school.findUnique({
-      where: { id: schoolId },
+      where: { id: actualSchoolId },
       select: { hasPrimary: true, hasSecondary: true, hasTertiary: true },
     });
 
@@ -1338,10 +1365,10 @@ export class StudentsService {
     else if (school?.hasTertiary) schoolType = 'TERTIARY';
 
     // Get events
-    const events = await this.eventService.getEvents(schoolId, start, end, schoolType);
+    const events = await this.eventService.getEvents(actualSchoolId, start, end, schoolType);
 
     // Get timetable (for current term)
-    const timetable = await this.getMyTimetable(user, schoolId);
+    const timetable = await this.getMyTimetable(user, actualSchoolId);
 
     return {
       events,
@@ -2270,7 +2297,7 @@ export class StudentsService {
         try {
           await this.cloudinaryService.deleteImage(oldPublicId);
         } catch (error) {
-          console.error('Error deleting old profile image:', error);
+          this.logger.error('Error deleting old profile image:', error instanceof Error ? error.stack : error);
           // Continue even if deletion fails
         }
       }

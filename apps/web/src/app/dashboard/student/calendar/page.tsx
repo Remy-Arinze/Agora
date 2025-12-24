@@ -11,7 +11,6 @@ import { CustomEvent } from '@/components/calendar/CustomEvent';
 import { CompactEventCard } from '@/components/calendar/CompactEventCard';
 import { DayEventsModal } from '@/components/modals/DayEventsModal';
 import {
-  useGetMyStudentSchoolQuery,
   useGetMyStudentClassesQuery,
   useGetActiveSessionQuery,
   useGetSessionsQuery,
@@ -23,7 +22,7 @@ import {
   type AcademicSession,
   type Term,
 } from '@/lib/store/api/schoolAdminApi';
-import { useSchoolType } from '@/hooks/useSchoolType';
+import { useStudentSchoolType } from '@/hooks/useStudentDashboard';
 import { Calendar as CalendarIcon } from 'lucide-react';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 
@@ -67,13 +66,11 @@ export default function StudentCalendarPage() {
   const [showDayEventsModal, setShowDayEventsModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
-  // Get student's school and classes
-  const { data: schoolResponse } = useGetMyStudentSchoolQuery();
+  // Get student's school and school type from enrollment
+  const { schoolType: currentType, schoolId } = useStudentSchoolType();
   const { data: classesResponse } = useGetMyStudentClassesQuery();
-  const schoolId = schoolResponse?.data?.id;
   const classes = classesResponse?.data || [];
   const classData = useMemo(() => classes[0] || null, [classes]);
-  const { currentType } = useSchoolType();
 
   const { data: activeSessionResponse } = useGetActiveSessionQuery(
     { schoolId: schoolId! },

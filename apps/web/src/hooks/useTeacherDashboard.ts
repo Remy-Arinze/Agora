@@ -125,7 +125,6 @@ export function useTeacherDashboard(): TeacherDashboardData {
       if (classTypes.size === 1) {
         const type = classes[0].type;
         if (type === 'PRIMARY' || type === 'SECONDARY' || type === 'TERTIARY') {
-          console.log('[useTeacherDashboard] School type derived from classes:', type);
           return type;
         }
       }
@@ -188,21 +187,6 @@ export function useTeacherDashboard(): TeacherDashboardData {
   );
   
   const timetable = timetableResponse?.data || [];
-  
-  // Debug logging for timetable issues
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[useTeacherDashboard] Debug:', {
-      schoolId,
-      teacherId,
-      termId,
-      derivedSchoolType,
-      classesCount: classes.length,
-      classTypes: classes.map(c => c.type),
-      timetableLength: timetable.length,
-      isLoadingTimetable,
-      querySkipped: !schoolId || !teacherId || !termId,
-    });
-  }
   
   // Use derivedSchoolType directly (no need for refinedSchoolType anymore)
   const refinedSchoolType = derivedSchoolType;

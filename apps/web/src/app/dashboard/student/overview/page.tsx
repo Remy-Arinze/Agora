@@ -16,115 +16,44 @@ import {
   Calendar,
   Loader2,
   AlertCircle,
-  UserCheck,
 } from 'lucide-react';
 import {
-  useGetMyStudentProfileQuery,
-  useGetMyStudentEnrollmentsQuery,
-  useGetMyStudentClassesQuery,
-  useGetMyStudentGradesQuery,
-  useGetMyStudentTimetableQuery,
-  useGetMyStudentCalendarQuery,
-  useGetActiveSessionQuery,
   useGetUpcomingEventsQuery,
+  useGetMyStudentCalendarQuery,
 } from '@/lib/store/api/schoolAdminApi';
-import { useSchoolType } from '@/hooks/useSchoolType';
-import { getTerminology } from '@/lib/utils/terminology';
-import { format, isToday, parseISO, startOfDay } from 'date-fns';
-import toast from 'react-hot-toast';
+import { 
+  useStudentDashboard, 
+  getStudentTodaySchedule, 
+  getStudentTerminology 
+} from '@/hooks/useStudentDashboard';
+import { format, parseISO } from 'date-fns';
 
 export default function StudentOverviewPage() {
-  const { currentType } = useSchoolType();
-  const terminology = getTerminology(currentType) || {
-    courses: 'Classes',
-    courseSingular: 'Class',
-    staff: 'Teachers',
-    staffSingular: 'Teacher',
-    periods: 'Terms',
-    periodSingular: 'Term',
-    subjects: 'Subjects',
-    subjectSingular: 'Subject',
-  };
-
-  // Get student profile
-  const { data: profileResponse, isLoading: isLoadingProfile } = useGetMyStudentProfileQuery();
-  const student = profileResponse?.data;
-
-  // Get enrollments
-  const { data: enrollmentsResponse, isLoading: isLoadingEnrollments } = useGetMyStudentEnrollmentsQuery();
-  const enrollments = enrollmentsResponse?.data || [];
+  // Use unified dashboard hook for core data
+  const {
+    student,
+    school,
+    schoolType,
+    activeEnrollment,
+    activeClass,
+    activeTerm,
+    timetable,
+    stats,
+    isLoading,
+    hasError,
+    errorMessage,
+  } = useStudentDashboard();
   
-  // Get active enrollment (current school)
-  const activeEnrollment = useMemo(() => {
-    return enrollments.find((e: any) => e.isActive) || enrollments[0];
-  }, [enrollments]);
+  const terminology = getStudentTerminology(schoolType);
+  const schoolId = school?.id;
+  const activeTermId = activeTerm?.id;
   
-  // Get school ID from active enrollment
-  const schoolId = activeEnrollment?.school?.id;
-
-  // Get student's classes to find class data for timetable
-  const { data: classesResponse, isLoading: isLoadingClasses } = useGetMyStudentClassesQuery();
-  const classes = classesResponse?.data || [];
-  const classData = useMemo(() => {
-    return classes[0] || null; // Get the active/primary class
-  }, [classes]);
-
-  // Get active session
-  const { data: activeSessionResponse } = useGetActiveSessionQuery(
-    { schoolId: schoolId! },
-    { skip: !schoolId }
-  );
-  const activeSession = activeSessionResponse?.data;
-  const activeTermId = activeSession?.term?.id;
-
-  // Get grades for stats
-  const { data: gradesResponse, isLoading: isLoadingGrades } = useGetMyStudentGradesQuery(
-    { termId: activeTermId },
-    { skip: !activeTermId }
-  );
-  const allGrades = gradesResponse?.data || [];
-  
-  // Filter to only published grades
-  const publishedGrades = useMemo(() => {
-    return allGrades.filter((g: any) => g.isPublished !== false);
-  }, [allGrades]);
-
-  // Get recently published grades count (last 7 days)
-  const recentlyPublishedGrades = useMemo(() => {
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    
-    return publishedGrades.filter((g: any) => {
-      const publishedDate = new Date(g.updatedAt || g.createdAt);
-      return publishedDate >= sevenDaysAgo;
-    });
-  }, [publishedGrades]);
-
-  // Get timetable - use unified student timetable endpoint
-  // The backend handles PRIMARY/SECONDARY (ClassArm) and TERTIARY (courses) automatically
-  const { 
-    data: timetableResponse, 
-    isLoading: isLoadingTimetable 
-  } = useGetMyStudentTimetableQuery(
-    { termId: activeTermId },
-    { skip: !classData } // Skip until we know student is enrolled
-  );
-  
-  const timetable = timetableResponse?.data || [];
-
   // Get today's schedule
   const todaySchedule = useMemo(() => {
-    const today = new Date();
-    const dayOfWeek = today.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
-    
-    return timetable.filter((period: any) => {
-      return period.dayOfWeek === dayOfWeek;
-    }).sort((a: any, b: any) => {
-      return a.startTime.localeCompare(b.startTime);
-    });
+    return getStudentTodaySchedule(timetable);
   }, [timetable]);
 
-  // Get calendar data (events + timetable) for next 7 days
+  // Get calendar data (events) for next 7 days
   const startDate = new Date().toISOString().split('T')[0];
   const endDate = new Date();
   endDate.setDate(endDate.getDate() + 7);
@@ -139,34 +68,10 @@ export default function StudentOverviewPage() {
 
   // Get upcoming events (fallback to events query if calendar doesn't have events)
   const { data: upcomingEventsResponse } = useGetUpcomingEventsQuery(
-    { schoolId: schoolId!, days: 7, schoolType: currentType || undefined },
+    { schoolId: schoolId!, days: 7, schoolType: schoolType || undefined },
     { skip: !schoolId || (calendarEvents && calendarEvents.length > 0) }
   );
   const upcomingEvents = calendarEvents.length > 0 ? calendarEvents : (upcomingEventsResponse?.data || []);
-
-  // Calculate stats
-  const stats = useMemo(() => {
-    // Calculate GPA/Average (only from published grades)
-    let totalScore = 0;
-    let totalMaxScore = 0;
-    publishedGrades.forEach((grade: any) => {
-      totalScore += grade.score || 0;
-      totalMaxScore += grade.maxScore || 0;
-    });
-    const average = totalMaxScore > 0 ? Math.round((totalScore / totalMaxScore) * 100) : 0;
-
-    // Count active classes
-    const activeClassesCount = enrollments.filter((e: any) => e.isActive).length;
-
-    return {
-      average,
-      activeClassesCount,
-      totalGrades: publishedGrades.length,
-      recentlyPublished: recentlyPublishedGrades.length,
-    };
-  }, [publishedGrades, enrollments, recentlyPublishedGrades]);
-
-  const isLoading = isLoadingProfile || isLoadingEnrollments || isLoadingClasses || isLoadingGrades || isLoadingTimetable;
 
   if (isLoading) {
     return (
@@ -183,14 +88,14 @@ export default function StudentOverviewPage() {
     );
   }
 
-  if (!student) {
+  if (hasError || !student) {
     return (
       <ProtectedRoute roles={['STUDENT']}>
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center">
             <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-4" />
             <p className="text-light-text-secondary dark:text-dark-text-secondary">
-              Unable to load student profile
+              {errorMessage || 'Unable to load student profile'}
             </p>
           </div>
         </div>
@@ -231,7 +136,7 @@ export default function StudentOverviewPage() {
                     Average Score
                   </p>
                   <p className="text-3xl font-bold text-light-text-primary dark:text-dark-text-primary mt-2">
-                    {stats.average}%
+                    {stats.averageScore}%
                   </p>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
@@ -246,10 +151,10 @@ export default function StudentOverviewPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary">
-                    Current {currentType === 'TERTIARY' ? 'Level' : 'Class'}
+                    Current {terminology.classLabel}
                   </p>
                   <p className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary mt-2">
-                    {classData?.name || activeEnrollment?.classLevel || 'N/A'}
+                    {activeClass?.name || activeEnrollment?.classLevel || 'N/A'}
                   </p>
                 </div>
                 <div className="h-12 w-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
@@ -269,9 +174,9 @@ export default function StudentOverviewPage() {
                   <p className="text-3xl font-bold text-light-text-primary dark:text-dark-text-primary mt-2">
                     {stats.totalGrades}
                   </p>
-                  {stats.recentlyPublished > 0 && (
+                  {stats.recentGradesCount > 0 && (
                     <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                      {stats.recentlyPublished} new this week
+                      {stats.recentGradesCount} new this week
                     </p>
                   )}
                 </div>
@@ -458,23 +363,23 @@ export default function StudentOverviewPage() {
               <Link href="/dashboard/student/classes">
                 <Button className="w-full" variant="primary">
                   <BookOpen className="h-4 w-4 mr-2" />
-                  My {terminology.courses}
+                  My Classes
                 </Button>
               </Link>
-              <Link href="/dashboard/student/timetables">
-                <Button className="w-full" variant="ghost">
-                  <Clock className="h-4 w-4 mr-2" />
-                  Timetable
+              <Link href="/dashboard/student/results">
+                <Button className="w-full" variant="secondary">
+                  <FileText className="h-4 w-4 mr-2" />
+                  View Results
                 </Button>
               </Link>
-              <Link href="/dashboard/student/grades">
-                <Button className="w-full" variant="ghost">
-                  <Award className="h-4 w-4 mr-2" />
-                  Grades
+              <Link href="/dashboard/student/resources">
+                <Button className="w-full" variant="secondary">
+                  <BookOpen className="h-4 w-4 mr-2" />
+                  Resources
                 </Button>
               </Link>
               <Link href="/dashboard/student/calendar">
-                <Button className="w-full" variant="ghost">
+                <Button className="w-full" variant="secondary">
                   <Calendar className="h-4 w-4 mr-2" />
                   Calendar
                 </Button>

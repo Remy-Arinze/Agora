@@ -28,8 +28,7 @@ import {
   useGetMyClassmatesQuery,
 } from '@/lib/store/api/schoolAdminApi';
 import { TeacherTimetableGrid } from '@/components/timetable/TeacherTimetableGrid';
-import { useSchoolType } from '@/hooks/useSchoolType';
-import { getTerminology } from '@/lib/utils/terminology';
+import { useStudentSchoolType, getStudentTerminology } from '@/hooks/useStudentDashboard';
 import toast from 'react-hot-toast';
 
 type TabType = 'overview' | 'teachers' | 'resources' | 'curriculum' | 'timetable' | 'classmates';
@@ -92,17 +91,9 @@ export default function StudentClassesPage() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [selectedTermId, setSelectedTermId] = useState<string>('');
 
-  const { currentType } = useSchoolType();
-  const terminology = getTerminology(currentType) || {
-    courses: 'Classes',
-    courseSingular: 'Class',
-    staff: 'Teachers',
-    staffSingular: 'Teacher',
-    periods: 'Terms',
-    periodSingular: 'Term',
-    subjects: 'Subjects',
-    subjectSingular: 'Subject',
-  };
+  // Get school type from student's enrollment (not localStorage)
+  const { schoolType: currentType, schoolId, isLoading: isLoadingSchoolType } = useStudentSchoolType();
+  const terminology = getStudentTerminology(currentType);
 
   // Get student's classes
   const { data: classesResponse, isLoading: isLoadingClasses } = useGetMyStudentClassesQuery();
@@ -114,9 +105,6 @@ export default function StudentClassesPage() {
     // In practice, students typically have one active class
     return classes[0] || null;
   }, [classes]);
-
-  // Get school ID from class data
-  const schoolId = classData?.enrollment?.school?.id;
 
   // Get active session
   const { data: activeSessionResponse } = useGetActiveSessionQuery(
@@ -201,7 +189,7 @@ export default function StudentClassesPage() {
     });
   }, [sessionsResponse, currentType]);
 
-  const isLoading = isLoadingClasses || isLoadingTimetable;
+  const isLoading = isLoadingSchoolType || isLoadingClasses || isLoadingTimetable;
 
   // Handle resource download
   const handleDownload = async (resource: any) => {

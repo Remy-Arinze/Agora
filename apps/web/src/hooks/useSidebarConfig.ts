@@ -130,7 +130,7 @@ export function useSidebarConfig(): {
             { label: 'Overview', href: '/dashboard/student/overview', icon: LayoutDashboard },
             { label: 'Classes', href: '/dashboard/student/classes', icon: BookOpen },
             { label: 'Timetables', href: '/dashboard/student/timetables', icon: Clock },
-            { label: 'Results', href: '/dashboard/student/grades', icon: FileText },
+            { label: 'Results', href: '/dashboard/student/results', icon: FileText },
             { label: 'Calendar', href: '/dashboard/student/calendar', icon: Calendar },
             { label: 'Resources', href: '/dashboard/student/resources', icon: FileText },
             { label: 'History', href: '/dashboard/student/history', icon: GraduationCap },

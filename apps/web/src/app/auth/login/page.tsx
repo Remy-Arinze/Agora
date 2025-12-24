@@ -43,6 +43,8 @@ export default function LoginPage() {
           headers: {
             'Content-Type': 'application/json',
           },
+          // Include credentials to receive httpOnly cookie from server
+          credentials: 'include',
           body: JSON.stringify({
             emailOrPublicId: formData.emailOrPublicId,
             password: formData.password,

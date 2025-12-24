@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, ConflictException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { AuthService } from '../auth/auth.service';
 import { EmailService } from '../email/email.service';
@@ -13,6 +13,8 @@ import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class SchoolsService {
+  private readonly logger = new Logger(SchoolsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
@@ -367,7 +369,7 @@ export class SchoolsService {
             result.school.name
           );
         } catch (error) {
-          console.error(`Failed to send password reset email to ${emailData.email}:`, error);
+          this.logger.error(`Failed to send password reset email to ${emailData.email}:`, error instanceof Error ? error.stack : error);
           // Don't fail the request if email fails
         }
       }
@@ -418,13 +420,6 @@ export class SchoolsService {
       })),
       teachersCount: completeSchool.teachers.length,
     };
-    
-    // TEMPORARY LOG: Log admins being returned
-    console.log('🔍 [GET SCHOOL] Admin roles in response:', completeSchool.admins.map(a => ({ 
-      id: a.id, 
-      name: `${a.firstName} ${a.lastName}`, 
-      role: a.role 
-    })));
     } catch (error) {
       if (error instanceof ConflictException || error instanceof BadRequestException) {
         throw error;
@@ -768,10 +763,6 @@ export class SchoolsService {
     // Store role as-is (formatted by frontend)
     const roleToStore = adminData.role.trim();
     
-    // TEMPORARY LOG: Log the received role
-    console.log('🔍 [ADD ADMIN] Received role from frontend:', adminData.role);
-    console.log('🔍 [ADD ADMIN] Role to store:', roleToStore);
-    
     // Check if role is PRINCIPAL (case-insensitive) for special handling
     const isPrincipal = roleLower === 'principal' || roleLower.includes('principal');
     
@@ -872,13 +863,9 @@ export class SchoolsService {
         school.name
       );
     } catch (error) {
-      console.error('Failed to send password reset email to admin:', error);
+      this.logger.error('Failed to send password reset email to admin:', error instanceof Error ? error.stack : error);
       // Don't fail the request if email fails
     }
-
-    // TEMPORARY LOG: Log what's being returned
-    console.log('🔍 [ADD ADMIN] Role stored in database:', result.admin.role);
-    console.log('🔍 [ADD ADMIN] Role being returned to frontend:', result.admin.role);
     
     return {
       id: result.admin.id,
@@ -1047,7 +1034,7 @@ export class SchoolsService {
         school.name
       );
     } catch (error) {
-      console.error('Failed to send password reset email to teacher:', error);
+      this.logger.error('Failed to send password reset email to teacher:', error instanceof Error ? error.stack : error);
       // Don't fail the request if email fails
     }
 
@@ -1301,7 +1288,7 @@ export class SchoolsService {
           school.name
         );
       } catch (error) {
-        console.error('Failed to send role change email:', error);
+        this.logger.error('Failed to send role change email:', error instanceof Error ? error.stack : error);
         // Don't fail the request if email fails
       }
     }
@@ -1512,7 +1499,7 @@ export class SchoolsService {
         school.name
       );
     } catch (error) {
-      console.error(`Failed to send role change email to ${adminToPromote.email}:`, error);
+      this.logger.error(`Failed to send role change email to ${adminToPromote.email}:`, error instanceof Error ? error.stack : error);
     }
 
     // Email to demoted principal (if exists)
@@ -1527,7 +1514,7 @@ export class SchoolsService {
           school.name
         );
       } catch (error) {
-        console.error(`Failed to send role change email to ${currentPrincipal.email}:`, error);
+        this.logger.error(`Failed to send role change email to ${currentPrincipal.email}:`, error instanceof Error ? error.stack : error);
       }
     }
   }
@@ -1693,7 +1680,7 @@ export class SchoolsService {
           school.name
         );
       } catch (error) {
-        console.error(`Failed to send role change email to ${teacher.email}:`, error);
+        this.logger.error(`Failed to send role change email to ${teacher.email}:`, error instanceof Error ? error.stack : error);
       }
     }
   }

@@ -32,6 +32,8 @@ export default function VerifyOtpPage() {
           headers: {
             'Content-Type': 'application/json',
           },
+          // Include credentials to receive httpOnly cookie from server
+          credentials: 'include',
           body: JSON.stringify({
             phone: formData.phone,
             code: formData.code,

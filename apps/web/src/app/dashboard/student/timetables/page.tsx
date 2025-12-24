@@ -12,33 +12,21 @@ import {
   useGetSessionsQuery,
 } from '@/lib/store/api/schoolAdminApi';
 import { TeacherTimetableGrid } from '@/components/timetable/TeacherTimetableGrid';
-import { useSchoolType } from '@/hooks/useSchoolType';
-import { getTerminology } from '@/lib/utils/terminology';
+import { useStudentSchoolType, getStudentTerminology } from '@/hooks/useStudentDashboard';
 
 export default function StudentTimetablesPage() {
   const [selectedTermId, setSelectedTermId] = useState<string>('');
 
-  // Get student's classes to find the school ID (for term selector)
+  // Get school type from student's enrollment (not localStorage)
+  const { schoolType: currentType, schoolId, isLoading: isLoadingSchoolType } = useStudentSchoolType();
+  const terminology = getStudentTerminology(currentType);
+
+  // Get student's classes to find the class data
   const { data: classesResponse, isLoading: isLoadingClasses } = useGetMyStudentClassesQuery();
   const classes = classesResponse?.data || [];
   const classData = useMemo(() => {
     return classes[0] || null; // Get the active/primary class
   }, [classes]);
-  
-  // Get school ID from class data (for term selector only)
-  const schoolId = classData?.enrollment?.school?.id;
-
-  const { currentType } = useSchoolType();
-  const terminology = getTerminology(currentType) || {
-    courses: 'Classes',
-    courseSingular: 'Class',
-    staff: 'Teachers',
-    staffSingular: 'Teacher',
-    periods: 'Terms',
-    periodSingular: 'Term',
-    subjects: 'Subjects',
-    subjectSingular: 'Subject',
-  };
 
   // Get active session (for term selector)
   const { data: activeSessionResponse } = useGetActiveSessionQuery(
@@ -70,7 +58,7 @@ export default function StudentTimetablesPage() {
 
   const timetable = timetableResponse?.data || [];
 
-  const isLoading = isLoadingClasses || isLoadingTimetable;
+  const isLoading = isLoadingSchoolType || isLoadingClasses || isLoadingTimetable;
 
   // Extract all terms from sessions for selector - filtered by school type and deduplicated
   const allTerms = useMemo(() => {

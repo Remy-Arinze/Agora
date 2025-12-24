@@ -51,6 +51,8 @@ export function useApi() {
         const response = await fetch(`${baseUrl}${endpoint}`, {
           ...fetchOptions,
           headers,
+          // Include credentials to send httpOnly cookies (refresh token)
+          credentials: 'include',
         });
 
         const data = await response.json();

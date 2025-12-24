@@ -296,20 +296,6 @@ export class TimetableService {
       }
     }
 
-    // Debug logging for PRIMARY teacher timetable issues
-    console.log('[getTimetableForTeacher] Debug:', {
-      teacherId: teacher.id,
-      teacherName: `${teacher.firstName} ${teacher.lastName}`,
-      termId,
-      classTeachersCount: teacher.classTeachers.length,
-      classTeachers: teacher.classTeachers.map(ct => ({
-        classArmId: ct.classArmId,
-        classId: ct.classId,
-        className: ct.classArm?.classLevel?.name || ct.class?.name || 'N/A',
-      })),
-      orConditions,
-    });
-
     // Get all periods for this teacher
     const periods = await this.timetablePeriodModel.findMany({
       where: {
@@ -334,9 +320,6 @@ export class TimetableService {
         { startTime: 'asc' },
       ],
     });
-
-    // Debug: log the result
-    console.log('[getTimetableForTeacher] Found', periods.length, 'periods');
 
     return periods.map((p: any) => this.mapToPeriodDto(p));
   }

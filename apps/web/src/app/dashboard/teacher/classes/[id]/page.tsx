@@ -93,9 +93,20 @@ export default function ClassDetailPage() {
   const { data: schoolResponse } = useGetMyTeacherSchoolQuery();
   const schoolId = schoolResponse?.data?.id;
 
-  // Get active session
+  // Get class data first - we need the class type to fetch the correct active session
+  const { data: classResponse, isLoading, error } = useGetClassByIdQuery(
+    { schoolId: schoolId!, classId },
+    { skip: !schoolId || !classId }
+  );
+  
+  const classData = classResponse?.data;
+  
+  // Derive school type from the class being viewed (more accurate than localStorage)
+  const classType = classData?.type as 'PRIMARY' | 'SECONDARY' | 'TERTIARY' | undefined;
+
+  // Get active session - use the class type to get the correct session for this school type
   const { data: activeSessionResponse } = useGetActiveSessionQuery(
-    { schoolId: schoolId! },
+    { schoolId: schoolId!, schoolType: classType || currentType || undefined },
     { skip: !schoolId }
   );
   const activeSession = activeSessionResponse?.data;
@@ -104,12 +115,6 @@ export default function ClassDetailPage() {
   const { data: sessionsResponse } = useGetSessionsQuery(
     { schoolId: schoolId! },
     { skip: !schoolId || activeTab !== 'timetable' }
-  );
-
-  // Get class data
-  const { data: classResponse, isLoading, error } = useGetClassByIdQuery(
-    { schoolId: schoolId!, classId },
-    { skip: !schoolId || !classId }
   );
 
   // Get students in class (always fetch so they're available for grade entry modal)
@@ -148,8 +153,6 @@ export default function ClassDetailPage() {
     }
   };
 
-  const classData = classResponse?.data;
-
   // Get curriculum for class
   const { data: curriculumResponse, refetch: refetchCurriculum } = useGetCurriculumForClassQuery(
     {
@@ -180,13 +183,16 @@ export default function ClassDetailPage() {
   }, [allGrades]);
 
   // Extract all terms from sessions for timetable term selector - filtered by school type and deduplicated
+  // Use classType (from the class being viewed) as primary, fallback to currentType (from localStorage)
+  const effectiveSchoolType: 'PRIMARY' | 'SECONDARY' | 'TERTIARY' | null = classType || currentType || null;
+  
   const timetableTerms = useMemo(() => {
     if (!sessionsResponse?.data) return [];
     
-    // Filter sessions by current school type to avoid duplicates
+    // Filter sessions by the class's school type to show the correct terms
     const filteredSessions = sessionsResponse.data.filter((session: any) => {
-      if (!currentType) return !session.schoolType;
-      return session.schoolType === currentType;
+      if (!effectiveSchoolType) return !session.schoolType;
+      return session.schoolType === effectiveSchoolType;
     });
     
     // Deduplicate sessions by name (keep first/latest)
@@ -210,7 +216,7 @@ export default function ClassDetailPage() {
       }
     });
     return terms;
-  }, [sessionsResponse, currentType]);
+  }, [sessionsResponse, effectiveSchoolType]);
 
   // Determine which term to use for timetable
   const timetableTermId = selectedTimetableTermId || activeSession?.term?.id || '';
@@ -461,7 +467,7 @@ export default function ClassDetailPage() {
                   schoolId={schoolId!}
                   classId={classId}
                   termId={timetableTermId}
-                  schoolType={currentType}
+                  schoolType={effectiveSchoolType}
                   allTerms={timetableTerms}
                   selectedTermId={timetableTermId}
                   onTermChange={setSelectedTimetableTermId}

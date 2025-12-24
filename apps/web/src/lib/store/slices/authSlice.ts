@@ -2,6 +2,8 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
 interface AuthState {
   token: string | null;
+  // Note: refreshToken is now stored in httpOnly cookie for security
+  // This field is kept for backwards compatibility but should not be used
   refreshToken: string | null;
   user: {
     id: string;
@@ -28,13 +30,15 @@ const authSlice = createSlice({
       state,
       action: PayloadAction<{
         accessToken: string;
-        refreshToken: string;
+        refreshToken?: string; // Optional - now stored in httpOnly cookie
         user: AuthState['user'];
         tenantId?: string;
       }>
     ) => {
       state.token = action.payload.accessToken;
-      state.refreshToken = action.payload.refreshToken;
+      // Don't store refresh token in state anymore - it's in httpOnly cookie
+      // Keep for backwards compatibility during migration
+      state.refreshToken = action.payload.refreshToken || null;
       state.user = action.payload.user;
       if (action.payload.tenantId) {
         state.tenantId = action.payload.tenantId;

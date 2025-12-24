@@ -22,12 +22,10 @@ import {
 } from 'lucide-react';
 import {
   useGetMyStudentGradesQuery,
-  useGetMyStudentEnrollmentsQuery,
   useGetActiveSessionQuery,
   useGetSessionsQuery,
 } from '@/lib/store/api/schoolAdminApi';
-import { useSchoolType } from '@/hooks/useSchoolType';
-import { getTerminology } from '@/lib/utils/terminology';
+import { useStudentSchoolType, getStudentTerminology } from '@/hooks/useStudentDashboard';
 import { format } from 'date-fns';
 
 interface Grade {
@@ -130,19 +128,9 @@ export default function StudentResultsPage() {
   const [expandedSubjects, setExpandedSubjects] = useState<Set<string>>(new Set());
   const [gradeTypeFilter, setGradeTypeFilter] = useState<GradeTypeFilter>('ALL');
   
-  const { currentType } = useSchoolType();
-  const terminology = getTerminology(currentType) || {
-    periods: 'Terms',
-    periodSingular: 'Term',
-  };
-
-  // Get enrollments to find school ID
-  const { data: enrollmentsResponse, isLoading: isLoadingEnrollments } = useGetMyStudentEnrollmentsQuery();
-  const enrollments = enrollmentsResponse?.data || [];
-  const activeEnrollment = useMemo(() => {
-    return enrollments.find((e: any) => e.isActive) || enrollments[0];
-  }, [enrollments]);
-  const schoolId = activeEnrollment?.school?.id;
+  // Get school type and school ID from student's enrollment (not localStorage)
+  const { schoolType: currentType, schoolId, isLoading: isLoadingSchoolType } = useStudentSchoolType();
+  const terminology = getStudentTerminology(currentType);
 
   // Get active session
   const { data: activeSessionResponse } = useGetActiveSessionQuery(
@@ -301,7 +289,7 @@ export default function StudentResultsPage() {
     });
   };
 
-  const isLoading = isLoadingEnrollments || isLoadingGrades;
+  const isLoading = isLoadingSchoolType || isLoadingGrades;
 
   if (isLoading) {
     return (

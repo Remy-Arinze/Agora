@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../database/prisma.service';
 import { EmailService } from '../email/email.service';
@@ -10,6 +10,8 @@ import { randomBytes } from 'crypto';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
@@ -52,29 +54,27 @@ export class AuthService {
       } else {
         // Admin, principal, teacher, or student logging in with public ID
         // Principals are SchoolAdmin records with role PRINCIPAL, so they're included here
-        // Find by public ID in SchoolAdmin (includes principals and all admin roles), Teacher, or Student
-        schoolAdmin = await this.prisma.schoolAdmin.findUnique({
-          where: { publicId: emailOrPublicId },
-          include: { user: true },
-        });
-
-        if (!schoolAdmin) {
-          teacherProfile = await this.prisma.teacher.findUnique({
+        // Run all three queries in parallel for better performance
+        const [adminResult, teacherResult, studentResult] = await Promise.all([
+          this.prisma.schoolAdmin.findUnique({
             where: { publicId: emailOrPublicId },
             include: { user: true },
-          });
-        }
-
-        if (!schoolAdmin && !teacherProfile) {
-          // Check for student with publicId
-          const studentProfile = await this.prisma.student.findUnique({
+          }),
+          this.prisma.teacher.findUnique({
             where: { publicId: emailOrPublicId },
             include: { user: true },
-          });
+          }),
+          this.prisma.student.findUnique({
+            where: { publicId: emailOrPublicId },
+            include: { user: true },
+          }),
+        ]);
 
-          if (studentProfile) {
-            user = studentProfile.user;
-          }
+        schoolAdmin = adminResult;
+        teacherProfile = teacherResult;
+
+        if (studentResult) {
+          user = studentResult.user;
         }
 
         if (!schoolAdmin && !teacherProfile && !user) {
@@ -142,7 +142,7 @@ export class AuthService {
           if (user.studentProfile && user.studentProfile.enrollments.length > 0) {
             const activeEnrollment = user.studentProfile.enrollments[0];
             currentSchoolId = activeEnrollment.schoolId;
-            // Students don't have publicId or profileId
+            currentPublicId = user.studentProfile.publicId || null;
           }
           // If no active enrollment, schoolId remains null (student not enrolled anywhere)
         }
@@ -150,15 +150,23 @@ export class AuthService {
         // schoolId, publicId, profileId remain null for super admin
       } else {
         // Public ID login - capture school context
-        // ✅ Only SCHOOL_ADMIN, TEACHER, PRINCIPAL log in with public ID
         if (schoolAdmin) {
+          // ✅ SCHOOL_ADMIN or PRINCIPAL
           currentSchoolId = schoolAdmin.schoolId;
           currentPublicId = schoolAdmin.publicId;
           currentProfileId = schoolAdmin.adminId;
         } else if (teacherProfile) {
+          // ✅ TEACHER
           currentSchoolId = teacherProfile.schoolId;
           currentPublicId = teacherProfile.publicId;
           currentProfileId = teacherProfile.teacherId;
+        } else if (user.role === 'STUDENT') {
+          // ✅ STUDENT logging in with publicId
+          if (user.studentProfile && user.studentProfile.enrollments.length > 0) {
+            const activeEnrollment = user.studentProfile.enrollments[0];
+            currentSchoolId = activeEnrollment.schoolId;
+            currentPublicId = user.studentProfile.publicId || null;
+          }
         }
       }
 
@@ -186,7 +194,7 @@ export class AuthService {
       };
     } catch (error) {
       // Log the full error for debugging
-      console.error('AuthService.login error:', error);
+      this.logger.error('AuthService.login error:', error instanceof Error ? error.stack : error);
       // If it's already a NestJS exception, re-throw it
       if (error instanceof UnauthorizedException || error instanceof BadRequestException) {
         throw error;
@@ -465,7 +473,7 @@ export class AuthService {
       await this.emailService.sendPasswordResetEmail(email, name, token, role, undefined, schoolName);
     } catch (error) {
       // Log error but don't fail the request
-      console.error('Failed to send password reset email:', error);
+      this.logger.error('Failed to send password reset email:', error instanceof Error ? error.stack : error);
     }
   }
 
@@ -565,7 +573,7 @@ export class AuthService {
         );
       } catch (error) {
         // Log error but don't fail the request
-        console.error('Failed to send password reset confirmation email:', error);
+        this.logger.error('Failed to send password reset confirmation email:', error instanceof Error ? error.stack : error);
       }
     }
   }
@@ -600,7 +608,7 @@ export class AuthService {
       await this.emailService.sendPasswordResetEmail(email, name, token, role, publicId || undefined, schoolName);
     } catch (error) {
       // Log error but don't fail the request
-      console.error('Failed to send password reset email:', error);
+      this.logger.error('Failed to send password reset email:', error instanceof Error ? error.stack : error);
     }
   }
 
@@ -714,7 +722,7 @@ export class AuthService {
       await this.emailService.sendPasswordResetEmail(user.email, name, token, role, publicId, schoolName);
     } catch (error) {
       // Log error but don't fail the request
-      console.error('Failed to resend password reset email:', error);
+      this.logger.error('Failed to resend password reset email:', error instanceof Error ? error.stack : error);
       throw error; // Re-throw so admin knows it failed
     }
   }

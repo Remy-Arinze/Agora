@@ -28,8 +28,7 @@ import {
   useGetSessionsQuery,
 } from '@/lib/store/api/schoolAdminApi';
 import { TeacherTimetableGrid } from '@/components/timetable/TeacherTimetableGrid';
-import { useSchoolType } from '@/hooks/useSchoolType';
-import { getTerminology } from '@/lib/utils/terminology';
+import { useStudentSchoolType, getStudentTerminology } from '@/hooks/useStudentDashboard';
 
 type TabType = 'overview' | 'teachers' | 'resources' | 'timetable';
 
@@ -40,17 +39,9 @@ export default function StudentClassDetailPage() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [selectedTermId, setSelectedTermId] = useState<string>('');
 
-  const { currentType } = useSchoolType();
-  const terminology = getTerminology(currentType) || {
-    courses: 'Classes',
-    courseSingular: 'Class',
-    staff: 'Teachers',
-    staffSingular: 'Teacher',
-    periods: 'Terms',
-    periodSingular: 'Term',
-    subjects: 'Subjects',
-    subjectSingular: 'Subject',
-  };
+  // Get school type from student's enrollment (not localStorage)
+  const { schoolType: currentType, schoolId, isLoading: isLoadingSchoolType } = useStudentSchoolType();
+  const terminology = getStudentTerminology(currentType);
 
   // Get student's classes
   const { data: classesResponse, isLoading: isLoadingClasses } = useGetMyStudentClassesQuery();
@@ -58,9 +49,6 @@ export default function StudentClassDetailPage() {
   const classData = useMemo(() => {
     return classes.find((c: any) => c.id === classId);
   }, [classes, classId]);
-
-  // Get school ID from class data or first class
-  const schoolId = classData?.enrollment?.school?.id || classes[0]?.enrollment?.school?.id;
 
   // Get active session
   const { data: activeSessionResponse } = useGetActiveSessionQuery(
@@ -124,7 +112,7 @@ export default function StudentClassDetailPage() {
     });
   }, [sessionsResponse, currentType]);
 
-  const isLoading = isLoadingClasses || isLoadingTimetable;
+  const isLoading = isLoadingSchoolType || isLoadingClasses || isLoadingTimetable;
 
   const tabs = [
     {

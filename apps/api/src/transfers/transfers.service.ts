@@ -4,6 +4,7 @@ import {
   NotFoundException,
   ConflictException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { EmailService } from '../email/email.service';
@@ -13,6 +14,8 @@ import { randomBytes } from 'crypto';
 
 @Injectable()
 export class TransfersService {
+  private readonly logger = new Logger(TransfersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly emailService: EmailService
@@ -91,7 +94,7 @@ export class TransfersService {
           );
         } catch (error) {
           // Log error but don't fail the request
-          console.error('Failed to send transfer initiation email:', error);
+          this.logger.error('Failed to send transfer initiation email:', error instanceof Error ? error.stack : error);
         }
       } else if (!studentEmail) {
         console.warn(`Student ${student.id} does not have an email address. Cannot send transfer notification.`);
@@ -987,7 +990,7 @@ export class TransfersService {
         );
       } catch (error) {
         // Log error but don't fail the request
-        console.error('Failed to send transfer revocation email:', error);
+        this.logger.error('Failed to send transfer revocation email:', error instanceof Error ? error.stack : error);
       }
     } else if (!studentEmail) {
       console.warn(`Student ${transfer.studentId} does not have an email address. Cannot send revocation notification.`);
