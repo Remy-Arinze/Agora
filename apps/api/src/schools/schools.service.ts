@@ -8,7 +8,7 @@ import { AddAdminDto } from './dto/add-admin.dto';
 import { AddTeacherDto } from './dto/add-teacher.dto';
 import { ConvertTeacherToAdminDto } from './dto/convert-teacher-to-admin.dto';
 import { UpdateSchoolDto } from './dto/update-school.dto';
-import { PermissionResource, PermissionType } from './dto/permission.dto';
+import { PermissionResource, PermissionType, isPrincipalRole } from './dto/permission.dto';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -672,6 +672,13 @@ export class SchoolsService {
    * Add an administrator to a school
    */
   async addAdmin(schoolId: string, adminData: AddAdminDto): Promise<any> {
+    // Log incoming data for debugging
+    this.logger.log(`[AddAdmin] Received request for school ${schoolId}`);
+    this.logger.log(`[AddAdmin] Admin data: role="${adminData.role}", permissions=${adminData.permissions?.length || 0} items`);
+    if (adminData.permissions && adminData.permissions.length > 0) {
+      this.logger.log(`[AddAdmin] First 3 permissions: ${JSON.stringify(adminData.permissions.slice(0, 3))}`);
+    }
+    
     // Support both database ID and subdomain
     const school = await this.prisma.school.findFirst({
       where: {
@@ -764,14 +771,18 @@ export class SchoolsService {
     // Store role as-is (formatted by frontend)
     const roleToStore = adminData.role.trim();
     
-    // Check if role is PRINCIPAL (case-insensitive) for special handling
-    const isPrincipal = roleLower === 'principal' || roleLower.includes('principal');
+    // Check if role is PRINCIPAL using strict match (exact match for security)
+    // This ensures roles like "Vice Principal" don't get treated as principal
+    const isPrincipal = isPrincipalRole(roleToStore);
+    
+    this.logger.log(`[AddAdmin] Role: "${roleToStore}", isPrincipal: ${isPrincipal}`);
     
     if (isPrincipal) {
+      // Check for existing principal - use exact match for validation
       const existingPrincipal = await this.prisma.schoolAdmin.findFirst({
         where: {
           schoolId: schoolId,
-          role: { contains: 'principal', mode: 'insensitive' },
+          role: { equals: 'Principal', mode: 'insensitive' },
         },
       });
 
@@ -868,15 +879,27 @@ export class SchoolsService {
       // Don't fail the request if email fails
     }
 
-    // Assign default READ permissions to new admin (so they can at least view dashboard screens)
+    // Assign permissions to new admin
     // Principals automatically have full access via PermissionGuard, so skip for them
+    this.logger.log(`[AddAdmin] isPrincipal: ${isPrincipal}, permissions provided: ${adminData.permissions?.length || 0}`);
+    
     if (!isPrincipal) {
       try {
-        await this.assignDefaultReadPermissions(result.admin.id);
+        if (adminData.permissions && adminData.permissions.length > 0) {
+          // Use custom permissions provided in the request
+          this.logger.log(`[AddAdmin] Assigning ${adminData.permissions.length} custom permissions to admin ${result.admin.id}`);
+          await this.assignCustomPermissions(result.admin.id, adminData.permissions);
+        } else {
+          // Fall back to default READ permissions for all resources
+          this.logger.log(`[AddAdmin] No custom permissions, assigning default READ permissions to admin ${result.admin.id}`);
+          await this.assignDefaultReadPermissions(result.admin.id);
+        }
       } catch (error) {
-        this.logger.error('Failed to assign default permissions:', error instanceof Error ? error.stack : error);
+        this.logger.error('Failed to assign permissions:', error instanceof Error ? error.stack : error);
         // Don't fail the request if permission assignment fails
       }
+    } else {
+      this.logger.log(`[AddAdmin] Skipping permission assignment for Principal role`);
     }
     
     return {
@@ -896,6 +919,8 @@ export class SchoolsService {
    * This ensures new admins can at least view all dashboard screens
    */
   private async assignDefaultReadPermissions(adminId: string): Promise<void> {
+    this.logger.log(`[assignDefaultReadPermissions] Starting for admin ${adminId}`);
+    
     // Get all READ permissions
     const readPermissions = await this.prisma.permission.findMany({
       where: {
@@ -903,13 +928,39 @@ export class SchoolsService {
       },
     });
 
+    this.logger.log(`[assignDefaultReadPermissions] Found ${readPermissions.length} READ permissions in database`);
+
     if (readPermissions.length === 0) {
-      this.logger.warn('No READ permissions found in database. Run permission initialization.');
+      this.logger.warn('[assignDefaultReadPermissions] No READ permissions found in database! Permissions may not be initialized.');
+      // Try to initialize permissions on the fly
+      this.logger.log('[assignDefaultReadPermissions] Attempting to initialize permissions...');
+      await this.initializePermissionsIfNeeded();
+      
+      // Try again
+      const retryPermissions = await this.prisma.permission.findMany({
+        where: { type: PermissionType.READ },
+      });
+      
+      if (retryPermissions.length === 0) {
+        this.logger.error('[assignDefaultReadPermissions] Still no permissions after initialization attempt!');
+        return;
+      }
+      
+      // Use the newly found permissions
+      await this.prisma.staffPermission.createMany({
+        data: retryPermissions.map((perm) => ({
+          adminId: adminId,
+          permissionId: perm.id,
+        })),
+        skipDuplicates: true,
+      });
+      
+      this.logger.log(`[assignDefaultReadPermissions] Assigned ${retryPermissions.length} default READ permissions to admin ${adminId} (after init)`);
       return;
     }
 
     // Assign all READ permissions to the admin
-    await this.prisma.staffPermission.createMany({
+    const result = await this.prisma.staffPermission.createMany({
       data: readPermissions.map((perm) => ({
         adminId: adminId,
         permissionId: perm.id,
@@ -917,7 +968,90 @@ export class SchoolsService {
       skipDuplicates: true, // In case any already exist
     });
 
-    this.logger.log(`Assigned ${readPermissions.length} default READ permissions to admin ${adminId}`);
+    this.logger.log(`[assignDefaultReadPermissions] Created ${result.count} permission assignments for admin ${adminId}`);
+  }
+
+  /**
+   * Initialize permissions if they don't exist
+   */
+  private async initializePermissionsIfNeeded(): Promise<void> {
+    const count = await this.prisma.permission.count();
+    if (count > 0) {
+      return; // Already initialized
+    }
+
+    const resources = Object.values(PermissionResource);
+    const types = Object.values(PermissionType);
+
+    for (const resource of resources) {
+      for (const type of types) {
+        await this.prisma.permission.upsert({
+          where: {
+            resource_type: {
+              resource: resource,
+              type: type,
+            },
+          },
+          create: {
+            resource: resource,
+            type: type,
+            description: `${type} access to ${resource}`,
+          },
+          update: {},
+        });
+      }
+    }
+
+    this.logger.log(`[initializePermissionsIfNeeded] Initialized ${resources.length * types.length} permissions`);
+  }
+
+  /**
+   * Assign custom permissions to a new admin
+   * Used when the admin creator specifies specific permissions during creation
+   */
+  private async assignCustomPermissions(
+    adminId: string,
+    permissions: Array<{ resource: PermissionResource; type: PermissionType }>
+  ): Promise<void> {
+    this.logger.log(`[assignCustomPermissions] Starting for admin ${adminId} with ${permissions.length} permissions`);
+    
+    if (permissions.length === 0) {
+      this.logger.warn('[assignCustomPermissions] Empty permissions array provided, skipping.');
+      return;
+    }
+
+    // Build query conditions for all requested permissions
+    const permissionConditions = permissions.map((p) => ({
+      resource: p.resource,
+      type: p.type,
+    }));
+
+    this.logger.log(`[assignCustomPermissions] Looking for permissions:`, JSON.stringify(permissionConditions.slice(0, 5)));
+
+    // Fetch matching permissions from the database
+    const dbPermissions = await this.prisma.permission.findMany({
+      where: {
+        OR: permissionConditions,
+      },
+    });
+
+    this.logger.log(`[assignCustomPermissions] Found ${dbPermissions.length} matching permissions in database`);
+
+    if (dbPermissions.length === 0) {
+      this.logger.warn('[assignCustomPermissions] No matching permissions found in database!');
+      return;
+    }
+
+    // Create permission assignments
+    const result = await this.prisma.staffPermission.createMany({
+      data: dbPermissions.map((perm) => ({
+        adminId: adminId,
+        permissionId: perm.id,
+      })),
+      skipDuplicates: true,
+    });
+
+    this.logger.log(`[assignCustomPermissions] Created ${result.count} permission assignments for admin ${adminId}`);
   }
 
   /**

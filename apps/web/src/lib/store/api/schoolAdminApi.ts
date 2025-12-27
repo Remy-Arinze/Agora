@@ -1203,8 +1203,8 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
       },
       invalidatesTags: ['School'],
     }),
-    // Update school information
-    updateSchool: builder.mutation<ResponseDto<School>, { data: Partial<School>; token?: string }>({
+    // Update my school information (for school admins to update their own school)
+    updateMySchool: builder.mutation<ResponseDto<School>, { data: Partial<School>; token?: string }>({
       query: ({ data, token }) => {
         const queryParams = new URLSearchParams();
         if (token) queryParams.append('token', token);
@@ -2973,7 +2973,7 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
 export const { 
   useGetMySchoolQuery,
   useUploadSchoolLogoMutation,
-  useUpdateSchoolMutation,
+  useUpdateMySchoolMutation,
   useRequestEditTokenMutation,
   useVerifyEditTokenQuery,
   useGetSchoolAdminDashboardQuery, 

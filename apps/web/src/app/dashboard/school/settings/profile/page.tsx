@@ -14,7 +14,7 @@ import { Alert, AlertDescription } from '@/components/ui/Alert';
 import { Checkbox } from '@/components/ui/Checkbox';
 import {
   useGetMySchoolQuery,
-  useUpdateSchoolMutation,
+  useUpdateMySchoolMutation,
   useRequestEditTokenMutation,
   useVerifyEditTokenQuery,
 } from '@/lib/store/api/schoolAdminApi';
@@ -29,7 +29,7 @@ export default function SchoolProfilePage() {
   const { data: schoolData, isLoading: isLoadingSchool } = useGetMySchoolQuery();
   const school = schoolData?.data;
 
-  const [updateSchool, { isLoading: isUpdating }] = useUpdateSchoolMutation();
+  const [updateSchool, { isLoading: isUpdating }] = useUpdateMySchoolMutation();
   const [requestToken, { isLoading: isRequestingToken }] = useRequestEditTokenMutation();
 
   // Verify token if present in URL

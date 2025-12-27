@@ -170,6 +170,8 @@ export function useAddAdmin(schoolId: string | null) {
           ...adminData,
           role: adminData.role,
           roleType: typeof adminData.role,
+          permissionsCount: adminData.permissions?.length || 0,
+          permissions: adminData.permissions,
         },
       });
 

@@ -20,8 +20,9 @@ import type { RootState } from '@/lib/store/store';
 import { useApi } from '@/hooks/useApi';
 import { useSchoolType } from '@/hooks/useSchoolType';
 import { getTerminology } from '@/lib/utils/terminology';
-import { useUploadTeacherImageMutation, useUploadAdminImageMutation } from '@/lib/store/api/schoolsApi';
+import { useUploadTeacherImageMutation, useUploadAdminImageMutation, AdminPermissionInput } from '@/lib/store/api/schoolsApi';
 import { SubjectMultiSelect } from '@/components/teachers/SubjectMultiSelect';
+import { PermissionSelector, getDefaultReadPermissions } from '@/components/permissions';
 import toast from 'react-hot-toast';
 
 type StaffType = 'teacher' | 'admin';
@@ -47,6 +48,8 @@ export default function AddStaffPage() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [schoolId, setSchoolId] = useState<string | null>(null);
+  // Admin permissions - initialized with default READ permissions
+  const [adminPermissions, setAdminPermissions] = useState<AdminPermissionInput[]>(getDefaultReadPermissions());
   
   const { addTeacher, isLoading: isAddingTeacher } = useAddTeacher(schoolId);
   const { addAdmin, isLoading: isAddingAdmin } = useAddAdmin(schoolId);
@@ -145,7 +148,7 @@ export default function AddStaffPage() {
       }
       return true;
     } catch (error) {
-      if (error instanceof z.ZodError) {
+      if (error instanceof z.ZodError && error.errors) {
         const fieldErrors: FormErrors = {};
         error.errors.forEach((err) => {
           if (err.path[0]) {
@@ -153,6 +156,9 @@ export default function AddStaffPage() {
           }
         });
         setErrors(fieldErrors);
+      } else {
+        console.error('Validation error:', error);
+        setSubmitError('Validation failed. Please check your inputs.');
       }
       return false;
     }
@@ -239,6 +245,18 @@ export default function AddStaffPage() {
 
         router.push('/dashboard/school/teachers');
       } else {
+        // Check if the role is a Principal role - they don't need custom permissions
+        const isPrincipalRole = ['principal', 'school principal', 'head teacher', 'headmaster', 'headmistress']
+          .includes(capitalizeWords(adminRole).toLowerCase());
+
+        // Debug logging
+        console.log('🔐 [AddStaff] Permission assignment debug:', {
+          role: capitalizeWords(adminRole),
+          isPrincipalRole,
+          adminPermissionsCount: adminPermissions.length,
+          willSendPermissions: !isPrincipalRole,
+        });
+
         const adminData = {
           firstName: capitalizeWords(formData.firstName),
           lastName: capitalizeWords(formData.lastName),
@@ -247,7 +265,14 @@ export default function AddStaffPage() {
           role: capitalizeWords(adminRole),
           employeeId: formData.employeeId.trim() || undefined,
           profileImage: profileImageUrl,
+          // Only include permissions for non-principal roles
+          permissions: isPrincipalRole ? undefined : adminPermissions,
         };
+
+        console.log('🔐 [AddStaff] Sending admin data with permissions:', {
+          permissionsIncluded: !!adminData.permissions,
+          permissionsCount: adminData.permissions?.length || 0,
+        });
 
         const result = await addAdmin(adminData);
         
@@ -360,6 +385,8 @@ export default function AddStaffPage() {
                     onClick={() => {
                       setStaffType('admin');
                       setErrors({});
+                      // Reset permissions to defaults when switching to admin
+                      setAdminPermissions(getDefaultReadPermissions());
                     }}
                     className={`p-4 rounded-lg border-2 transition-all ${
                       staffType === 'admin'
@@ -394,9 +421,29 @@ export default function AddStaffPage() {
                 </div>
               </div>
 
+              {/* Profile Image - moved above role input */}
+              <div className="pt-4 border-t border-light-border dark:border-dark-border">
+                <h3 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary mb-4">
+                  Profile Image
+                </h3>
+                <ImageUpload
+                  value={formData.profileImage}
+                  onChange={(url) => {
+                    setFormData({ ...formData, profileImage: url });
+                  }}
+                  onUpload={async (file) => {
+                    setSelectedImageFile(file);
+                    // Return a temporary URL for preview
+                    return URL.createObjectURL(file);
+                  }}
+                  helperText="Upload a passport-sized profile image (optional). Image will be cropped to square format."
+                  maxSizeMB={5}
+                />
+              </div>
+
               {/* Role Input for Admin */}
               {staffType === 'admin' && (
-                <div className="space-y-3">
+                <div className="space-y-3 pt-4 border-t border-light-border dark:border-dark-border">
                   <Input
                     label="Role *"
                     name="adminRole"
@@ -420,26 +467,6 @@ export default function AddStaffPage() {
                   />
                 </div>
               )}
-
-              {/* Profile Image */}
-              <div className="pt-4 border-t border-light-border dark:border-dark-border">
-                <h3 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary mb-4">
-                  Profile Image
-                </h3>
-                <ImageUpload
-                  value={formData.profileImage}
-                  onChange={(url) => {
-                    setFormData({ ...formData, profileImage: url });
-                  }}
-                  onUpload={async (file) => {
-                    setSelectedImageFile(file);
-                    // Return a temporary URL for preview
-                    return URL.createObjectURL(file);
-                  }}
-                  helperText="Upload a passport-sized profile image (optional). Image will be cropped to square format."
-                  maxSizeMB={5}
-                />
-              </div>
 
               {/* Personal Information */}
               <div className="pt-4 border-t border-light-border dark:border-dark-border">
@@ -600,6 +627,20 @@ export default function AddStaffPage() {
                 </div>
               )}
 
+              {/* Permissions Section for Admin - shown at the end of the form */}
+              {staffType === 'admin' && (
+                <div className="pt-4 border-t border-light-border dark:border-dark-border">
+                  <PermissionSelector
+                    value={adminPermissions}
+                    onChange={setAdminPermissions}
+                    disabled={isLoadingState}
+                  />
+                  <p className="text-xs text-light-text-muted dark:text-dark-text-muted mt-2">
+                    💡 Tip: Principals automatically have full access and their permissions cannot be modified.
+                  </p>
+                </div>
+              )}
+
               {/* Form Actions */}
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-light-border dark:border-dark-border">
                 <Link href="/dashboard/school/teachers">
@@ -609,7 +650,7 @@ export default function AddStaffPage() {
                 </Link>
                 <Button type="submit" isLoading={isLoadingState}>
                   <UserPlus className="h-4 w-4 mr-2" />
-                  Add {terminology.staffSingular}
+                  Continue
                 </Button>
               </div>
             </form>

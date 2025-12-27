@@ -94,6 +94,14 @@ export interface CreateSchoolDto {
   }>;
 }
 
+/**
+ * Permission assignment for new admin
+ */
+export interface AdminPermissionInput {
+  resource: string; // PermissionResource enum value
+  type: string; // PermissionType enum value (READ, WRITE, ADMIN)
+}
+
 export interface AddAdminDto {
   firstName: string;
   lastName: string;
@@ -101,6 +109,12 @@ export interface AddAdminDto {
   phone: string;
   role: string;
   employeeId?: string;
+  profileImage?: string;
+  /**
+   * Optional custom permissions to assign during creation.
+   * If not provided, default READ permissions for all resources will be assigned.
+   */
+  permissions?: AdminPermissionInput[];
 }
 
 export interface AddTeacherDto {
