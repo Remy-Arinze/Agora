@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/Input';
 import { Alert } from '@/components/ui/Alert';
 import { Modal } from '@/components/ui/Modal';
 import { SearchInput } from '@/components/ui/SearchInput';
+import { PermissionGate } from '@/components/permissions/PermissionGate';
+import { PermissionResource, PermissionType } from '@/hooks/usePermissions';
 import { motion } from 'framer-motion';
 import {
   CheckCircle2,
@@ -922,14 +924,16 @@ export default function TransfersPage() {
                         containerClassName="flex-1 max-w-md"
                         size="lg"
                       />
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => setShowGenerateTacModal(true)}
-                      >
-                        <Key className="h-4 w-4 mr-2" />
-                        Generate TAC
-                      </Button>
+                      <PermissionGate resource={PermissionResource.TRANSFERS} type={PermissionType.WRITE}>
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => setShowGenerateTacModal(true)}
+                        >
+                          <Key className="h-4 w-4 mr-2" />
+                          Generate TAC
+                        </Button>
+                      </PermissionGate>
                     </div>
                   </div>
                 </CardHeader>

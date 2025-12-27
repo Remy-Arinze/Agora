@@ -7,6 +7,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { BackButton } from '@/components/ui/BackButton';
+import { PermissionGate } from '@/components/permissions/PermissionGate';
+import { PermissionResource, PermissionType } from '@/hooks/usePermissions';
 import { motion } from 'framer-motion';
 import {
   BookOpen,
@@ -163,10 +165,12 @@ export default function DepartmentDetailPage() {
                 </p>
               </div>
             </div>
-            <Button variant="secondary" onClick={() => router.push(`/dashboard/school/departments/${departmentId}/settings`)}>
-              <Settings className="h-4 w-4 mr-2" />
-              Settings
-            </Button>
+            <PermissionGate resource={PermissionResource.CLASSES} type={PermissionType.WRITE}>
+              <Button variant="secondary" onClick={() => router.push(`/dashboard/school/departments/${departmentId}/settings`)}>
+                <Settings className="h-4 w-4 mr-2" />
+                Settings
+              </Button>
+            </PermissionGate>
           </div>
         </motion.div>
 

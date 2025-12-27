@@ -9,8 +9,19 @@ import {
   Param,
   Query,
   UseGuards,
+  NotFoundException,
+  UseInterceptors,
+  UploadedFile,
+  Post as PostDecorator,
+  Req,
+  Ip,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { Request } from 'express';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator';
+import { UserWithContext } from '../../auth/types/user-with-context.type';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiConsumes } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { AdminService } from './admins/admin.service';
 import { TeacherService } from './teachers/teacher.service';
 import { TeacherSubjectsService } from './teachers/teacher-subjects.service';
@@ -20,7 +31,7 @@ import { UpdateAdminDto } from '../dto/update-admin.dto';
 import { UpdateTeacherDto } from '../dto/update-teacher.dto';
 import { UpdatePrincipalDto } from '../dto/update-principal.dto';
 import { ConvertTeacherToAdminDto } from '../dto/convert-teacher-to-admin.dto';
-import { AssignPermissionsDto } from '../dto/permission.dto';
+import { AssignPermissionsDto, PermissionResource, PermissionType } from '../dto/permission.dto';
 import { 
   UpdateTeacherSubjectsDto, 
   AddTeacherSubjectDto,
@@ -31,18 +42,16 @@ import {
 import { ResponseDto } from '../../common/dto/response.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { SchoolDataAccessGuard } from '../../common/guards/school-data-access.guard';
+import { PermissionGuard } from '../../common/guards/permission.guard';
+import { RequirePermission } from '../../common/decorators/permission.decorator';
 import { PermissionService } from './permissions/permission.service';
-import { NotFoundException, UseInterceptors, UploadedFile, Post as PostDecorator } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { memoryStorage } from 'multer';
-import { ApiConsumes } from '@nestjs/swagger';
 import { StaffImportService } from './staff-import.service';
 import { AuthService } from '../../auth/auth.service';
 import { StaffImportSummaryDto } from '../dto/staff-bulk-import.dto';
 
 @ApiTags('schools')
 @Controller('schools/:schoolId')
-@UseGuards(JwtAuthGuard, SchoolDataAccessGuard)
+@UseGuards(JwtAuthGuard, SchoolDataAccessGuard, PermissionGuard)
 @ApiBearerAuth()
 export class StaffController {
   constructor(
@@ -56,6 +65,7 @@ export class StaffController {
 
   // Admin endpoints
   @Post('admins')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.WRITE)
   @ApiOperation({ summary: 'Add an administrator to a school' })
   @ApiResponse({
     status: 201,
@@ -72,6 +82,7 @@ export class StaffController {
   }
 
   @PostDecorator('admins/:adminId/image')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.WRITE)
   @UseInterceptors(
     FileInterceptor('image', {
       storage: memoryStorage(),
@@ -97,6 +108,7 @@ export class StaffController {
   }
 
   @Patch('admins/:adminId')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.WRITE)
   @ApiOperation({ summary: 'Update an administrator in a school' })
   @ApiResponse({
     status: 200,
@@ -113,6 +125,7 @@ export class StaffController {
   }
 
   @Delete('admins/:adminId')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Delete an administrator from a school' })
   @ApiResponse({
     status: 200,
@@ -129,6 +142,7 @@ export class StaffController {
 
   // Teacher endpoints
   @Post('teachers')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.WRITE)
   @ApiOperation({ summary: 'Add a teacher to a school' })
   @ApiResponse({
     status: 201,
@@ -145,6 +159,7 @@ export class StaffController {
   }
 
   @PostDecorator('teachers/:teacherId/image')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.WRITE)
   @UseInterceptors(
     FileInterceptor('image', {
       storage: memoryStorage(),
@@ -170,6 +185,7 @@ export class StaffController {
   }
 
   @Patch('teachers/:teacherId')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.WRITE)
   @ApiOperation({ summary: 'Update a teacher in a school' })
   @ApiResponse({
     status: 200,
@@ -186,6 +202,7 @@ export class StaffController {
   }
 
   @Delete('teachers/:teacherId')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Delete a teacher from a school' })
   @ApiResponse({
     status: 200,
@@ -205,6 +222,7 @@ export class StaffController {
   // =====================
 
   @Get('teachers/:teacherId/subjects')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.READ)
   @ApiOperation({ 
     summary: 'Get subjects a teacher is qualified to teach',
     description: 'Returns all subjects the teacher can teach along with assignment counts'
@@ -224,6 +242,7 @@ export class StaffController {
   }
 
   @Get('teachers/:teacherId/subjects/details')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.READ)
   @ApiOperation({ 
     summary: 'Get teacher with all subject competencies and assignment totals',
     description: 'Returns teacher info with subjects and total class assignments'
@@ -243,6 +262,7 @@ export class StaffController {
   }
 
   @Put('teachers/:teacherId/subjects')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.WRITE)
   @ApiOperation({ 
     summary: 'Update all subjects a teacher can teach',
     description: 'Replaces all existing subject competencies with the provided list'
@@ -264,6 +284,7 @@ export class StaffController {
   }
 
   @Post('teachers/:teacherId/subjects')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.WRITE)
   @ApiOperation({ 
     summary: 'Add a subject to teacher competencies',
     description: 'Adds a single subject the teacher can teach'
@@ -285,6 +306,7 @@ export class StaffController {
   }
 
   @Delete('teachers/:teacherId/subjects/:subjectId')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.WRITE)
   @ApiOperation({ 
     summary: 'Remove a subject from teacher competencies',
     description: 'Removes a subject from teacher. Will fail if teacher is currently teaching this subject in any class.'
@@ -305,6 +327,7 @@ export class StaffController {
   }
 
   @Get('teachers/:teacherId/assignable-subjects')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.READ)
   @ApiOperation({ 
     summary: 'Get subjects a teacher can be assigned to for a specific class',
     description: 'Returns subjects from teacher competencies, indicating which are already assigned to the class'
@@ -327,6 +350,7 @@ export class StaffController {
 
   // Principal endpoints
   @Patch('admins/:adminId/make-principal')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Make an admin the principal (switches current principal to admin)' })
   @ApiResponse({
     status: 200,
@@ -346,6 +370,7 @@ export class StaffController {
   }
 
   @Patch('principal/:principalId')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Update a principal in a school' })
   @ApiResponse({
     status: 200,
@@ -362,6 +387,7 @@ export class StaffController {
   }
 
   @Delete('principal/:principalId')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Delete a principal from a school' })
   @ApiResponse({
     status: 200,
@@ -382,6 +408,7 @@ export class StaffController {
 
   // Convert teacher to admin
   @Patch('teachers/:teacherId/convert-to-admin')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Convert a teacher to an admin (optionally keep teacher role)' })
   @ApiResponse({
     status: 200,
@@ -402,7 +429,32 @@ export class StaffController {
   }
 
   // Permission endpoints
+  
+  /**
+   * Get current admin's own permissions - NO permission check required
+   * This allows admins to fetch their own permissions for UI rendering
+   */
+  @Get('permissions/me')
+  @ApiOperation({ summary: 'Get current admin\'s own permissions' })
+  @ApiResponse({
+    status: 200,
+    description: 'Current admin permissions retrieved successfully',
+  })
+  async getMyPermissions(
+    @Param('schoolId') schoolId: string,
+    @CurrentUser() user: UserWithContext
+  ): Promise<ResponseDto<any>> {
+    // Get the current admin's profileId from the JWT
+    const adminId = user.currentProfileId;
+    if (!adminId) {
+      throw new NotFoundException('Admin profile not found in token');
+    }
+    const data = await this.permissionService.getAdminPermissions(schoolId, adminId);
+    return ResponseDto.ok(data, 'Permissions retrieved successfully');
+  }
+
   @Get('permissions')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.READ)
   @ApiOperation({ summary: 'Get all available permissions' })
   @ApiResponse({
     status: 200,
@@ -414,6 +466,7 @@ export class StaffController {
   }
 
   @Get('admins/:adminId/permissions')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.READ)
   @ApiOperation({ summary: 'Get permissions for a specific admin' })
   @ApiResponse({
     status: 200,
@@ -429,6 +482,7 @@ export class StaffController {
   }
 
   @Post('admins/:adminId/permissions')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Assign permissions to an admin' })
   @ApiResponse({
     status: 200,
@@ -436,17 +490,45 @@ export class StaffController {
   })
   @ApiResponse({ status: 404, description: 'Admin not found' })
   @ApiResponse({ status: 400, description: 'Invalid permission IDs' })
+  @ApiResponse({ status: 403, description: 'Insufficient privileges to assign these permissions' })
   async assignPermissions(
     @Param('schoolId') schoolId: string,
     @Param('adminId') adminId: string,
-    @Body() dto: AssignPermissionsDto
+    @Body() dto: AssignPermissionsDto,
+    @CurrentUser() user: UserWithContext,
+    @Ip() ip: string
   ): Promise<ResponseDto<any>> {
-    const data = await this.permissionService.assignPermissions(schoolId, adminId, dto.permissionIds);
+    const data = await this.permissionService.assignPermissions(
+      schoolId, 
+      adminId, 
+      dto.permissionIds,
+      user,
+      ip
+    );
     return ResponseDto.ok(data, 'Permissions assigned successfully');
+  }
+
+  // Migrate existing admins to have default READ permissions
+  @Post('permissions/migrate')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.ADMIN)
+  @ApiOperation({ 
+    summary: 'Migrate existing admins to have default READ permissions',
+    description: 'Assigns default READ permissions to all admins who don\'t have any permissions yet. Skips Principals (they have permanent full access).'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Migration completed successfully',
+  })
+  async migrateAdminPermissions(
+    @Param('schoolId') schoolId: string
+  ): Promise<ResponseDto<{ migrated: number; skipped: number }>> {
+    const result = await this.permissionService.migrateExistingAdmins(schoolId);
+    return ResponseDto.ok(result, `Migration complete: ${result.migrated} admins updated, ${result.skipped} skipped`);
   }
 
   // Get single staff member (teacher or admin)
   @Get('staff/:staffId')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.READ)
   @ApiOperation({ summary: 'Get a single staff member by ID (teacher or admin)' })
   @ApiResponse({
     status: 200,
@@ -474,6 +556,7 @@ export class StaffController {
 
   // Bulk import staff
   @Post('staff/bulk-import')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.WRITE)
   @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({ 
     summary: 'Bulk import staff from CSV/Excel file',
@@ -495,6 +578,7 @@ export class StaffController {
 
   // Resend password reset email for staff
   @Post('staff/:staffId/resend-password-reset')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.WRITE)
   @ApiOperation({ summary: 'Resend password reset email for a staff member' })
   @ApiResponse({
     status: 200,

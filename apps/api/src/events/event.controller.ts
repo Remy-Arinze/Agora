@@ -16,17 +16,21 @@ import { EventDto } from './dto/event.dto';
 import { ResponseDto } from '../common/dto/response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SchoolDataAccessGuard } from '../common/guards/school-data-access.guard';
+import { PermissionGuard } from '../common/guards/permission.guard';
+import { RequirePermission } from '../common/decorators/permission.decorator';
+import { PermissionResource, PermissionType } from '../schools/dto/permission.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserWithContext } from '../auth/types/user-with-context.type';
 
 @ApiTags('events')
 @Controller('schools/:schoolId/events')
-@UseGuards(JwtAuthGuard, SchoolDataAccessGuard)
+@UseGuards(JwtAuthGuard, SchoolDataAccessGuard, PermissionGuard)
 @ApiBearerAuth()
 export class EventController {
   constructor(private readonly eventService: EventService) {}
 
   @Post()
+  @RequirePermission(PermissionResource.EVENTS, PermissionType.WRITE)
   @ApiOperation({ summary: 'Create a one-off event' })
   @ApiResponse({
     status: 201,
@@ -43,6 +47,7 @@ export class EventController {
   }
 
   @Get()
+  @RequirePermission(PermissionResource.EVENTS, PermissionType.READ)
   @ApiOperation({ summary: 'Get events for a date range, optionally filtered by school type' })
   @ApiResponse({
     status: 200,
@@ -65,6 +70,7 @@ export class EventController {
   }
 
   @Get('upcoming')
+  @RequirePermission(PermissionResource.EVENTS, PermissionType.READ)
   @ApiOperation({ summary: 'Get upcoming events (next 7 days), optionally filtered by school type' })
   @ApiResponse({
     status: 200,
@@ -85,6 +91,7 @@ export class EventController {
   }
 
   @Patch(':eventId')
+  @RequirePermission(PermissionResource.EVENTS, PermissionType.WRITE)
   @ApiOperation({ summary: 'Update an event' })
   @ApiResponse({
     status: 200,
@@ -101,6 +108,7 @@ export class EventController {
   }
 
   @Delete(':eventId')
+  @RequirePermission(PermissionResource.EVENTS, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Delete an event' })
   @ApiResponse({
     status: 200,

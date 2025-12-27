@@ -14,7 +14,12 @@ export class CreateGradeDto {
   @IsNotEmpty()
   enrollmentId: string;
 
-  @ApiProperty({ description: 'Subject name', required: false })
+  @ApiPropertyOptional({ description: 'Subject ID (preferred over subject string)' })
+  @IsString()
+  @IsOptional()
+  subjectId?: string;
+
+  @ApiProperty({ description: 'Subject name (auto-populated if subjectId provided)', required: false })
   @IsString()
   @IsOptional()
   subject?: string;
@@ -88,6 +93,11 @@ export class UpdateGradeDto {
   @IsOptional()
   maxScore?: number;
 
+  @ApiPropertyOptional({ description: 'Subject ID (preferred over subject string)' })
+  @IsString()
+  @IsOptional()
+  subjectId?: string;
+
   @ApiPropertyOptional({ description: 'Subject name', required: false })
   @IsString()
   @IsOptional()
@@ -142,7 +152,12 @@ export class BulkGradeEntryDto {
   @IsNotEmpty()
   classId: string;
 
-  @ApiPropertyOptional({ description: 'Subject name (required for secondary schools)', required: false })
+  @ApiPropertyOptional({ description: 'Subject ID (preferred over subject string)' })
+  @IsString()
+  @IsOptional()
+  subjectId?: string;
+
+  @ApiPropertyOptional({ description: 'Subject name (auto-populated if subjectId provided)', required: false })
   @IsString()
   @IsOptional()
   subject?: string;

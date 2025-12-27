@@ -145,6 +145,18 @@ export class AuthService {
             currentPublicId = user.studentProfile.publicId || null;
           }
           // If no active enrollment, schoolId remains null (student not enrolled anywhere)
+        } else if (user.role === 'SCHOOL_ADMIN' && user.schoolAdmins && user.schoolAdmins.length > 0) {
+          // ✅ SCHOOL_ADMIN via email: Use first school admin profile
+          const adminProfile = user.schoolAdmins[0];
+          currentSchoolId = adminProfile.schoolId;
+          currentPublicId = adminProfile.publicId;
+          currentProfileId = adminProfile.id; // This is the SchoolAdmin record ID used for permissions
+        } else if (user.role === 'TEACHER' && user.teacherProfiles && user.teacherProfiles.length > 0) {
+          // ✅ TEACHER via email: Use first teacher profile
+          const teacherProf = user.teacherProfiles[0];
+          currentSchoolId = teacherProf.schoolId;
+          currentPublicId = teacherProf.publicId;
+          currentProfileId = teacherProf.id;
         }
         // ✅ SUPER_ADMIN: No school context (can access all schools)
         // schoolId, publicId, profileId remain null for super admin
@@ -154,12 +166,12 @@ export class AuthService {
           // ✅ SCHOOL_ADMIN or PRINCIPAL
           currentSchoolId = schoolAdmin.schoolId;
           currentPublicId = schoolAdmin.publicId;
-          currentProfileId = schoolAdmin.adminId;
+          currentProfileId = schoolAdmin.id; // Use record ID for permission lookups
         } else if (teacherProfile) {
           // ✅ TEACHER
           currentSchoolId = teacherProfile.schoolId;
           currentPublicId = teacherProfile.publicId;
-          currentProfileId = teacherProfile.teacherId;
+          currentProfileId = teacherProfile.id; // Use record ID for permission lookups
         } else if (user.role === 'STUDENT') {
           // ✅ STUDENT logging in with publicId
           if (user.studentProfile && user.studentProfile.enrollments.length > 0) {

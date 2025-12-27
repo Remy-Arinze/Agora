@@ -981,6 +981,15 @@ export class TimetableService {
       teacherName: period.teacher
         ? `${period.teacher.firstName} ${period.teacher.lastName}`
         : undefined,
+      // Include full teacher details for secondary school class detail pages
+      teacher: period.teacher ? {
+        id: period.teacher.id,
+        firstName: period.teacher.firstName,
+        lastName: period.teacher.lastName,
+        email: period.teacher.email || '',
+        phone: period.teacher.phone || '',
+        profileImage: period.teacher.profileImage || null,
+      } : undefined,
       roomId: period.roomId,
       roomName: period.room?.name,
       classArmId: period.classArmId,

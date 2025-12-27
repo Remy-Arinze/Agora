@@ -10,14 +10,19 @@ import { UpdateSchoolDto } from '../dto/update-school.dto';
 import { ResponseDto } from '../../common/dto/response.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { SchoolDataAccessGuard } from '../../common/guards/school-data-access.guard';
+import { PermissionGuard } from '../../common/guards/permission.guard';
+import { RequirePermission } from '../../common/decorators/permission.decorator';
+import { PermissionResource, PermissionType } from '../dto/permission.dto';
 
 @ApiTags('school-admin')
 @Controller('school-admin')
-@UseGuards(JwtAuthGuard, SchoolDataAccessGuard)
+@UseGuards(JwtAuthGuard, SchoolDataAccessGuard, PermissionGuard)
 @ApiBearerAuth()
 export class SchoolAdminSchoolsController {
   constructor(private readonly schoolAdminSchoolsService: SchoolAdminSchoolsService) {}
 
+  // Note: No @RequirePermission on this endpoint - it's needed for the permission system to bootstrap
+  // Access is still controlled by JwtAuthGuard and SchoolDataAccessGuard
   @Get('school')
   @ApiOperation({ summary: 'Get my school information' })
   @ApiResponse({
@@ -31,6 +36,7 @@ export class SchoolAdminSchoolsController {
   }
 
   @Get('dashboard')
+  @RequirePermission(PermissionResource.OVERVIEW, PermissionType.READ)
   @ApiOperation({ summary: 'Get school dashboard data' })
   @ApiQuery({ name: 'schoolType', required: false, type: String, description: 'Filter by school type (PRIMARY, SECONDARY, TERTIARY)' })
   @ApiResponse({
@@ -47,6 +53,7 @@ export class SchoolAdminSchoolsController {
   }
 
   @Get('staff')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.READ)
   @ApiOperation({ summary: 'Get paginated staff list with search and filtering' })
   @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number (default: 1)' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Items per page (default: 10, max: 100)' })
@@ -78,6 +85,7 @@ export class SchoolAdminSchoolsController {
   }
 
   @Post('school/logo')
+  @RequirePermission(PermissionResource.OVERVIEW, PermissionType.WRITE)
   @UseInterceptors(
     FileInterceptor('logo', {
       storage: memoryStorage(),
@@ -102,6 +110,7 @@ export class SchoolAdminSchoolsController {
   }
 
   @Patch('school')
+  @RequirePermission(PermissionResource.OVERVIEW, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Update school information' })
   @ApiQuery({ name: 'token', required: false, type: String, description: 'Verification token for sensitive changes' })
   @ApiResponse({
@@ -119,6 +128,7 @@ export class SchoolAdminSchoolsController {
   }
 
   @Post('school/request-edit-token')
+  @RequirePermission(PermissionResource.OVERVIEW, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Request verification token for sensitive school profile changes' })
   @ApiResponse({
     status: 200,
@@ -133,6 +143,7 @@ export class SchoolAdminSchoolsController {
   }
 
   @Get('school/verify-edit-token/:token')
+  @RequirePermission(PermissionResource.OVERVIEW, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Verify edit token and get proposed changes' })
   @ApiResponse({
     status: 200,

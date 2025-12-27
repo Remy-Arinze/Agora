@@ -15,6 +15,8 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { useSchoolType } from '@/hooks/useSchoolType';
 import { getTerminology } from '@/lib/utils/terminology';
 import { PermissionAssignmentModal } from '@/components/permissions/PermissionAssignmentModal';
+import { PermissionGate } from '@/components/permissions/PermissionGate';
+import { PermissionResource, PermissionType } from '@/hooks/usePermissions';
 import { StaffImportModal } from '@/components/modals/StaffImportModal';
 import toast from 'react-hot-toast';
 
@@ -189,18 +191,20 @@ export default function StaffPage() {
                 Manage all staff in your school
               </p>
             </div>
-            <div className="flex items-center gap-3">
-              <Link href="/dashboard/school/teachers/add">
-                <Button variant="primary" size="sm">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Staff
+            <PermissionGate resource={PermissionResource.STAFF} type={PermissionType.WRITE}>
+              <div className="flex items-center gap-3">
+                <Link href="/dashboard/school/teachers/add">
+                  <Button variant="primary" size="sm">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Staff
+                  </Button>
+                </Link>
+                <Button variant="ghost" size="sm" onClick={() => setShowImportModal(true)}>
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Import CSV
                 </Button>
-              </Link>
-              <Button variant="ghost" size="sm" onClick={() => setShowImportModal(true)}>
-                <FileSpreadsheet className="h-4 w-4 mr-2" />
-                Import CSV
-              </Button>
-            </div>
+              </div>
+            </PermissionGate>
           </div>
         </motion.div>
 

@@ -28,6 +28,8 @@ import {
 } from '@/lib/store/api/schoolAdminApi';
 import { EditStudentProfileModal } from '@/components/modals/EditStudentProfileModal';
 import { BackButton } from '@/components/ui/BackButton';
+import { PermissionGate } from '@/components/permissions/PermissionGate';
+import { PermissionResource, PermissionType } from '@/hooks/usePermissions';
 import toast from 'react-hot-toast';
 
 type TabType = 'profile' | 'health' | 'grades' | 'transcript';
@@ -237,10 +239,12 @@ export default function StudentDetailPage() {
                   {isResendingPasswordReset ? 'Sending...' : 'Resend Password Setup Email'}
                 </Button>
               )}
-              <Button variant="ghost" size="sm" onClick={() => setShowEditProfileModal(true)}>
-                <Edit className="h-4 w-4 mr-2" />
-                Edit Profile
-              </Button>
+              <PermissionGate resource={PermissionResource.STUDENTS} type={PermissionType.WRITE}>
+                <Button variant="ghost" size="sm" onClick={() => setShowEditProfileModal(true)}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit Profile
+                </Button>
+              </PermissionGate>
             </div>
           </div>
         </motion.div>

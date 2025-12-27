@@ -283,6 +283,7 @@ model School {
   subscription        Subscription?
   toolAccess          SchoolToolAccess[]
   profileEditTokens   SchoolProfileEditToken[]
+  assessmentTemplates AssessmentTemplate[]     // Assessment templates for this school
 
   @@index([subdomain])
   @@index([schoolId])
@@ -512,9 +513,11 @@ model Subject {
   classLevel          ClassLevel?          @relation(fields: [classLevelId], references: [id], onDelete: SetNull)
   timetablePeriods    TimetablePeriod[]
   subjectTeachers     SubjectTeacher[]
-  classTeachers       ClassTeacher[]       // NEW: Teachers assigned to teach this subject in specific classes
+  classTeachers       ClassTeacher[]       // Teachers assigned to teach this subject in specific classes
   courseRegistrations CourseRegistration[] // For TERTIARY: Students registered for this subject
   curricula           Curriculum[]         // Curricula for this subject
+  grades              Grade[]              // Grades for this subject
+  assessmentTemplates AssessmentTemplate[] // Assessment templates for this subject
 
   @@unique([schoolId, code, schoolType])
   @@index([schoolId])
@@ -615,17 +618,18 @@ model Grade {
   enrollmentId   String
   teacherId      String
   termId         String? // Link to Term
-  subject        String // Keep for backward compatibility
-  gradeType      GradeType // NEW: CA, ASSIGNMENT, EXAM
-  assessmentName String? // NEW: e.g., "CA1", "Assignment 1", "First Term Exam"
-  assessmentDate DateTime? // NEW: Date when assessment was conducted
-  sequence       Int? // NEW: Order of assessment (1, 2, 3...)
+  subjectId      String? // NEW: Proper FK to Subject entity
+  subject        String // Keep for backward compatibility (auto-populated from Subject.name)
+  gradeType      GradeType // CA, ASSIGNMENT, EXAM
+  assessmentName String? // e.g., "CA1", "Assignment 1", "First Term Exam"
+  assessmentDate DateTime? // Date when assessment was conducted
+  sequence       Int? // Order of assessment (1, 2, 3...)
   score          Decimal
   maxScore       Decimal   @default(100)
   term           String // Keep for backward compatibility
   academicYear   String // Keep for backward compatibility
   remarks        String?
-  isPublished    Boolean   @default(false) // NEW: Whether grade is visible to students/parents
+  isPublished    Boolean   @default(false) // Whether grade is visible to students/parents
   signedAt       DateTime  @default(now())
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
@@ -633,13 +637,42 @@ model Grade {
   enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
   teacher      Teacher    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   termRelation Term?      @relation("GradeTerm", fields: [termId], references: [id], onDelete: SetNull)
+  subjectRef   Subject?   @relation(fields: [subjectId], references: [id], onDelete: SetNull)
 
   @@index([enrollmentId])
   @@index([teacherId])
   @@index([termId])
+  @@index([subjectId])
   @@index([academicYear])
   @@index([gradeType])
   @@index([assessmentDate])
+}
+
+// Assessment templates for consistent grading across a school
+model AssessmentTemplate {
+  id          String    @id @default(cuid())
+  schoolId    String
+  subjectId   String?   // Optional: subject-specific templates (null = all subjects)
+  schoolType  String?   // PRIMARY, SECONDARY, TERTIARY (null = all types)
+  name        String    // e.g., "First CA", "Mid-Term Test", "Final Exam"
+  gradeType   GradeType // CA, ASSIGNMENT, EXAM
+  maxScore    Decimal   @default(100)
+  weight      Decimal?  // Optional: weight for grade calculation (e.g., 0.3 for 30%)
+  sequence    Int?      // Order in term (1, 2, 3...)
+  description String?   // Description of the assessment
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  school     School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  subject    Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  @@unique([schoolId, name, subjectId, schoolType, gradeType])
+  @@index([schoolId])
+  @@index([subjectId])
+  @@index([schoolType])
+  @@index([gradeType])
+  @@index([isActive])
 }
 
 model Attendance {
@@ -1055,6 +1088,12 @@ enum PermissionResource {
   ADMISSIONS
   SESSIONS
   EVENTS
+  // New resources for complete coverage
+  GRADES
+  CURRICULUM
+  RESOURCES
+  TRANSFERS
+  INTEGRATIONS
 }
 
 enum PermissionType {

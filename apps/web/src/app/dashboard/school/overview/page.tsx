@@ -14,6 +14,8 @@ import { ImageCropModal } from '@/components/ui/ImageCropModal';
 import { useRouter } from 'next/navigation';
 import { useGetSchoolAdminDashboardQuery, useGetActiveSessionQuery, useGetMySchoolQuery, useEndTermMutation, useUploadSchoolLogoMutation } from '@/lib/store/api/schoolAdminApi';
 import { EndTermModal } from '@/components/modals';
+import { PermissionGate } from '@/components/permissions/PermissionGate';
+import { PermissionResource, PermissionType } from '@/hooks/usePermissions';
 import toast from 'react-hot-toast';
 import { useSchoolType } from '@/hooks/useSchoolType';
 import { getTerminology } from '@/lib/utils/terminology';
@@ -306,25 +308,27 @@ export default function AdminOverviewPage() {
                   </div>
                 )}
               </div>
-              <Button
-                variant={buttonConfig.variant}
-                size="sm"
-                onClick={buttonConfig.onClick}
-                disabled={isEndingTerm}
-                className="flex items-center gap-2"
-              >
-                {isEndingTerm ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Ending {terminology.periodSingular}...
-                  </>
-                ) : (
-                  <>
-                    <ButtonIcon className="h-4 w-4" />
-                    {buttonConfig.text}
-                  </>
-                )}
-              </Button>
+              <PermissionGate resource={PermissionResource.SESSIONS} type={PermissionType.WRITE}>
+                <Button
+                  variant={buttonConfig.variant}
+                  size="sm"
+                  onClick={buttonConfig.onClick}
+                  disabled={isEndingTerm}
+                  className="flex items-center gap-2"
+                >
+                  {isEndingTerm ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Ending {terminology.periodSingular}...
+                    </>
+                  ) : (
+                    <>
+                      <ButtonIcon className="h-4 w-4" />
+                      {buttonConfig.text}
+                    </>
+                  )}
+                </Button>
+              </PermissionGate>
             </div>
           </div>
           

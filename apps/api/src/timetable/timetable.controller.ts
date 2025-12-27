@@ -32,10 +32,13 @@ import {
 import { ResponseDto } from '../common/dto/response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SchoolDataAccessGuard } from '../common/guards/school-data-access.guard';
+import { PermissionGuard } from '../common/guards/permission.guard';
+import { RequirePermission } from '../common/decorators/permission.decorator';
+import { PermissionResource, PermissionType } from '../schools/dto/permission.dto';
 
 @ApiTags('timetable')
 @Controller('schools/:schoolId/timetable')
-@UseGuards(JwtAuthGuard, SchoolDataAccessGuard)
+@UseGuards(JwtAuthGuard, SchoolDataAccessGuard, PermissionGuard)
 @ApiBearerAuth()
 export class TimetableController {
   constructor(
@@ -44,6 +47,7 @@ export class TimetableController {
   ) {}
 
   @Post('periods')
+  @RequirePermission(PermissionResource.TIMETABLES, PermissionType.WRITE)
   @ApiOperation({ summary: 'Create a timetable period with conflict detection' })
   @ApiResponse({
     status: 201,
@@ -60,6 +64,7 @@ export class TimetableController {
   }
 
   @Post('master-schedule')
+  @RequirePermission(PermissionResource.TIMETABLES, PermissionType.WRITE)
   @ApiOperation({ summary: 'Create master schedule (empty slots for all class arms)' })
   @ApiResponse({
     status: 201,
@@ -74,6 +79,7 @@ export class TimetableController {
   }
 
   @Get('class-arm/:classArmId')
+  @RequirePermission(PermissionResource.TIMETABLES, PermissionType.READ)
   @ApiOperation({ summary: 'Get timetable for a class arm' })
   @ApiResponse({
     status: 200,
@@ -90,6 +96,7 @@ export class TimetableController {
   }
 
   @Get('teacher/:teacherId')
+  @RequirePermission(PermissionResource.TIMETABLES, PermissionType.READ)
   @ApiOperation({ summary: 'Get timetable for a teacher' })
   @ApiResponse({
     status: 200,
@@ -106,6 +113,7 @@ export class TimetableController {
   }
 
   @Get('class/:classId')
+  @RequirePermission(PermissionResource.TIMETABLES, PermissionType.READ)
   @ApiOperation({ summary: 'Get timetable for a class' })
   @ApiResponse({
     status: 200,
@@ -122,6 +130,7 @@ export class TimetableController {
   }
 
   @Get('student/:studentId')
+  @RequirePermission(PermissionResource.TIMETABLES, PermissionType.READ)
   @ApiOperation({ summary: 'Get timetable for a student (Hybrid approach for TERTIARY)' })
   @ApiResponse({
     status: 200,
@@ -138,6 +147,7 @@ export class TimetableController {
   }
 
   @Get('timetables')
+  @RequirePermission(PermissionResource.TIMETABLES, PermissionType.READ)
   @ApiOperation({ summary: 'Get all timetables for a school type (grouped by class)' })
   @ApiResponse({
     status: 200,
@@ -153,6 +163,7 @@ export class TimetableController {
   }
 
   @Patch('periods/:periodId')
+  @RequirePermission(PermissionResource.TIMETABLES, PermissionType.WRITE)
   @ApiOperation({ summary: 'Update a timetable period' })
   @ApiResponse({
     status: 200,
@@ -170,6 +181,7 @@ export class TimetableController {
   }
 
   @Delete('periods/:periodId')
+  @RequirePermission(PermissionResource.TIMETABLES, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Delete a timetable period' })
   @ApiResponse({
     status: 200,
@@ -184,6 +196,7 @@ export class TimetableController {
   }
 
   @Delete('class/:classId')
+  @RequirePermission(PermissionResource.TIMETABLES, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Delete all timetable periods for a class and term' })
   @ApiQuery({ name: 'termId', required: true, type: String })
   @ApiResponse({
@@ -201,6 +214,7 @@ export class TimetableController {
 
   // Resource endpoints (ClassArms, Subjects, Rooms)
   @Post('generate-default-classes')
+  @RequirePermission(PermissionResource.CLASSES, PermissionType.WRITE)
   @ApiOperation({ summary: 'Generate default classes for a school type (Primary 1-6, JSS1-SS3, Year 1-4)' })
   @ApiResponse({
     status: 201,
@@ -216,6 +230,7 @@ export class TimetableController {
   }
 
   @Get('class-levels')
+  @RequirePermission(PermissionResource.CLASSES, PermissionType.READ)
   @ApiOperation({ summary: 'Get all class levels for a school, optionally filtered by school type' })
   @ApiResponse({
     status: 200,
@@ -231,6 +246,7 @@ export class TimetableController {
   }
 
   @Get('class-arms')
+  @RequirePermission(PermissionResource.CLASSES, PermissionType.READ)
   @ApiOperation({ summary: 'Get all class arms for a school, optionally filtered by school type' })
   @ApiResponse({
     status: 200,
@@ -247,6 +263,7 @@ export class TimetableController {
   }
 
   @Post('class-arms')
+  @RequirePermission(PermissionResource.CLASSES, PermissionType.WRITE)
   @ApiOperation({ summary: 'Create a new class arm' })
   @ApiResponse({
     status: 201,
@@ -262,6 +279,7 @@ export class TimetableController {
   }
 
   @Get('subjects')
+  @RequirePermission(PermissionResource.SUBJECTS, PermissionType.READ)
   @ApiOperation({ summary: 'Get all subjects for a school' })
   @ApiResponse({
     status: 200,
@@ -280,6 +298,7 @@ export class TimetableController {
   }
 
   @Post('subjects')
+  @RequirePermission(PermissionResource.SUBJECTS, PermissionType.WRITE)
   @ApiOperation({ summary: 'Create a new subject' })
   @ApiResponse({
     status: 201,
@@ -295,6 +314,7 @@ export class TimetableController {
   }
 
   @Patch('subjects/:subjectId')
+  @RequirePermission(PermissionResource.SUBJECTS, PermissionType.WRITE)
   @ApiOperation({ summary: 'Update a subject' })
   @ApiResponse({
     status: 200,
@@ -311,6 +331,7 @@ export class TimetableController {
   }
 
   @Delete('subjects/:subjectId')
+  @RequirePermission(PermissionResource.SUBJECTS, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Delete a subject' })
   @ApiResponse({
     status: 200,
@@ -325,6 +346,7 @@ export class TimetableController {
   }
 
   @Post('subjects/:subjectId/teachers')
+  @RequirePermission(PermissionResource.SUBJECTS, PermissionType.WRITE)
   @ApiOperation({ summary: 'Assign a teacher to a subject' })
   @ApiResponse({
     status: 200,
@@ -341,6 +363,7 @@ export class TimetableController {
   }
 
   @Delete('subjects/:subjectId/teachers/:teacherId')
+  @RequirePermission(PermissionResource.SUBJECTS, PermissionType.WRITE)
   @ApiOperation({ summary: 'Remove a teacher from a subject' })
   @ApiResponse({
     status: 200,
@@ -357,6 +380,7 @@ export class TimetableController {
   }
 
   @Post('subjects/auto-generate')
+  @RequirePermission(PermissionResource.SUBJECTS, PermissionType.WRITE)
   @ApiOperation({ summary: 'Auto-generate standard subjects for a school type' })
   @ApiResponse({
     status: 201,
@@ -376,6 +400,7 @@ export class TimetableController {
   // ============================================
 
   @Get('subjects/:subjectId/class-assignments')
+  @RequirePermission(PermissionResource.SUBJECTS, PermissionType.READ)
   @ApiOperation({ summary: 'Get class assignments for a subject (SECONDARY schools)' })
   @ApiResponse({
     status: 200,
@@ -392,6 +417,7 @@ export class TimetableController {
   }
 
   @Post('subjects/:subjectId/class-assignments')
+  @RequirePermission(PermissionResource.SUBJECTS, PermissionType.WRITE)
   @ApiOperation({ summary: 'Bulk assign teachers to classes for a subject (SECONDARY schools)' })
   @ApiResponse({
     status: 200,
@@ -407,6 +433,7 @@ export class TimetableController {
   }
 
   @Delete('subjects/:subjectId/class-assignments/:classArmId')
+  @RequirePermission(PermissionResource.SUBJECTS, PermissionType.WRITE)
   @ApiOperation({ summary: 'Remove a class-subject-teacher assignment' })
   @ApiResponse({
     status: 200,
@@ -427,6 +454,7 @@ export class TimetableController {
   // ============================================
 
   @Get('teacher-workloads')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.READ)
   @ApiOperation({ summary: 'Get teacher workload summary for balancing assignments' })
   @ApiQuery({ name: 'termId', required: true, description: 'Term ID to analyze workloads for' })
   @ApiQuery({ name: 'schoolType', required: false, description: 'Filter by school type' })
@@ -444,6 +472,7 @@ export class TimetableController {
   }
 
   @Get('subjects/:subjectId/least-loaded-teacher')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.READ)
   @ApiOperation({ summary: 'Get the least loaded teacher for a subject (for auto-assignment)' })
   @ApiQuery({ name: 'termId', required: true, description: 'Term ID to check workloads' })
   @ApiQuery({ name: 'excludeTeacherIds', required: false, description: 'Comma-separated teacher IDs to exclude' })
@@ -467,6 +496,7 @@ export class TimetableController {
   // ============================================
 
   @Get('teachers/:teacherId/classes')
+  @RequirePermission(PermissionResource.STAFF, PermissionType.READ)
   @ApiOperation({ summary: 'Get classes assigned to a teacher from timetable (for SECONDARY schools)' })
   @ApiQuery({ name: 'termId', required: false, description: 'Term ID (defaults to current active term)' })
   @ApiResponse({
@@ -483,6 +513,7 @@ export class TimetableController {
   }
 
   @Get('rooms')
+  @RequirePermission(PermissionResource.TIMETABLES, PermissionType.READ)
   @ApiOperation({ summary: 'Get all rooms for a school' })
   @ApiResponse({
     status: 200,
@@ -497,6 +528,7 @@ export class TimetableController {
   }
 
   @Post('rooms')
+  @RequirePermission(PermissionResource.TIMETABLES, PermissionType.WRITE)
   @ApiOperation({ summary: 'Create a new room' })
   @ApiResponse({
     status: 201,
@@ -512,6 +544,7 @@ export class TimetableController {
   }
 
   @Get('courses')
+  @RequirePermission(PermissionResource.SUBJECTS, PermissionType.READ)
   @ApiOperation({ summary: 'Get all courses for a school (for TERTIARY schools)' })
   @ApiResponse({
     status: 200,

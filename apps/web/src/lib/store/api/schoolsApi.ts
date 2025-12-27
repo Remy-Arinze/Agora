@@ -57,6 +57,11 @@ export interface School {
   teachersCount: number;
   studentsCount?: number;
   schoolType?: SchoolTypeContext;
+  // Current admin info for permission checks (set on getMySchool)
+  currentAdmin?: {
+    id: string;
+    role: string;
+  };
 }
 
 export interface CreateSchoolDto {

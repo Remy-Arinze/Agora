@@ -17,15 +17,19 @@ import { ClassDto } from '../dto/class.dto';
 import { ResponseDto } from '../../common/dto/response.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { SchoolDataAccessGuard } from '../../common/guards/school-data-access.guard';
+import { PermissionGuard } from '../../common/guards/permission.guard';
+import { RequirePermission } from '../../common/decorators/permission.decorator';
+import { PermissionResource, PermissionType } from '../dto/permission.dto';
 
 @ApiTags('schools')
 @Controller('schools/:schoolId/classes')
-@UseGuards(JwtAuthGuard, SchoolDataAccessGuard)
+@UseGuards(JwtAuthGuard, SchoolDataAccessGuard, PermissionGuard)
 @ApiBearerAuth()
 export class ClassController {
   constructor(private readonly classService: ClassService) {}
 
   @Post()
+  @RequirePermission(PermissionResource.CLASSES, PermissionType.WRITE)
   @ApiOperation({ summary: 'Create a new class/course' })
   @ApiResponse({
     status: 201,
@@ -43,6 +47,7 @@ export class ClassController {
   }
 
   @Get()
+  @RequirePermission(PermissionResource.CLASSES, PermissionType.READ)
   @ApiOperation({ summary: 'Get all classes/courses for a school' })
   @ApiResponse({
     status: 200,
@@ -66,6 +71,7 @@ export class ClassController {
   }
 
   @Get(':classId')
+  @RequirePermission(PermissionResource.CLASSES, PermissionType.READ)
   @ApiOperation({ summary: 'Get a single class/course by ID' })
   @ApiResponse({
     status: 200,
@@ -82,6 +88,7 @@ export class ClassController {
   }
 
   @Patch(':classId')
+  @RequirePermission(PermissionResource.CLASSES, PermissionType.WRITE)
   @ApiOperation({ summary: 'Update a class/course' })
   @ApiResponse({
     status: 200,
@@ -99,6 +106,7 @@ export class ClassController {
   }
 
   @Delete(':classId')
+  @RequirePermission(PermissionResource.CLASSES, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Delete a class/course' })
   @ApiQuery({
     name: 'force',
@@ -123,6 +131,7 @@ export class ClassController {
   }
 
   @Post(':classId/teachers')
+  @RequirePermission(PermissionResource.CLASSES, PermissionType.WRITE)
   @ApiOperation({ summary: 'Assign a teacher to a class/course' })
   @ApiResponse({
     status: 201,
@@ -142,6 +151,7 @@ export class ClassController {
   }
 
   @Delete(':classId/teachers/:teacherId')
+  @RequirePermission(PermissionResource.CLASSES, PermissionType.WRITE)
   @ApiOperation({ summary: 'Remove a teacher from a class/course' })
   @ApiResponse({
     status: 200,
@@ -159,6 +169,7 @@ export class ClassController {
   }
 
   @Get(':classId/students')
+  @RequirePermission(PermissionResource.STUDENTS, PermissionType.READ)
   @ApiOperation({ summary: 'Get all students enrolled in a class' })
   @ApiResponse({
     status: 200,

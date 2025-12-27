@@ -36,6 +36,16 @@ export class TimetablePeriodDto {
   teacherName?: string;
 
   @ApiProperty({ required: false })
+  teacher?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    profileImage?: string | null;
+  };
+
+  @ApiProperty({ required: false })
   roomId?: string;
 
   @ApiProperty({ required: false })

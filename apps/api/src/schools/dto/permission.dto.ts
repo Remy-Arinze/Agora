@@ -14,12 +14,38 @@ export enum PermissionResource {
   ADMISSIONS = 'ADMISSIONS',
   SESSIONS = 'SESSIONS',
   EVENTS = 'EVENTS',
+  // New resources for complete coverage
+  GRADES = 'GRADES',
+  CURRICULUM = 'CURRICULUM',
+  RESOURCES = 'RESOURCES',
+  TRANSFERS = 'TRANSFERS',
+  INTEGRATIONS = 'INTEGRATIONS',
 }
 
 export enum PermissionType {
   READ = 'READ',
   WRITE = 'WRITE',
   ADMIN = 'ADMIN',
+}
+
+/**
+ * Roles that have permanent full access (cannot be edited)
+ * Using exact match for security - prevents "Vice Principal" from getting full access
+ */
+export const PRINCIPAL_ROLES = [
+  'principal',
+  'school principal', 
+  'head teacher',
+  'headmaster',
+  'headmistress',
+] as const;
+
+/**
+ * Check if a role is a Principal role (has permanent full access)
+ */
+export function isPrincipalRole(role: string): boolean {
+  const normalizedRole = role.toLowerCase().trim();
+  return PRINCIPAL_ROLES.includes(normalizedRole as typeof PRINCIPAL_ROLES[number]);
 }
 
 export class PermissionDto {

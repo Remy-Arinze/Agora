@@ -67,7 +67,7 @@ export function SchoolTypeSelector() {
                 className={`w-full text-left px-4 py-2 text-sm transition-colors ${
                   currentType === type
                     ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium'
-                    : 'text-light-text-primary dark:text-dark-text-primary hover:bg-gray-50 dark:hover:bg-dark-surface/80'
+                    : 'text-light-text-primary dark:text-dark-text-primary hover:bg-gray-100 dark:hover:bg-[var(--dark-hover)]'
                 }`}
               >
                 {getSchoolTypeDisplayName(type)}

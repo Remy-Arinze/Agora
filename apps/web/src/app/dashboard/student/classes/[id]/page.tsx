@@ -19,16 +19,13 @@ import {
   Download,
   Loader2,
   AlertCircle,
-  Calendar,
 } from 'lucide-react';
 import { 
-  useGetMyStudentClassesQuery,
-  useGetMyStudentTimetableQuery,
-  useGetActiveSessionQuery,
   useGetSessionsQuery,
+  useGetMyStudentTimetableQuery,
 } from '@/lib/store/api/schoolAdminApi';
 import { TeacherTimetableGrid } from '@/components/timetable/TeacherTimetableGrid';
-import { useStudentSchoolType, getStudentTerminology } from '@/hooks/useStudentDashboard';
+import { useStudentDashboard, getStudentTerminology, ClassData } from '@/hooks/useStudentDashboard';
 
 type TabType = 'overview' | 'teachers' | 'resources' | 'timetable';
 
@@ -39,23 +36,26 @@ export default function StudentClassDetailPage() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [selectedTermId, setSelectedTermId] = useState<string>('');
 
-  // Get school type from student's enrollment (not localStorage)
-  const { schoolType: currentType, schoolId, isLoading: isLoadingSchoolType } = useStudentSchoolType();
-  const terminology = getStudentTerminology(currentType);
+  // Use unified dashboard hook - single source of truth for student data
+  const {
+    school,
+    schoolType,
+    classes,
+    activeSession,
+    activeTerm,
+    timetable: dashboardTimetable,
+    isLoading: isDashboardLoading,
+    isLoadingTimetable: isDashboardLoadingTimetable,
+    hasError,
+  } = useStudentDashboard();
 
-  // Get student's classes
-  const { data: classesResponse, isLoading: isLoadingClasses } = useGetMyStudentClassesQuery();
-  const classes = classesResponse?.data || [];
-  const classData = useMemo(() => {
-    return classes.find((c: any) => c.id === classId);
+  const schoolId = school?.id;
+  const terminology = getStudentTerminology(schoolType);
+
+  // Find the specific class by ID
+  const classData = useMemo((): ClassData | undefined => {
+    return classes.find((c) => c.id === classId);
   }, [classes, classId]);
-
-  // Get active session
-  const { data: activeSessionResponse } = useGetActiveSessionQuery(
-    { schoolId: schoolId! },
-    { skip: !schoolId }
-  );
-  const activeSession = activeSessionResponse?.data;
 
   // Get all sessions for term selector
   const { data: sessionsResponse } = useGetSessionsQuery(
@@ -64,14 +64,28 @@ export default function StudentClassDetailPage() {
   );
 
   // Determine which term to use
-  const currentTermId = selectedTermId || activeSession?.term?.id || '';
+  const currentTermId = selectedTermId || activeTerm?.id || '';
 
-  // Get timetable for student
-  const { data: timetableResponse, isLoading: isLoadingTimetable } = useGetMyStudentTimetableQuery(
-    { termId: currentTermId },
-    { skip: !currentTermId }
+  // If user selected a different term, fetch that timetable separately
+  const needsSeparateFetch = selectedTermId && selectedTermId !== activeTerm?.id;
+  
+  const { 
+    data: selectedTermTimetableResponse, 
+    isLoading: isLoadingSelectedTerm,
+  } = useGetMyStudentTimetableQuery(
+    { termId: selectedTermId },
+    { skip: !needsSeparateFetch || !selectedTermId }
   );
-  const timetable = timetableResponse?.data || [];
+
+  // Use selected term's timetable if fetched, otherwise use dashboard's timetable (same as timetables page)
+  const timetable = needsSeparateFetch 
+    ? (selectedTermTimetableResponse?.data || [])
+    : dashboardTimetable;
+
+  // Track loading state: either loading selected term OR dashboard timetable
+  const isLoadingTimetable = needsSeparateFetch 
+    ? isLoadingSelectedTerm 
+    : isDashboardLoadingTimetable;
 
   // Extract all terms from sessions for selector - filtered by school type and deduplicated
   const allTerms = useMemo(() => {
@@ -79,8 +93,8 @@ export default function StudentClassDetailPage() {
     
     // Filter sessions by current school type to avoid duplicates
     const filteredSessions = sessionsResponse.data.filter((session: any) => {
-      if (!currentType) return !session.schoolType;
-      return session.schoolType === currentType;
+      if (!schoolType) return !session.schoolType;
+      return session.schoolType === schoolType;
     });
     
     // Deduplicate sessions by name (keep first/latest)
@@ -110,9 +124,77 @@ export default function StudentClassDetailPage() {
       }
       return b.name.localeCompare(a.name);
     });
-  }, [sessionsResponse, currentType]);
+  }, [sessionsResponse, schoolType]);
 
-  const isLoading = isLoadingSchoolType || isLoadingClasses || isLoadingTimetable;
+  // Main page loading only depends on dashboard loading (not timetable)
+  // Timetable has its own loading state in the tab
+  const isLoading = isDashboardLoading;
+
+  // Combine teachers from BOTH sources:
+  // 1. ClassTeacher records (classData.teachers) - primary/secondary class teachers
+  // 2. Timetable periods - teachers assigned to specific subjects/periods
+  const teachers = useMemo(() => {
+    const teacherMap = new Map<string, any>();
+    
+    // Add teachers directly assigned to class (from ClassTeacher records)
+    const directTeachers = classData?.teachers || [];
+    directTeachers.forEach((teacher: any) => {
+      if (teacher.id && !teacherMap.has(teacher.id)) {
+        teacherMap.set(teacher.id, {
+          id: teacher.id,
+          firstName: teacher.firstName || '',
+          lastName: teacher.lastName || '',
+          email: teacher.email || '',
+          phone: teacher.phone || '',
+          subject: teacher.subject || '',
+          isPrimary: teacher.isPrimary || false,
+          profileImage: teacher.profileImage || null,
+        });
+      }
+    });
+    
+    // Also extract teachers from timetable periods (for teachers assigned to specific subjects)
+    if (timetable && timetable.length > 0) {
+      timetable.forEach((period: any) => {
+        // Check for nested teacher object first, then fall back to flat fields
+        const teacherId = period.teacher?.id || period.teacherId;
+        const teacherName = period.teacher 
+          ? `${period.teacher.firstName} ${period.teacher.lastName}` 
+          : period.teacherName;
+        
+        if (teacherId && !teacherMap.has(teacherId)) {
+          if (period.teacher) {
+            // Use nested teacher object if available
+            teacherMap.set(teacherId, {
+              id: period.teacher.id,
+              firstName: period.teacher.firstName || '',
+              lastName: period.teacher.lastName || '',
+              email: period.teacher.email || '',
+              phone: period.teacher.phone || '',
+              subject: period.subjectName || period.courseName || '',
+              isPrimary: false,
+              profileImage: period.teacher.profileImage || null,
+            });
+          } else if (teacherName) {
+            // Fall back to flat fields
+            const nameParts = teacherName.split(' ');
+            teacherMap.set(teacherId, {
+              id: teacherId,
+              firstName: nameParts[0] || '',
+              lastName: nameParts.slice(1).join(' ') || '',
+              email: '',
+              phone: '',
+              subject: period.subjectName || period.courseName || '',
+              isPrimary: false,
+              profileImage: null,
+            });
+          }
+        }
+      });
+    }
+    
+    return Array.from(teacherMap.values());
+  }, [classData?.teachers, timetable]);
 
   const tabs = [
     {
@@ -201,7 +283,7 @@ export default function StudentClassDetailPage() {
                 {classData.code && `${classData.code} • `}
                 {classData.classLevel && `${classData.classLevel} • `}
                 {classData.academicYear}
-                {activeSession?.term && ` • ${activeSession.term.name}`}
+                {activeTerm && ` • ${activeTerm.name}`}
               </p>
             </div>
           </div>
@@ -301,15 +383,31 @@ export default function StudentClassDetailPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {classData.teachers && classData.teachers.length > 0 ? (
+                  {teachers.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {classData.teachers.map((teacher: any) => (
+                      {teachers.map((teacher: any) => {
+                        const initials = `${teacher.firstName?.charAt(0) || ''}${teacher.lastName?.charAt(0) || ''}`.toUpperCase();
+                        return (
                         <Card key={teacher.id} className="border border-light-border dark:border-dark-border">
                           <CardContent className="pt-6">
                             <div className="flex items-start gap-4">
-                              <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
-                                <User className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                              </div>
+                              {teacher.profileImage ? (
+                                <img
+                                  src={teacher.profileImage}
+                                  alt={`${teacher.firstName} ${teacher.lastName}`}
+                                  className="w-12 h-12 rounded-full object-cover flex-shrink-0"
+                                />
+                              ) : initials ? (
+                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center flex-shrink-0">
+                                  <span className="text-white font-semibold text-sm">
+                                    {initials}
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+                                  <User className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                                </div>
+                              )}
                               <div className="flex-1 min-w-0">
                                 <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary mb-1">
                                   {teacher.firstName} {teacher.lastName}
@@ -344,7 +442,8 @@ export default function StudentClassDetailPage() {
                             </div>
                           </CardContent>
                         </Card>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="text-center py-12">
@@ -424,14 +523,20 @@ export default function StudentClassDetailPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {timetable.length > 0 ? (
+                  {isLoadingTimetable ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="h-8 w-8 text-light-text-muted dark:text-dark-text-muted animate-spin" />
+                    </div>
+                  ) : timetable.length > 0 ? (
                     <TeacherTimetableGrid
-                      periods={timetable}
+                      timetable={timetable}
+                      schoolType={schoolType}
+                      isLoading={isLoading}
                       allTerms={allTerms}
                       selectedTermId={currentTermId}
                       onTermChange={setSelectedTermId}
-                      activeTermId={activeSession?.term?.id}
-                      terminologyProp={terminology}
+                      activeTermId={activeTerm?.id}
+                      terminology={terminology}
                     />
                   ) : (
                     <div className="text-center py-12">

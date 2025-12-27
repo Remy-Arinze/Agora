@@ -12,7 +12,7 @@ import { LogOut } from 'lucide-react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { getActivePluginsForTeacher } from '@/lib/plugins';
-import { useSidebarConfig, type NavItem } from '@/hooks/useSidebarConfig';
+import { usePermissionFilteredSidebar, type NavItem } from '@/hooks/useSidebarConfig';
 
 function LogoSection() {
   const { open } = useSidebar();
@@ -153,8 +153,8 @@ export function SidebarNew() {
   const user = useSelector((state: RootState) => state.auth.user);
   const pathname = usePathname();
   
-  // Use centralized sidebar config
-  const { sections } = useSidebarConfig();
+  // Use permission-filtered sidebar config
+  const { sections, isLoadingPermissions } = usePermissionFilteredSidebar();
 
   if (!user) return null;
 
@@ -166,6 +166,9 @@ export function SidebarNew() {
       icon: <item.icon className="h-5 w-5 flex-shrink-0" />,
     }))
   );
+  
+  // Show loading state for school admins while permissions load
+  const showLoadingSkeleton = user.role === 'SCHOOL_ADMIN' && isLoadingPermissions;
 
   // If user is a teacher, add active plugins as tools
   if (user.role === 'TEACHER') {
@@ -193,7 +196,7 @@ export function SidebarNew() {
 
   return (
     <SidebarBody className="justify-between gap-10">
-      <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
+      <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide">
         <LogoSection />
         
         {/* User Profile at Top */}
@@ -201,7 +204,18 @@ export function SidebarNew() {
 
         {/* Navigation Links */}
         <div className="flex flex-col gap-2 flex-1">
-          {links.map((link, idx) => {
+          {showLoadingSkeleton ? (
+            // Loading skeleton while permissions are being fetched
+            <>
+              {[...Array(6)].map((_, idx) => (
+                <div key={idx} className="flex items-center gap-3 px-3 py-2 animate-pulse">
+                  <div className="h-5 w-5 bg-gray-200 dark:bg-gray-700 rounded" />
+                  <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded" />
+                </div>
+              ))}
+            </>
+          ) : (
+            links.map((link, idx) => {
             const isActive =
               pathname === link.href ||
               pathname.startsWith(link.href + '/') ||
@@ -222,7 +236,8 @@ export function SidebarNew() {
                 isActive={isActive}
               />
             );
-          })}
+            })
+          )}
         </div>
       </div>
 

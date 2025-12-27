@@ -8,6 +8,7 @@ import { AddAdminDto } from './dto/add-admin.dto';
 import { AddTeacherDto } from './dto/add-teacher.dto';
 import { ConvertTeacherToAdminDto } from './dto/convert-teacher-to-admin.dto';
 import { UpdateSchoolDto } from './dto/update-school.dto';
+import { PermissionResource, PermissionType } from './dto/permission.dto';
 import * as bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -866,6 +867,17 @@ export class SchoolsService {
       this.logger.error('Failed to send password reset email to admin:', error instanceof Error ? error.stack : error);
       // Don't fail the request if email fails
     }
+
+    // Assign default READ permissions to new admin (so they can at least view dashboard screens)
+    // Principals automatically have full access via PermissionGuard, so skip for them
+    if (!isPrincipal) {
+      try {
+        await this.assignDefaultReadPermissions(result.admin.id);
+      } catch (error) {
+        this.logger.error('Failed to assign default permissions:', error instanceof Error ? error.stack : error);
+        // Don't fail the request if permission assignment fails
+      }
+    }
     
     return {
       id: result.admin.id,
@@ -877,6 +889,35 @@ export class SchoolsService {
       role: result.admin.role,
       createdAt: result.admin.createdAt,
     };
+  }
+
+  /**
+   * Assign default READ permissions to a new admin
+   * This ensures new admins can at least view all dashboard screens
+   */
+  private async assignDefaultReadPermissions(adminId: string): Promise<void> {
+    // Get all READ permissions
+    const readPermissions = await this.prisma.permission.findMany({
+      where: {
+        type: PermissionType.READ,
+      },
+    });
+
+    if (readPermissions.length === 0) {
+      this.logger.warn('No READ permissions found in database. Run permission initialization.');
+      return;
+    }
+
+    // Assign all READ permissions to the admin
+    await this.prisma.staffPermission.createMany({
+      data: readPermissions.map((perm) => ({
+        adminId: adminId,
+        permissionId: perm.id,
+      })),
+      skipDuplicates: true, // In case any already exist
+    });
+
+    this.logger.log(`Assigned ${readPermissions.length} default READ permissions to admin ${adminId}`);
   }
 
   /**

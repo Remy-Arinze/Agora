@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/Button';
 import { BackButton } from '@/components/ui/BackButton';
 import { AutoGenerateButton } from '@/components/ui/AutoGenerateButton';
 import { EntityAvatar } from '@/components/ui/EntityAvatar';
+import { PermissionGate } from '@/components/permissions/PermissionGate';
+import { PermissionResource, PermissionType } from '@/hooks/usePermissions';
 import { motion } from 'framer-motion';
 import {
   Library,
@@ -285,10 +287,12 @@ export default function FacultyDetailPage() {
                       loadingLabel="Generating..."
                     />
                   )}
-                  <Button variant="primary" onClick={() => setShowCreateDeptModal(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Department
-                  </Button>
+                  <PermissionGate resource={PermissionResource.CLASSES} type={PermissionType.WRITE}>
+                    <Button variant="primary" onClick={() => setShowCreateDeptModal(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Department
+                    </Button>
+                  </PermissionGate>
                 </div>
               </div>
             </CardHeader>
@@ -320,10 +324,12 @@ export default function FacultyDetailPage() {
                       <span className="text-xs">or</span>
                       <span className="h-px w-8 bg-light-border dark:bg-dark-border" />
                     </div>
-                    <Button variant="secondary" onClick={() => setShowCreateDeptModal(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create Custom Department
-                    </Button>
+                    <PermissionGate resource={PermissionResource.CLASSES} type={PermissionType.WRITE}>
+                      <Button variant="secondary" onClick={() => setShowCreateDeptModal(true)}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create Custom Department
+                      </Button>
+                    </PermissionGate>
                   </div>
                 </div>
               ) : (

@@ -534,6 +534,11 @@ export class StudentsService {
           },
           include: {
             class: true,
+            classArm: {
+              include: {
+                classLevel: true,
+              },
+            },
           },
         },
       },
@@ -549,10 +554,47 @@ export class StudentsService {
       return [];
     }
 
-    // Get active term if termId not provided
+    // Derive schoolType from student's enrollment for correct session lookup
+    const enrollment = student.enrollments[0];
+    let schoolType: string | null = null;
+    
+    // Check classArm's classLevel type first (for ClassArm-based enrollments)
+    if (enrollment.classArm?.classLevel?.type) {
+      schoolType = enrollment.classArm.classLevel.type;
+    }
+    // Fallback to class type
+    else if (enrollment.class?.type) {
+      schoolType = enrollment.class.type;
+    }
+
+    // Always find the correct active term for this student's schoolType
+    // This ensures we use the right term even if frontend passes wrong termId
     let activeTermId = termId;
-    if (!activeTermId) {
-      const activeSession = await this.prisma.academicSession.findFirst({
+    
+    // Find active session for this student's schoolType
+    const activeSession = await this.prisma.academicSession.findFirst({
+      where: {
+        schoolId: actualSchoolId,
+        status: 'ACTIVE',
+        ...(schoolType ? { schoolType } : {}),
+      },
+      include: {
+        terms: {
+          where: {
+            status: 'ACTIVE',
+          },
+          orderBy: { startDate: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    // If we found an active session for this schoolType, use its term
+    if (activeSession && activeSession.terms.length > 0) {
+      activeTermId = activeSession.terms[0].id;
+    } else if (!activeTermId) {
+      // Only fallback if no termId was provided AND no session found
+      const fallbackSession = await this.prisma.academicSession.findFirst({
         where: {
           schoolId: actualSchoolId,
           status: 'ACTIVE',
@@ -567,12 +609,16 @@ export class StudentsService {
           },
         },
       });
-
-      if (activeSession && activeSession.terms.length > 0) {
-        activeTermId = activeSession.terms[0].id;
+      if (fallbackSession && fallbackSession.terms.length > 0) {
+        activeTermId = fallbackSession.terms[0].id;
       } else {
         return [];
       }
+    }
+
+    // If still no termId, return empty
+    if (!activeTermId) {
+      return [];
     }
 
     // Use TimetableService.getTimetableForStudent which handles:
@@ -1751,7 +1797,15 @@ export class StudentsService {
         const classArm = enrollment.classArm;
         const classLevel = classArm.classLevel;
 
-        // Get ClassArm teachers (from ClassTeacher with classArmId)
+        // Get teachers from multiple sources for secondary schools:
+        // 1. ClassTeacher records with classArmId
+        // 2. The ClassArm's primary class teacher (classTeacherId)
+        // 3. SubjectTeacher for subjects taught at this class level
+        // 4. Teachers assigned to timetable periods for this classArm
+        
+        const teacherMap = new Map<string, any>();
+        
+        // Source 1: ClassTeacher records
         const classArmTeachers = await this.prisma.classTeacher.findMany({
           where: {
             classArmId: classArm.id,
@@ -1765,10 +1819,111 @@ export class StudentsService {
                 email: true,
                 phone: true,
                 subject: true,
+                profileImage: true,
+              },
+            },
+            subjectRef: {
+              select: {
+                name: true,
               },
             },
           },
         });
+        
+        classArmTeachers.forEach(ct => {
+          if (!teacherMap.has(ct.teacher.id)) {
+            teacherMap.set(ct.teacher.id, {
+              id: ct.teacher.id,
+              firstName: ct.teacher.firstName,
+              lastName: ct.teacher.lastName,
+              email: ct.teacher.email,
+              phone: ct.teacher.phone,
+              subject: ct.subjectRef?.name || ct.subject || ct.teacher.subject,
+              isPrimary: ct.isPrimary,
+              profileImage: ct.teacher.profileImage,
+            });
+          }
+        });
+        
+        // Source 2: ClassArm's primary class teacher
+        if (classArm.classTeacherId) {
+          const primaryTeacher = await this.prisma.teacher.findUnique({
+            where: { id: classArm.classTeacherId },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+              subject: true,
+              profileImage: true,
+            },
+          });
+          if (primaryTeacher && !teacherMap.has(primaryTeacher.id)) {
+            teacherMap.set(primaryTeacher.id, {
+              ...primaryTeacher,
+              isPrimary: true,
+            });
+          }
+        }
+        
+        // Source 3: Teachers from timetable periods for this classArm
+        // Get the active term - MUST filter by schoolType (classLevel.type) to get correct session
+        const activeTerm = await this.prisma.term.findFirst({
+          where: {
+            status: 'ACTIVE',
+            academicSession: {
+              schoolId: enrollment.schoolId,
+              status: 'ACTIVE',
+              schoolType: classLevel.type, // Critical: use the class level's type
+            },
+          },
+        });
+        
+        if (activeTerm) {
+          const timetablePeriods = await this.prisma.timetablePeriod.findMany({
+            where: {
+              classArmId: classArm.id,
+              termId: activeTerm.id,
+              teacherId: { not: null },
+            },
+            include: {
+              teacher: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                  phone: true,
+                  subject: true,
+                  profileImage: true,
+                },
+              },
+              subject: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          });
+          
+          timetablePeriods.forEach(period => {
+            if (period.teacher && !teacherMap.has(period.teacher.id)) {
+              teacherMap.set(period.teacher.id, {
+                id: period.teacher.id,
+                firstName: period.teacher.firstName,
+                lastName: period.teacher.lastName,
+                email: period.teacher.email,
+                phone: period.teacher.phone,
+                subject: period.subject?.name || period.teacher.subject,
+                isPrimary: false,
+                profileImage: period.teacher.profileImage,
+              });
+            }
+          });
+        }
+        
+        const allTeachers = Array.from(teacherMap.values());
 
         // Get ClassArm resources (or ClassLevel resources if shared)
         const classArmResources = await this.prisma.classResource.findMany({
@@ -1799,15 +1954,7 @@ export class StudentsService {
           type: classLevel.type,
           academicYear: classArm.academicYear,
           description: null,
-          teachers: classArmTeachers.map((ct) => ({
-            id: ct.teacher.id,
-            firstName: ct.teacher.firstName,
-            lastName: ct.teacher.lastName,
-            email: ct.teacher.email,
-            phone: ct.teacher.phone,
-            subject: ct.subject || ct.teacher.subject,
-            isPrimary: ct.isPrimary,
-          })),
+          teachers: allTeachers,
           resources: classArmResources.map((r) => ({
             id: r.id,
             name: r.name,

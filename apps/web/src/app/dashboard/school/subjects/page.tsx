@@ -22,6 +22,8 @@ import {
   Save,
 } from 'lucide-react';
 import { AutoGenerateButton } from '@/components/ui/AutoGenerateButton';
+import { PermissionGate } from '@/components/permissions/PermissionGate';
+import { PermissionResource, PermissionType } from '@/hooks/usePermissions';
 import {
   useGetMySchoolQuery,
   useGetSubjectsQuery,
@@ -287,19 +289,21 @@ export default function SubjectsPage() {
                 Manage {currentType === 'TERTIARY' ? 'courses' : 'subjects'} for {currentType || 'your school'}
               </p>
             </div>
-            <div className="flex items-center gap-3">
-              {canAutoGenerate && (
-                <AutoGenerateButton
-                  onClick={openConfirmModal}
-                  isLoading={isGenerating}
-                  label="Auto-Generate"
-                />
-              )}
-              <Button variant="primary" onClick={() => setShowCreateModal(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add {currentType === 'TERTIARY' ? 'Course' : 'Subject'}
-              </Button>
-            </div>
+            <PermissionGate resource={PermissionResource.SUBJECTS} type={PermissionType.WRITE}>
+              <div className="flex items-center gap-3">
+                {canAutoGenerate && (
+                  <AutoGenerateButton
+                    onClick={openConfirmModal}
+                    isLoading={isGenerating}
+                    label="Auto-Generate"
+                  />
+                )}
+                <Button variant="primary" onClick={() => setShowCreateModal(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add {currentType === 'TERTIARY' ? 'Course' : 'Subject'}
+                </Button>
+              </div>
+            </PermissionGate>
           </div>
         </motion.div>
 
@@ -422,10 +426,12 @@ export default function SubjectsPage() {
                   ? `No ${currentType === 'TERTIARY' ? 'courses' : 'subjects'} found matching your search.`
                   : `No ${currentType === 'TERTIARY' ? 'courses' : 'subjects'} added yet.`}
               </p>
-              <Button variant="primary" onClick={() => setShowCreateModal(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Your First {currentType === 'TERTIARY' ? 'Course' : 'Subject'}
-              </Button>
+              <PermissionGate resource={PermissionResource.SUBJECTS} type={PermissionType.WRITE}>
+                <Button variant="primary" onClick={() => setShowCreateModal(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Your First {currentType === 'TERTIARY' ? 'Course' : 'Subject'}
+                </Button>
+              </PermissionGate>
             </CardContent>
           </Card>
         )}

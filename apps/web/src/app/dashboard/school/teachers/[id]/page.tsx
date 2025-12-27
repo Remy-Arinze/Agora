@@ -35,6 +35,8 @@ import {
   PermissionType,
 } from '@/lib/store/api/schoolAdminApi';
 import { PermissionAssignmentModal } from '@/components/permissions/PermissionAssignmentModal';
+import { PermissionGate } from '@/components/permissions/PermissionGate';
+import { PermissionResource as PermissionResourceHook, PermissionType as PermissionTypeHook } from '@/hooks/usePermissions';
 import { EditTeacherProfileModal } from '@/components/modals/EditTeacherProfileModal';
 import { useSchoolType } from '@/hooks/useSchoolType';
 import { useTeacherSubjects } from '@/hooks/useTeacherSubjects';
@@ -251,15 +253,19 @@ export default function StaffDetailPage() {
                 </Button>
               )}
               {isAdmin && !isPrincipal && (
-                <Button variant="ghost" size="sm" onClick={() => setShowPermissionModal(true)}>
-                  <Shield className="h-4 w-4 mr-2" />
-                  Manage Permissions
-                </Button>
+                <PermissionGate resource={PermissionResourceHook.STAFF} type={PermissionTypeHook.ADMIN}>
+                  <Button variant="ghost" size="sm" onClick={() => setShowPermissionModal(true)}>
+                    <Shield className="h-4 w-4 mr-2" />
+                    Manage Permissions
+                  </Button>
+                </PermissionGate>
               )}
-              <Button variant="ghost" size="sm" onClick={() => setShowEditProfileModal(true)}>
-                <Edit className="h-4 w-4 mr-2" />
-                Edit Profile
-              </Button>
+              <PermissionGate resource={PermissionResourceHook.STAFF} type={PermissionTypeHook.WRITE}>
+                <Button variant="ghost" size="sm" onClick={() => setShowEditProfileModal(true)}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit Profile
+                </Button>
+              </PermissionGate>
             </div>
           </div>
         </motion.div>
@@ -690,10 +696,12 @@ export default function StaffDetailPage() {
                     </CardTitle>
                   </div>
                   {!isPrincipal && (
-                    <Button variant="primary" size="sm" onClick={() => setShowPermissionModal(true)}>
-                      <Shield className="h-4 w-4 mr-2" />
-                      Manage Permissions
-                    </Button>
+                    <PermissionGate resource={PermissionResourceHook.STAFF} type={PermissionTypeHook.ADMIN}>
+                      <Button variant="primary" size="sm" onClick={() => setShowPermissionModal(true)}>
+                        <Shield className="h-4 w-4 mr-2" />
+                        Manage Permissions
+                      </Button>
+                    </PermissionGate>
                   )}
                 </div>
               </CardHeader>
@@ -714,10 +722,12 @@ export default function StaffDetailPage() {
                     <p className="text-light-text-secondary dark:text-dark-text-secondary mb-4">
                       No permissions assigned yet.
                     </p>
-                    <Button variant="primary" size="sm" onClick={() => setShowPermissionModal(true)}>
-                      <Shield className="h-4 w-4 mr-2" />
-                      Assign Permissions
-                    </Button>
+                    <PermissionGate resource={PermissionResourceHook.STAFF} type={PermissionTypeHook.ADMIN}>
+                      <Button variant="primary" size="sm" onClick={() => setShowPermissionModal(true)}>
+                        <Shield className="h-4 w-4 mr-2" />
+                        Assign Permissions
+                      </Button>
+                    </PermissionGate>
                   </div>
                 ) : (
                   <div className="space-y-4">

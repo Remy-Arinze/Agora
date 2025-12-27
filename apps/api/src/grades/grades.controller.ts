@@ -12,6 +12,9 @@ import {
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SchoolDataAccessGuard } from '../common/guards/school-data-access.guard';
+import { PermissionGuard } from '../common/guards/permission.guard';
+import { RequirePermission } from '../common/decorators/permission.decorator';
+import { PermissionResource, PermissionType } from '../schools/dto/permission.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserWithContext } from '../auth/types/user-with-context.type';
 import { ResponseDto } from '../common/dto/response.dto';
@@ -20,12 +23,13 @@ import { CreateGradeDto, UpdateGradeDto, BulkGradeEntryDto, GradeType } from './
 
 @ApiTags('grades')
 @Controller('schools/:schoolId/grades')
-@UseGuards(JwtAuthGuard, SchoolDataAccessGuard)
+@UseGuards(JwtAuthGuard, SchoolDataAccessGuard, PermissionGuard)
 @ApiBearerAuth()
 export class GradesController {
   constructor(private readonly gradesService: GradesService) {}
 
   @Post()
+  @RequirePermission(PermissionResource.GRADES, PermissionType.WRITE)
   @ApiOperation({ summary: 'Create a new grade' })
   @ApiResponse({
     status: 201,
@@ -43,6 +47,7 @@ export class GradesController {
   }
 
   @Patch(':gradeId')
+  @RequirePermission(PermissionResource.GRADES, PermissionType.WRITE)
   @ApiOperation({ summary: 'Update a grade' })
   @ApiResponse({
     status: 200,
@@ -61,6 +66,7 @@ export class GradesController {
   }
 
   @Delete(':gradeId')
+  @RequirePermission(PermissionResource.GRADES, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Delete a grade' })
   @ApiResponse({
     status: 200,
@@ -78,6 +84,7 @@ export class GradesController {
   }
 
   @Post('classes/:classId/bulk')
+  @RequirePermission(PermissionResource.GRADES, PermissionType.WRITE)
   @ApiOperation({ summary: 'Bulk create grades for a class' })
   @ApiResponse({
     status: 201,
@@ -98,6 +105,7 @@ export class GradesController {
   }
 
   @Get('classes/:classId')
+  @RequirePermission(PermissionResource.GRADES, PermissionType.READ)
   @ApiOperation({ summary: 'Get grades for a class' })
   @ApiQuery({ name: 'subject', required: false, description: 'Filter by subject' })
   @ApiQuery({ name: 'termId', required: false, description: 'Filter by term ID' })
@@ -119,6 +127,7 @@ export class GradesController {
   }
 
   @Get('students/:studentId')
+  @RequirePermission(PermissionResource.GRADES, PermissionType.READ)
   @ApiOperation({ summary: 'Get grades for a student' })
   @ApiQuery({ name: 'subject', required: false, description: 'Filter by subject' })
   @ApiResponse({

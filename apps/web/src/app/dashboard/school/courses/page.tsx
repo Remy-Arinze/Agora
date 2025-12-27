@@ -11,6 +11,8 @@ import { Alert } from '@/components/ui/Alert';
 import { motion } from 'framer-motion';
 import { BookOpen, Plus, Users, GraduationCap, Calendar, Loader2 } from 'lucide-react';
 import { AutoGenerateButton } from '@/components/ui/AutoGenerateButton';
+import { PermissionGate } from '@/components/permissions/PermissionGate';
+import { PermissionResource, PermissionType } from '@/hooks/usePermissions';
 import { useSchoolType } from '@/hooks/useSchoolType';
 import { getTerminology } from '@/lib/utils/terminology';
 import {
@@ -218,10 +220,12 @@ export default function ClassesPage() {
                 </div>
               )}
             </div>
-            <Button variant="primary" onClick={() => setShowAddClass(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add {terminology.courseSingular}
-            </Button>
+            <PermissionGate resource={PermissionResource.CLASSES} type={PermissionType.WRITE}>
+              <Button variant="primary" onClick={() => setShowAddClass(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add {terminology.courseSingular}
+              </Button>
+            </PermissionGate>
           </div>
         </motion.div>
 

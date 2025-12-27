@@ -39,10 +39,15 @@ interface Enrollment {
   };
 }
 
-interface ClassData {
+export interface ClassData {
   id: string;
   name: string;
   type?: string;
+  code?: string | null;
+  classLevel?: string;
+  classLevelId?: string;
+  academicYear?: string;
+  description?: string | null;
   classArmId?: string;
   classArm?: {
     id: string;
@@ -52,6 +57,25 @@ interface ClassData {
       type: string;
     };
   };
+  enrollment?: {
+    enrollmentDate: string;
+  };
+  resources?: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    url?: string;
+  }>;
+  teachers?: Array<{
+    id: string;
+    firstName: string;
+    lastName: string;
+    email?: string;
+    phone?: string;
+    subject?: string;
+    isPrimary?: boolean;
+    profileImage?: string | null;
+  }>;
 }
 
 export interface StudentDashboardData {
@@ -232,6 +256,8 @@ export function useStudentDashboard(): StudentDashboardData {
   }, [activeClass, activeEnrollment]);
   
   // Step 5: Fetch active session
+  // Pass schoolType if available for correct session, but don't block on it
+  // Backend now handles schoolType derivation as fallback
   const { 
     data: sessionResponse, 
     isLoading: isLoadingSession,

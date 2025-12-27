@@ -6,59 +6,55 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { motion } from 'framer-motion';
 import { Clock, Loader2, AlertCircle } from 'lucide-react';
 import {
-  useGetMyStudentClassesQuery,
-  useGetMyStudentTimetableQuery,
-  useGetActiveSessionQuery,
   useGetSessionsQuery,
+  useGetMyStudentTimetableQuery,
 } from '@/lib/store/api/schoolAdminApi';
 import { TeacherTimetableGrid } from '@/components/timetable/TeacherTimetableGrid';
-import { useStudentSchoolType, getStudentTerminology } from '@/hooks/useStudentDashboard';
+import { useStudentDashboard, getStudentTerminology } from '@/hooks/useStudentDashboard';
 
 export default function StudentTimetablePage() {
   const [selectedTermId, setSelectedTermId] = useState<string>('');
 
-  // Get school type from student's enrollment (not localStorage)
-  const { schoolType: currentType, schoolId, isLoading: isLoadingSchoolType } = useStudentSchoolType();
-  const terminology = getStudentTerminology(currentType);
+  // Use unified dashboard hook - single source of truth for student data
+  const {
+    school,
+    schoolType,
+    activeTerm,
+    timetable: dashboardTimetable,
+    isLoading: isDashboardLoading,
+    hasError,
+    errorMessage,
+  } = useStudentDashboard();
 
-  // Get student's classes
-  const { data: classesResponse, isLoading: isLoadingClasses } = useGetMyStudentClassesQuery();
-  const classes = classesResponse?.data || [];
-  const classData = useMemo(() => {
-    return classes[0] || null; // Get the active/primary class
-  }, [classes]);
+  const schoolId = school?.id;
+  const terminology = getStudentTerminology(schoolType);
 
-  // Get active session (for term selector)
-  const { data: activeSessionResponse } = useGetActiveSessionQuery(
-    { schoolId: schoolId || '' },
-    { skip: !schoolId }
-  );
-  const activeSession = activeSessionResponse?.data;
-
-  // Get all sessions to populate term selector
+  // Get all sessions to populate term selector (for selecting different terms)
   const { data: sessionsResponse } = useGetSessionsQuery(
     { schoolId: schoolId || '' },
     { skip: !schoolId }
   );
 
-  // Determine which term to use (selected or active)
-  const currentTermId = selectedTermId || activeSession?.term?.id || '';
+  // Determine which term to use (selected or active from dashboard)
+  const currentTermId = selectedTermId || activeTerm?.id || '';
 
-  // Use the unified student timetable endpoint which handles:
-  // - PRIMARY/SECONDARY: Automatically uses ClassArm or Class timetable
-  // - TERTIARY: Merges home class + course registrations
+  // If user selected a different term, fetch that timetable
+  const needsSeparateFetch = selectedTermId && selectedTermId !== activeTerm?.id;
+  
   const { 
-    data: timetableResponse, 
-    isLoading: isLoadingTimetable, 
-    error: timetableError 
+    data: selectedTermTimetableResponse, 
+    isLoading: isLoadingSelectedTerm,
   } = useGetMyStudentTimetableQuery(
-    { termId: currentTermId || undefined },
-    { skip: !classData } // Skip until we have class data (to ensure student is enrolled)
+    { termId: selectedTermId },
+    { skip: !needsSeparateFetch || !selectedTermId }
   );
 
-  const timetable = timetableResponse?.data || [];
+  // Use selected term's timetable if fetched, otherwise use dashboard's timetable
+  const timetable = needsSeparateFetch 
+    ? (selectedTermTimetableResponse?.data || [])
+    : dashboardTimetable;
 
-  const isLoading = isLoadingSchoolType || isLoadingClasses || isLoadingTimetable;
+  const isLoading = isDashboardLoading || (needsSeparateFetch && isLoadingSelectedTerm);
 
   // Extract all terms from sessions for selector - filtered by school type and deduplicated
   const allTerms = useMemo(() => {
@@ -66,8 +62,8 @@ export default function StudentTimetablePage() {
     
     // Filter sessions by current school type to avoid duplicates
     const filteredSessions = sessionsResponse.data.filter((session: any) => {
-      if (!currentType) return !session.schoolType;
-      return session.schoolType === currentType;
+      if (!schoolType) return !session.schoolType;
+      return session.schoolType === schoolType;
     });
     
     // Deduplicate sessions by name (keep first/latest)
@@ -98,7 +94,7 @@ export default function StudentTimetablePage() {
       }
       return b.name.localeCompare(a.name);
     });
-  }, [sessionsResponse, currentType]);
+  }, [sessionsResponse, schoolType]);
 
   if (isLoading) {
     return (
@@ -115,14 +111,14 @@ export default function StudentTimetablePage() {
     );
   }
 
-  if (timetableError) {
+  if (hasError) {
     return (
       <ProtectedRoute roles={['STUDENT']}>
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="text-center">
             <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-4" />
             <p className="text-light-text-secondary dark:text-dark-text-secondary">
-              Unable to load timetable
+              {errorMessage || 'Unable to load timetable'}
             </p>
           </div>
         </div>
@@ -157,12 +153,12 @@ export default function StudentTimetablePage() {
             {timetable.length > 0 ? (
               <TeacherTimetableGrid
                 timetable={timetable}
-                schoolType={currentType}
+                schoolType={schoolType}
                 isLoading={isLoading}
                 allTerms={allTerms}
                 selectedTermId={currentTermId}
                 onTermChange={setSelectedTermId}
-                activeTermId={activeSession?.term?.id}
+                activeTermId={activeTerm?.id}
                 terminology={terminology}
               />
             ) : (

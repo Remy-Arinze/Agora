@@ -5,10 +5,10 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { useBulkCreateGradesMutation, useGetClassGradesQuery } from '@/lib/store/api/schoolAdminApi';
+import { useBulkCreateGradesMutation, useGetClassGradesQuery, useGetTeacherSubjectsForClassQuery } from '@/lib/store/api/schoolAdminApi';
 import type { GradeType, BulkGradeEntryDto, StudentWithEnrollment } from '@/lib/store/api/schoolAdminApi';
 import toast from 'react-hot-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, CheckCircle2, Info } from 'lucide-react';
 
 interface BulkGradeEntryModalProps {
   isOpen: boolean;
@@ -16,7 +16,7 @@ interface BulkGradeEntryModalProps {
   schoolId: string;
   classId: string;
   students: StudentWithEnrollment[];
-  subject?: string;
+  subject?: string; // Optional: pre-selected subject name (for backward compatibility)
   termId?: string;
   academicYear?: string;
   onSuccess?: () => void;
@@ -41,6 +41,8 @@ export function BulkGradeEntryModal({
   academicYear,
   onSuccess,
 }: BulkGradeEntryModalProps) {
+  const [subjectId, setSubjectId] = useState<string>('');
+  const [selectedSubjectName, setSelectedSubjectName] = useState<string>(subject || '');
   const [gradeType, setGradeType] = useState<GradeType>('CA');
   const [assessmentName, setAssessmentName] = useState('');
   const [maxScore, setMaxScore] = useState<number | ''>(100);
@@ -50,6 +52,17 @@ export function BulkGradeEntryModal({
   const [isPublished, setIsPublished] = useState(false);
 
   const [bulkCreateGrades, { isLoading }] = useBulkCreateGradesMutation();
+
+  // Fetch teacher's authorized subjects for this class
+  const { data: subjectsResponse, isLoading: isLoadingSubjects } = useGetTeacherSubjectsForClassQuery(
+    { classId },
+    { skip: !isOpen || !classId }
+  );
+
+  const subjectsData = subjectsResponse?.data;
+  const subjects = subjectsData?.subjects || [];
+  const isPrimaryTeacher = subjectsData?.isPrimaryTeacher || false;
+  const canGradeAllSubjects = subjectsData?.canGradeAllSubjects || false;
 
   // Get existing grades to suggest next sequence number
   const { data: existingGradesResponse } = useGetClassGradesQuery(
@@ -81,6 +94,7 @@ export function BulkGradeEntryModal({
     return maxSequence + 1;
   }, [existingGrades, gradeType, termId]);
 
+  // Initialize form when modal opens
   useEffect(() => {
     if (isOpen && students.length > 0) {
       // Initialize student grades array
@@ -93,8 +107,21 @@ export function BulkGradeEntryModal({
           remarks: '',
         }))
       );
+
+      // Try to find matching subject if one was provided
+      if (subject && subjects.length > 0) {
+        const matchingSubject = subjects.find(
+          s => s.name.toLowerCase() === subject.toLowerCase()
+        );
+        if (matchingSubject) {
+          setSubjectId(matchingSubject.id);
+          setSelectedSubjectName(matchingSubject.name);
+        }
+      }
     } else if (!isOpen) {
       // Reset form when modal closes
+      setSubjectId('');
+      setSelectedSubjectName('');
       setGradeType('CA');
       setAssessmentName('');
       setMaxScore(100);
@@ -103,7 +130,7 @@ export function BulkGradeEntryModal({
       setStudentGrades([]);
       setIsPublished(false);
     }
-  }, [isOpen, students]);
+  }, [isOpen, students, subject, subjects]);
 
   // Auto-suggest sequence when grade type or term changes
   useEffect(() => {
@@ -111,6 +138,12 @@ export function BulkGradeEntryModal({
       setSequence(suggestedSequence);
     }
   }, [suggestedSequence, gradeType, termId, isOpen]);
+
+  const handleSubjectChange = (newSubjectId: string) => {
+    const selectedSubject = subjects.find(s => s.id === newSubjectId);
+    setSubjectId(newSubjectId);
+    setSelectedSubjectName(selectedSubject?.name || '');
+  };
 
   const handleScoreChange = (index: number, value: string) => {
     const newGrades = [...studentGrades];
@@ -126,6 +159,12 @@ export function BulkGradeEntryModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate subject selection
+    if (!subjectId && !selectedSubjectName) {
+      toast.error('Please select a subject');
+      return;
+    }
 
     // Validate common fields
     const finalMaxScore = maxScore === '' || maxScore <= 0 ? 100 : maxScore;
@@ -157,7 +196,8 @@ export function BulkGradeEntryModal({
 
     const bulkData: BulkGradeEntryDto = {
       classId,
-      subject: subject || undefined,
+      subjectId: subjectId || undefined,
+      subject: selectedSubjectName || undefined,
       gradeType,
       assessmentName: assessmentName.trim(),
       maxScore: finalMaxScore,
@@ -208,6 +248,48 @@ export function BulkGradeEntryModal({
         
         {/* Common Fields */}
         <div className="grid grid-cols-2 gap-4 p-4 bg-light-surface dark:bg-dark-surface rounded-lg border border-light-border dark:border-dark-border">
+          {/* Subject Selection */}
+          <div className="col-span-2">
+            {isLoadingSubjects ? (
+              <div className="flex items-center gap-2 text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading subjects...
+              </div>
+            ) : subjects.length > 0 ? (
+              <>
+                <Select
+                  label="Subject"
+                  required
+                  value={subjectId}
+                  onChange={(e) => handleSubjectChange(e.target.value)}
+                >
+                  <option value="">-- Select Subject --</option>
+                  {subjects.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} {s.code ? `(${s.code})` : ''}
+                    </option>
+                  ))}
+                </Select>
+                
+                {canGradeAllSubjects && (
+                  <div className="flex items-center gap-2 mt-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
+                    <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
+                    <p className="text-xs text-green-700 dark:text-green-300">
+                      As the class teacher, you can grade all subjects for this class
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="flex items-center gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md">
+                <Info className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                  No subjects assigned. Please contact your administrator.
+                </p>
+              </div>
+            )}
+          </div>
+
           <Select
             label="Grade Type"
             required
@@ -278,13 +360,12 @@ export function BulkGradeEntryModal({
               placeholder={suggestedSequence !== null ? `e.g., ${suggestedSequence}` : "e.g., 1, 2, 3"}
             />
             <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary mt-1">
-              Order number for this assessment within the same grade type and term. Use this to organize multiple assessments of the same type (e.g., CA1 = 1, CA2 = 2, CA3 = 3). 
+              Order number for this assessment within the same grade type and term.
               {suggestedSequence !== null && (
                 <span className="text-blue-600 dark:text-blue-400 font-medium">
-                  {' '}Next available sequence: {suggestedSequence}
+                  {' '}Next available: {suggestedSequence}
                 </span>
               )}
-              {' '}This helps track the sequence of assessments and can be useful for calculating averages or generating reports.
             </p>
           </div>
 
@@ -414,7 +495,7 @@ export function BulkGradeEntryModal({
           <Button
             type="submit"
             variant="primary"
-            disabled={isLoading || validGradesCount === 0}
+            disabled={isLoading || validGradesCount === 0 || subjects.length === 0}
           >
             {isLoading ? (
               <>

@@ -28,8 +28,9 @@ export class SchoolAdminSchoolsService {
   /**
    * Get school admin's own school
    */
-  async getMySchool(user: UserWithContext): Promise<SchoolDto> {
+  async getMySchool(user: UserWithContext): Promise<SchoolDto & { currentAdmin?: { id: string; role: string } }> {
     const schoolId = user.currentSchoolId;
+    const profileId = user.currentProfileId;
 
     if (!schoolId) {
       throw new BadRequestException('You are not associated with any school');
@@ -59,7 +60,18 @@ export class SchoolAdminSchoolsService {
       throw new BadRequestException('School not found');
     }
 
-    return this.schoolMapper.toDto(completeSchool);
+    const schoolDto = this.schoolMapper.toDto(completeSchool);
+    
+    // Include current admin info for permission checks
+    let currentAdmin: { id: string; role: string } | undefined;
+    if (profileId) {
+      const admin = completeSchool.admins.find(a => a.id === profileId);
+      if (admin) {
+        currentAdmin = { id: admin.id, role: admin.role };
+      }
+    }
+
+    return { ...schoolDto, currentAdmin };
   }
 
   /**

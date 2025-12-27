@@ -132,6 +132,12 @@ export enum PermissionResource {
   ADMISSIONS = 'ADMISSIONS',
   SESSIONS = 'SESSIONS',
   EVENTS = 'EVENTS',
+  // New resources for complete coverage
+  GRADES = 'GRADES',
+  CURRICULUM = 'CURRICULUM',
+  RESOURCES = 'RESOURCES',
+  TRANSFERS = 'TRANSFERS',
+  INTEGRATIONS = 'INTEGRATIONS',
 }
 
 export enum PermissionType {
@@ -179,6 +185,21 @@ export interface SchoolTypeContext {
   isMixed: boolean;
   availableTypes: SchoolType[];
   primaryType: SchoolType | 'MIXED';
+}
+
+// Teacher subjects response (for grading authorization)
+export interface TeacherSubject {
+  id: string;
+  name: string;
+  code: string | null;
+  source: 'PRIMARY_CLASS_TEACHER' | 'CLASS_TEACHER_ASSIGNMENT' | 'LEGACY_CLASS_TEACHER' | 'TIMETABLE' | 'COURSE_ASSIGNMENT';
+}
+
+export interface TeacherSubjectsResponse {
+  subjects: TeacherSubject[];
+  schoolType: SchoolType;
+  isPrimaryTeacher: boolean;
+  canGradeAllSubjects: boolean;
 }
 
 // Class/Course types
@@ -469,7 +490,8 @@ export interface Grade {
 
 export interface CreateGradeDto {
   enrollmentId: string;
-  subject?: string;
+  subjectId?: string; // NEW: Preferred - links to Subject entity
+  subject?: string; // Legacy: Auto-populated if subjectId provided
   gradeType: GradeType;
   assessmentName?: string;
   assessmentDate?: string;
@@ -501,7 +523,8 @@ export interface StudentGradeEntryDto {
 
 export interface BulkGradeEntryDto {
   classId: string;
-  subject?: string;
+  subjectId?: string; // NEW: Preferred - links to Subject entity
+  subject?: string; // Legacy: Auto-populated if subjectId provided
   gradeType: GradeType;
   assessmentName: string;
   assessmentDate?: string;
@@ -679,6 +702,15 @@ export interface TimetablePeriod {
   courseName?: string;
   teacherId?: string;
   teacherName?: string;
+  // Full teacher details for secondary school class detail pages
+  teacher?: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    profileImage?: string | null;
+  };
   roomId?: string;
   roomName?: string;
   classArmId?: string;
@@ -1999,6 +2031,11 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
       query: () => '/teachers/me/school',
       providesTags: ['School'],
     }),
+    // Get subjects teacher can grade for a specific class
+    getTeacherSubjectsForClass: builder.query<ResponseDto<TeacherSubjectsResponse>, { classId: string }>({
+      query: ({ classId }) => `/teachers/me/subjects?classId=${classId}`,
+      providesTags: ['TeacherSubjects'],
+    }),
     // Student "me" endpoints
     getMyStudentProfile: builder.query<ResponseDto<any>, void>({
       query: () => '/students/me',
@@ -2608,6 +2645,14 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
       query: ({ schoolId }) => `/schools/${schoolId}/permissions`,
       providesTags: (result) => (result ? [{ type: 'Permission' as const }] : []),
     }),
+    /**
+     * Get the current admin's own permissions
+     * This endpoint does NOT require STAFF:READ permission (avoids circular dependency)
+     */
+    getMyPermissions: builder.query<ResponseDto<StaffPermissions>, { schoolId: string }>({
+      query: ({ schoolId }) => `/schools/${schoolId}/permissions/me`,
+      providesTags: (result) => [{ type: 'Permission' as const, id: 'me' }],
+    }),
     getAdminPermissions: builder.query<ResponseDto<StaffPermissions>, { schoolId: string; adminId: string }>({
       query: ({ schoolId, adminId }) => `/schools/${schoolId}/admins/${adminId}/permissions`,
       providesTags: (result, error, { adminId }) => [{ type: 'Permission' as const, id: adminId }],
@@ -3060,6 +3105,7 @@ export const {
   // Teacher hooks
   useGetMyTeacherProfileQuery,
   useGetMyTeacherSchoolQuery,
+  useGetTeacherSubjectsForClassQuery,
   useGetMyClassesQuery,
   useGetClassStudentsQuery,
   // Student hooks
@@ -3086,6 +3132,7 @@ export const {
   useGetStudentsByClassQuery,
   // Permission hooks
   useGetAllPermissionsQuery,
+  useGetMyPermissionsQuery,
   useGetAdminPermissionsQuery,
   useAssignPermissionsMutation,
   // Password reset hooks

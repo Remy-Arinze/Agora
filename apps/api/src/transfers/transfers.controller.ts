@@ -29,12 +29,15 @@ import {
 import { ResponseDto } from '../common/dto/response.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SchoolDataAccessGuard } from '../common/guards/school-data-access.guard';
+import { PermissionGuard } from '../common/guards/permission.guard';
+import { RequirePermission } from '../common/decorators/permission.decorator';
+import { PermissionResource, PermissionType } from '../schools/dto/permission.dto';
 import { TransferStatus } from '@prisma/client';
 import { UserWithContext } from '../auth/types/user-with-context.type';
 
 @ApiTags('schools')
 @Controller('schools/:schoolId/transfers')
-@UseGuards(JwtAuthGuard, SchoolDataAccessGuard)
+@UseGuards(JwtAuthGuard, SchoolDataAccessGuard, PermissionGuard)
 @ApiBearerAuth()
 export class TransfersController {
   constructor(private readonly transfersService: TransfersService) {}
@@ -42,6 +45,7 @@ export class TransfersController {
   // Outgoing Transfers
 
   @Post('outgoing/generate')
+  @RequirePermission(PermissionResource.TRANSFERS, PermissionType.WRITE)
   @ApiOperation({ summary: 'Generate TAC for outgoing transfer' })
   @ApiResponse({
     status: 201,
@@ -60,6 +64,7 @@ export class TransfersController {
   }
 
   @Get('outgoing')
+  @RequirePermission(PermissionResource.TRANSFERS, PermissionType.READ)
   @ApiOperation({ summary: 'List outgoing transfers' })
   @ApiQuery({ name: 'status', enum: TransferStatus, required: false })
   @ApiQuery({ name: 'page', type: Number, required: false })
@@ -80,6 +85,7 @@ export class TransfersController {
   }
 
   @Get('outgoing/:transferId')
+  @RequirePermission(PermissionResource.TRANSFERS, PermissionType.READ)
   @ApiOperation({ summary: 'Get outgoing transfer details' })
   @ApiParam({ name: 'transferId', description: 'Transfer ID' })
   @ApiResponse({ status: 200, description: 'Transfer details retrieved successfully' })
@@ -98,6 +104,7 @@ export class TransfersController {
   }
 
   @Delete('outgoing/:transferId/revoke')
+  @RequirePermission(PermissionResource.TRANSFERS, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Revoke TAC (if not used)' })
   @ApiParam({ name: 'transferId', description: 'Transfer ID' })
   @ApiResponse({ status: 200, description: 'TAC revoked successfully' })
@@ -112,6 +119,7 @@ export class TransfersController {
   }
 
   @Get('outgoing/:transferId/historical-grades')
+  @RequirePermission(PermissionResource.TRANSFERS, PermissionType.READ)
   @ApiOperation({ summary: 'Get historical grades for a completed transfer' })
   @ApiParam({ name: 'transferId', description: 'Transfer ID' })
   @ApiResponse({ status: 200, description: 'Historical grades retrieved successfully' })
@@ -129,6 +137,7 @@ export class TransfersController {
   // Incoming Transfers
 
   @Post('incoming/initiate')
+  @RequirePermission(PermissionResource.TRANSFERS, PermissionType.WRITE)
   @ApiOperation({ summary: 'Initiate transfer with TAC' })
   @ApiResponse({
     status: 201,
@@ -147,6 +156,7 @@ export class TransfersController {
   }
 
   @Get('incoming')
+  @RequirePermission(PermissionResource.TRANSFERS, PermissionType.READ)
   @ApiOperation({ summary: 'List incoming transfers' })
   @ApiQuery({ name: 'status', enum: TransferStatus, required: false })
   @ApiQuery({ name: 'page', type: Number, required: false })
@@ -167,6 +177,7 @@ export class TransfersController {
   }
 
   @Post('incoming/:transferId/complete')
+  @RequirePermission(PermissionResource.TRANSFERS, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Complete transfer - migrate student data' })
   @ApiParam({ name: 'transferId', description: 'Transfer ID' })
   @ApiResponse({ status: 200, description: 'Transfer completed successfully' })
@@ -182,6 +193,7 @@ export class TransfersController {
   }
 
   @Post('incoming/:transferId/reject')
+  @RequirePermission(PermissionResource.TRANSFERS, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Reject transfer' })
   @ApiParam({ name: 'transferId', description: 'Transfer ID' })
   @ApiResponse({ status: 200, description: 'Transfer rejected successfully' })

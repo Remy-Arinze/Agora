@@ -46,6 +46,8 @@ import { FileUploadModal } from '@/components/modals/FileUploadModal';
 import { ConfirmModal } from '@/components/ui/Modal';
 import { BackButton } from '@/components/ui/BackButton';
 import { SubjectCurriculumList } from '@/components/curriculum';
+import { PermissionGate } from '@/components/permissions/PermissionGate';
+import { PermissionResource, PermissionType } from '@/hooks/usePermissions';
 import toast from 'react-hot-toast';
 
 type TabType = 'students' | 'teachers' | 'timetable' | 'resources' | 'curriculum';
@@ -365,12 +367,14 @@ export default function ClassDetailPage() {
                       ) : (
                         <>
                           <span className="text-light-text-muted dark:text-dark-text-muted italic">No teacher assigned</span>
-                          <button
-                            onClick={() => setShowAssignModal(true)}
-                            className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium ml-1"
-                          >
-                            Assign Teacher
-                          </button>
+                          <PermissionGate resource={PermissionResource.CLASSES} type={PermissionType.WRITE}>
+                            <button
+                              onClick={() => setShowAssignModal(true)}
+                              className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium ml-1"
+                            >
+                              Assign Teacher
+                            </button>
+                          </PermissionGate>
                         </>
                       )}
                     </span>
@@ -408,12 +412,14 @@ export default function ClassDetailPage() {
                         ) : (
                           <>
                             <span className="italic">No form teacher assigned</span>
-                            <button
-                              onClick={() => setShowAssignModal(true)}
-                              className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium ml-1"
-                            >
-                              Assign Teacher
-                            </button>
+                            <PermissionGate resource={PermissionResource.CLASSES} type={PermissionType.WRITE}>
+                              <button
+                                onClick={() => setShowAssignModal(true)}
+                                className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium ml-1"
+                              >
+                                Assign Teacher
+                              </button>
+                            </PermissionGate>
                           </>
                         )}
                       </span>
@@ -427,12 +433,14 @@ export default function ClassDetailPage() {
                       ) : (
                         <>
                           <span className="italic">No lecturer assigned</span>
-                          <button
-                            onClick={() => setShowAssignModal(true)}
-                            className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium ml-1"
-                          >
-                            Assign Lecturer
-                          </button>
+                          <PermissionGate resource={PermissionResource.CLASSES} type={PermissionType.WRITE}>
+                            <button
+                              onClick={() => setShowAssignModal(true)}
+                              className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium ml-1"
+                            >
+                              Assign Lecturer
+                            </button>
+                          </PermissionGate>
                         </>
                       )}
                     </span>
@@ -478,12 +486,14 @@ export default function ClassDetailPage() {
                     <Users className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                     <CardTitle>Students in Class</CardTitle>
                   </div>
-                  <Link href={`/dashboard/school/students?class=${classId}`}>
-                    <Button variant="primary" size="sm">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Student
-                    </Button>
-                  </Link>
+                  <PermissionGate resource={PermissionResource.STUDENTS} type={PermissionType.WRITE}>
+                    <Link href={`/dashboard/school/students?class=${classId}`}>
+                      <Button variant="primary" size="sm">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Student
+                      </Button>
+                    </Link>
+                  </PermissionGate>
                 </div>
                 </CardHeader>
                 <CardContent>
@@ -497,12 +507,14 @@ export default function ClassDetailPage() {
                     <p className="text-light-text-secondary dark:text-dark-text-secondary mb-4">
                       No students enrolled in this class yet.
                     </p>
-                    <Link href={`/dashboard/school/admissions`}>
-                      <Button variant="primary">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Admit Students
-                      </Button>
-                    </Link>
+                    <PermissionGate resource={PermissionResource.STUDENTS} type={PermissionType.WRITE}>
+                      <Link href={`/dashboard/school/admissions`}>
+                        <Button variant="primary">
+                          <Plus className="h-4 w-4 mr-2" />
+                          Admit Students
+                        </Button>
+                      </Link>
+                    </PermissionGate>
                       </div>
                 ) : (
                         <div className="space-y-2">
@@ -615,10 +627,12 @@ export default function ClassDetailPage() {
                     <GraduationCap className="h-6 w-6 text-green-600 dark:text-green-400" />
                     <CardTitle>Assigned Teachers</CardTitle>
                   </div>
-                  <Button variant="primary" size="sm" onClick={() => setShowAssignModal(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Assign Form Teacher
-                  </Button>
+                  <PermissionGate resource={PermissionResource.CLASSES} type={PermissionType.WRITE}>
+                    <Button variant="primary" size="sm" onClick={() => setShowAssignModal(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Assign Form Teacher
+                    </Button>
+                  </PermissionGate>
                 </div>
               </CardHeader>
               <CardContent>
@@ -760,11 +774,13 @@ export default function ClassDetailPage() {
                     <Calendar className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                     <CardTitle>Class Timetable</CardTitle>
                       </div>
-                  <Link href={`/dashboard/school/timetable?class=${classId}`}>
-                    <Button variant="primary" size="sm">
-                      Edit Timetable
-                    </Button>
-                  </Link>
+                  <PermissionGate resource={PermissionResource.TIMETABLES} type={PermissionType.WRITE}>
+                    <Link href={`/dashboard/school/timetable?class=${classId}`}>
+                      <Button variant="primary" size="sm">
+                        Edit Timetable
+                      </Button>
+                    </Link>
+                  </PermissionGate>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -785,12 +801,14 @@ export default function ClassDetailPage() {
                         <p className="text-light-text-secondary dark:text-dark-text-secondary mb-4">
                       No timetable set up for this class yet.
                     </p>
-                    <Link href={`/dashboard/school/timetable?class=${classId}`}>
-                      <Button variant="primary">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create Timetable
-                      </Button>
-                    </Link>
+                    <PermissionGate resource={PermissionResource.TIMETABLES} type={PermissionType.WRITE}>
+                      <Link href={`/dashboard/school/timetable?class=${classId}`}>
+                        <Button variant="primary">
+                          <Plus className="h-4 w-4 mr-2" />
+                          Create Timetable
+                        </Button>
+                      </Link>
+                    </PermissionGate>
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
@@ -874,14 +892,16 @@ export default function ClassDetailPage() {
                     <FileText className="h-6 w-6 text-purple-600 dark:text-purple-400" />
                     <CardTitle>Class Resources</CardTitle>
                   </div>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => setShowUploadModal(true)}
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload Resource
-                  </Button>
+                  <PermissionGate resource={PermissionResource.RESOURCES} type={PermissionType.WRITE}>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => setShowUploadModal(true)}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload Resource
+                    </Button>
+                  </PermissionGate>
                 </div>
               </CardHeader>
               <CardContent>
@@ -895,10 +915,12 @@ export default function ClassDetailPage() {
                         <p className="text-light-text-secondary dark:text-dark-text-secondary mb-4">
                           No resources uploaded yet.
                         </p>
-                    <Button variant="primary" onClick={() => setShowUploadModal(true)}>
-                      <Upload className="h-4 w-4 mr-2" />
-                      Upload First Resource
-                    </Button>
+                    <PermissionGate resource={PermissionResource.RESOURCES} type={PermissionType.WRITE}>
+                      <Button variant="primary" onClick={() => setShowUploadModal(true)}>
+                        <Upload className="h-4 w-4 mr-2" />
+                        Upload First Resource
+                      </Button>
+                    </PermissionGate>
                       </div>
                 ) : (
                   <div className="space-y-2">

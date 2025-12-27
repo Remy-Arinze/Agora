@@ -70,10 +70,63 @@ export class GradesService {
       }
     }
 
-    // Validate teacher is assigned to class/subject (supports both Class and ClassArm)
-    // Note: Use teacher.id (database ID) for ClassTeacher queries
-    if (dto.subject) {
-      // Build the where clause based on enrollment type (classId or classArmId)
+    // Validate teacher is assigned to class/subject
+    // Priority: subjectId (new) > subject string (legacy)
+    let subjectId: string | null = null;
+    let subjectName: string = dto.subject || '';
+
+    if (dto.subjectId) {
+      // NEW: Validate using subjectId (preferred method)
+      const subject = await this.prisma.subject.findUnique({
+        where: { id: dto.subjectId },
+      });
+
+      if (!subject) {
+        throw new BadRequestException('Subject not found');
+      }
+
+      subjectId = subject.id;
+      subjectName = subject.name; // Auto-populate subject string
+
+      // Check if teacher is authorized to grade this subject for this class
+      const classId = enrollment.classArmId || enrollment.classId;
+      
+      // Check 1: Is teacher a primary/class teacher? (can grade all subjects for PRIMARY)
+      const isPrimaryTeacher = await this.prisma.classTeacher.findFirst({
+        where: {
+          teacherId: teacher.id,
+          isPrimary: true,
+          ...(enrollment.classArmId ? { classArmId: enrollment.classArmId } : { classId: enrollment.classId }),
+        },
+      });
+
+      if (!isPrimaryTeacher) {
+        // Check 2: Is teacher assigned to this specific subject via ClassTeacher?
+        const subjectAssignment = await this.prisma.classTeacher.findFirst({
+          where: {
+            teacherId: teacher.id,
+            subjectId: dto.subjectId,
+            ...(enrollment.classArmId ? { classArmId: enrollment.classArmId } : { classId: enrollment.classId }),
+          },
+        });
+
+        if (!subjectAssignment) {
+          // Check 3: Is teacher assigned via timetable?
+          const timetableAssignment = await this.prisma.timetablePeriod.findFirst({
+            where: {
+              teacherId: teacher.id,
+              subjectId: dto.subjectId,
+              ...(enrollment.classArmId ? { classArmId: enrollment.classArmId } : { classId: enrollment.classId }),
+            },
+          });
+
+          if (!timetableAssignment) {
+            throw new ForbiddenException('You are not authorized to grade this subject for this class');
+          }
+        }
+      }
+    } else if (dto.subject) {
+      // LEGACY: Validate using subject string (for backward compatibility)
       const classAssignmentWhere: any = {
         teacherId: teacher.id,
         subject: dto.subject,
@@ -110,6 +163,19 @@ export class GradesService {
           throw new ForbiddenException('You are not assigned to teach this subject in this class');
         }
       }
+
+      // Try to find matching Subject entity for the string
+      const matchingSubject = await this.prisma.subject.findFirst({
+        where: {
+          schoolId: school.id,
+          name: { equals: dto.subject, mode: 'insensitive' },
+          isActive: true,
+        },
+      });
+
+      if (matchingSubject) {
+        subjectId = matchingSubject.id;
+      }
     }
 
     // Get term info if termId provided
@@ -134,7 +200,8 @@ export class GradesService {
       data: {
         enrollmentId: dto.enrollmentId,
         teacherId: teacher.id,
-        subject: dto.subject || '',
+        subjectId: subjectId, // NEW: Link to Subject entity
+        subject: subjectName, // Auto-populated from Subject if subjectId provided
         gradeType: dto.gradeType,
         assessmentName: dto.assessmentName || null,
         assessmentDate: assessmentDate,
@@ -822,8 +889,65 @@ export class GradesService {
     }
 
     // Validate teacher is assigned to this class/ClassArm/subject
-    // Note: Use teacher.id (database ID) for ClassTeacher queries
-    if (dto.subject) {
+    // Priority: subjectId (new) > subject string (legacy)
+    let subjectId: string | null = null;
+    let subjectName: string = dto.subject || '';
+
+    if (dto.subjectId) {
+      // NEW: Validate using subjectId (preferred method)
+      const subject = await this.prisma.subject.findUnique({
+        where: { id: dto.subjectId },
+      });
+
+      if (!subject) {
+        throw new BadRequestException('Subject not found');
+      }
+
+      subjectId = subject.id;
+      subjectName = subject.name;
+
+      // Check if teacher is authorized
+      const primaryWhere: any = {
+        teacherId: teacher.id,
+        isPrimary: true,
+      };
+      if (isClassArm) {
+        primaryWhere.classArmId = dto.classId;
+      } else {
+        primaryWhere.classId = dto.classId;
+      }
+
+      const isPrimaryTeacher = await this.prisma.classTeacher.findFirst({
+        where: primaryWhere,
+      });
+
+      if (!isPrimaryTeacher) {
+        // Check subject assignment
+        const subjectAssignment = await this.prisma.classTeacher.findFirst({
+          where: {
+            teacherId: teacher.id,
+            subjectId: dto.subjectId,
+            ...(isClassArm ? { classArmId: dto.classId } : { classId: dto.classId }),
+          },
+        });
+
+        if (!subjectAssignment) {
+          // Check timetable assignment
+          const timetableAssignment = await this.prisma.timetablePeriod.findFirst({
+            where: {
+              teacherId: teacher.id,
+              subjectId: dto.subjectId,
+              ...(isClassArm ? { classArmId: dto.classId } : { classId: dto.classId }),
+            },
+          });
+
+          if (!timetableAssignment) {
+            throw new ForbiddenException('You are not authorized to grade this subject for this class');
+          }
+        }
+      }
+    } else if (dto.subject) {
+      // LEGACY: Validate using subject string
       const assignmentWhere: any = {
         teacherId: teacher.id,
         subject: dto.subject,
@@ -840,7 +964,6 @@ export class GradesService {
       });
 
       if (!assignment) {
-        // Check if teacher is primary teacher (for primary schools)
         const primaryWhere: any = {
           teacherId: teacher.id,
           isPrimary: true,
@@ -860,8 +983,21 @@ export class GradesService {
           throw new ForbiddenException('You are not assigned to teach this subject in this class');
         }
       }
+
+      // Try to find matching Subject entity
+      const matchingSubject = await this.prisma.subject.findFirst({
+        where: {
+          schoolId: school.id,
+          name: { equals: dto.subject, mode: 'insensitive' },
+          isActive: true,
+        },
+      });
+
+      if (matchingSubject) {
+        subjectId = matchingSubject.id;
+      }
     } else {
-      // For primary schools, check if teacher is assigned
+      // No subject specified - check if teacher is assigned to class
       const assignmentWhere: any = {
         teacherId: teacher.id,
       };
@@ -935,7 +1071,8 @@ export class GradesService {
           data: {
             enrollmentId: gradeEntry.enrollmentId,
             teacherId: teacher.id,
-            subject: dto.subject || '',
+            subjectId: subjectId, // NEW: Link to Subject entity
+            subject: subjectName, // Auto-populated from Subject if subjectId provided
             gradeType: dto.gradeType,
             assessmentName: dto.assessmentName,
             assessmentDate: assessmentDate,

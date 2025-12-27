@@ -15,16 +15,11 @@ import {
   Smartphone,
   ArrowLeft,
   Search,
-  User,
-  Mail,
-  Phone,
   Calendar,
   Award,
-  TrendingUp,
   Clock,
   CheckCircle2,
   XCircle,
-  Sparkles,
   Plus,
   Download,
   Upload,
@@ -50,14 +45,13 @@ import {
 import { useClassResources } from '@/hooks/useClassResources';
 import { BulkGradeEntryModal } from '@/components/modals/BulkGradeEntryModal';
 import { GradeEntryModal } from '@/components/modals/GradeEntryModal';
-import { CreateCurriculumModal } from '@/components/modals/CreateCurriculumModal';
 import { ConfirmModal } from '@/components/ui/Modal';
 import { TeacherTimetableGrid } from '@/components/timetable/TeacherTimetableGrid';
 import toast from 'react-hot-toast';
 import { useSchoolType } from '@/hooks/useSchoolType';
 import { getTerminology } from '@/lib/utils/terminology';
 
-type TabType = 'curriculum' | 'students' | 'grades' | 'timetable' | 'tests' | 'rollcall' | 'resources';
+type TabType = 'curriculum' | 'students' | 'grades' | 'timetable' | 'rollcall' | 'resources';
 
 export default function ClassDetailPage() {
   const params = useParams();
@@ -74,7 +68,6 @@ export default function ClassDetailPage() {
   const [termFilter, setTermFilter] = useState<string>('');
   const [sequenceFilter, setSequenceFilter] = useState<number | ''>('');
   const [selectedTimetableTermId, setSelectedTimetableTermId] = useState<string>('');
-  const [showCreateCurriculumModal, setShowCreateCurriculumModal] = useState(false);
   const [showUploadResourceModal, setShowUploadResourceModal] = useState(false);
 
   const { currentType } = useSchoolType();
@@ -253,7 +246,6 @@ export default function ClassDetailPage() {
     activeTab,
   });
   const activePlugins = getActivePluginsForTeacher();
-  const hasSocratesAI = activePlugins.some(p => p.slug === 'socrates-ai');
   const hasRollCall = activePlugins.some(p => p.slug === 'rollcall');
 
   // Build tabs dynamically based on available plugins
@@ -263,7 +255,6 @@ export default function ClassDetailPage() {
     { id: 'students', label: 'Students', icon: <Users className="h-4 w-4" />, available: true },
     { id: 'grades', label: 'Grades', icon: <Award className="h-4 w-4" />, available: true },
     { id: 'resources', label: 'Resources', icon: <FileText className="h-4 w-4" />, available: true },
-    { id: 'tests', label: 'Tests', icon: <FileText className="h-4 w-4" />, available: true },
     { id: 'rollcall', label: 'RollCall', icon: <Smartphone className="h-4 w-4" />, available: hasRollCall },
   ];
 
@@ -365,19 +356,9 @@ export default function ClassDetailPage() {
             <div className="space-y-6">
               <Card>
                 <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-light-text-primary dark:text-dark-text-primary">
-                      Curriculum Overview
-                    </CardTitle>
-                    <Button 
-                      variant="primary" 
-                      size="sm"
-                      onClick={() => setShowCreateCurriculumModal(true)}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create Curriculum
-                    </Button>
-                  </div>
+                  <CardTitle className="text-light-text-primary dark:text-dark-text-primary">
+                    Curriculum Overview
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   {curriculumResponse?.data ? (
@@ -440,18 +421,11 @@ export default function ClassDetailPage() {
                     <div className="text-center py-12">
                       <BookOpen className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
                       <p className="text-light-text-secondary dark:text-dark-text-secondary mb-4">
-                        No curriculum created yet.
+                        No curriculum available for this class yet.
                       </p>
-                      <p className="text-sm text-light-text-muted dark:text-dark-text-muted mb-4">
-                        Create a curriculum with weekly topics, objectives, and resources.
+                      <p className="text-sm text-light-text-muted dark:text-dark-text-muted">
+                        The curriculum will be created by the school administration.
                       </p>
-                      <Button
-                        variant="primary"
-                        onClick={() => setShowCreateCurriculumModal(true)}
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Create Curriculum
-                      </Button>
                     </div>
                   )}
                 </CardContent>
@@ -968,91 +942,6 @@ export default function ClassDetailPage() {
             </div>
           )}
 
-          {/* Tests Tab */}
-          {(activeTab as TabType) === 'tests' && (
-            <div className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-light-text-primary dark:text-dark-text-primary">
-                      Tests & Assessments
-                    </CardTitle>
-                    <div className="flex gap-2">
-                      {hasSocratesAI && (
-                        <Button
-                          size="sm"
-                          onClick={() => router.push('/dashboard/teacher/plugins/socrates-ai')}
-                          className="flex items-center gap-2"
-                        >
-                          <Sparkles className="h-4 w-4" />
-                          Use Socrates AI
-                        </Button>
-                      )}
-                      <Button size="sm" className="flex items-center gap-2">
-                        <Plus className="h-4 w-4" />
-                        Create Test
-                      </Button>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {/* TODO: Replace with real tests data when API is ready */}
-                    {([] as any[]).map((test) => (
-                      <Card key={test.id} className="border border-light-border dark:border-dark-border">
-                        <CardContent className="pt-6">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-2">
-                                <FileText className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                                <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary">
-                                  {test.title}
-                                </h3>
-                                <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 text-xs font-medium rounded">
-                                  {test.type}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-4 text-sm text-light-text-secondary dark:text-dark-text-secondary ml-8">
-                                <div className="flex items-center gap-1">
-                                  <Calendar className="h-4 w-4" />
-                                  {new Date(test.date).toLocaleDateString()}
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <Award className="h-4 w-4" />
-                                  Avg: {test.averageScore}/{test.totalScore}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button variant="ghost" size="sm">
-                                <Download className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="sm">
-                                View Results
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                    {true && (
-                      <div className="text-center py-12">
-                        <FileText className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
-                        <p className="text-light-text-secondary dark:text-dark-text-secondary mb-4">
-                          No tests created yet.
-                        </p>
-                        <Button size="sm" className="flex items-center gap-2 mx-auto">
-                          <Plus className="h-4 w-4" />
-                          Create Your First Test
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
           {/* RollCall Tab */}
           {(activeTab as TabType) === 'rollcall' && hasRollCall && (
             <div className="space-y-6">
@@ -1210,20 +1099,6 @@ export default function ClassDetailPage() {
           }}
         />
       )}
-
-      <CreateCurriculumModal
-        isOpen={showCreateCurriculumModal}
-        onClose={() => setShowCreateCurriculumModal(false)}
-        schoolId={schoolId!}
-        classId={classId}
-        subject={classData?.teachers?.[0]?.subject || undefined}
-        academicYear={classData?.academicYear || activeSession?.session?.name || ''}
-        termId={activeSession?.term?.id || undefined}
-        onSuccess={() => {
-          refetchCurriculum();
-          setShowCreateCurriculumModal(false);
-        }}
-      />
 
       <ConfirmModal
         isOpen={showDeleteModal}

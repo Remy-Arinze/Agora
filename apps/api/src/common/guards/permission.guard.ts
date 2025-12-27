@@ -8,7 +8,7 @@ import { Reflector } from '@nestjs/core';
 import { PrismaService } from '../../database/prisma.service';
 import { UserWithContext } from '../../auth/types/user-with-context.type';
 import { PERMISSION_KEY } from '../decorators/permission.decorator';
-import { PermissionResource, PermissionType } from '../../schools/dto/permission.dto';
+import { PermissionResource, PermissionType, isPrincipalRole } from '../../schools/dto/permission.dto';
 
 @Injectable()
 export class PermissionGuard implements CanActivate {
@@ -56,8 +56,8 @@ export class PermissionGuard implements CanActivate {
         throw new ForbiddenException('Admin profile not found');
       }
 
-      // Principal has all permissions (role is "Principal" case-insensitive)
-      if (admin.role.toLowerCase() === 'principal') {
+      // Principal has all permissions (exact role match for security)
+      if (isPrincipalRole(admin.role)) {
         return true;
       }
 
@@ -96,7 +96,18 @@ export class PermissionGuard implements CanActivate {
       return true;
     }
 
-    // For other roles, deny by default (can be extended later)
+    // TEACHER role: Teachers have their own authorization logic in services
+    // They don't use the admin permission system
+    if (user.role === 'TEACHER') {
+      return true;
+    }
+
+    // STUDENT role: Students have their own access controls
+    if (user.role === 'STUDENT') {
+      return true;
+    }
+
+    // For other roles (e.g., PARENT), deny by default
     throw new ForbiddenException('Permission denied');
   }
 }

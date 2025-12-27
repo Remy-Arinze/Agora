@@ -12,6 +12,8 @@ import { GraduationCap, Plus, FileSpreadsheet, Loader2, Mail, CheckCircle, Clock
 import { useGetStudentsQuery, useGetMySchoolQuery, useResendPasswordResetForStudentMutation } from '@/lib/store/api/schoolAdminApi';
 import { useSchoolType } from '@/hooks/useSchoolType';
 import { StudentImportModal } from '@/components/modals/StudentImportModal';
+import { PermissionGate } from '@/components/permissions/PermissionGate';
+import { PermissionResource, PermissionType } from '@/hooks/usePermissions';
 import toast from 'react-hot-toast';
 
 // Avatar component for students
@@ -161,16 +163,18 @@ export default function StudentsPage() {
                 Manage all students in your school
               </p>
             </div>
-            <div className="flex items-center gap-3">
-              <Button variant="primary" size="sm" onClick={() => router.push('/dashboard/school/admissions?new=true')}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Student
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setShowImportModal(true)}>
-                <FileSpreadsheet className="h-4 w-4 mr-2" />
-                Import CSV
-              </Button>
-            </div>
+            <PermissionGate resource={PermissionResource.STUDENTS} type={PermissionType.WRITE}>
+              <div className="flex items-center gap-3">
+                <Button variant="primary" size="sm" onClick={() => router.push('/dashboard/school/admissions?new=true')}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Student
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setShowImportModal(true)}>
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Import CSV
+                </Button>
+              </div>
+            </PermissionGate>
           </div>
         </motion.div>
 

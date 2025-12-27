@@ -18,6 +18,8 @@ import {
   GripVertical,
   AlertTriangle,
 } from 'lucide-react';
+import { PermissionGate } from '@/components/permissions/PermissionGate';
+import { PermissionResource, PermissionType } from '@/hooks/usePermissions';
 import {
   useGetMySchoolQuery,
   useGetActiveSessionQuery,
@@ -779,13 +781,15 @@ export default function TimetablesPage() {
                 Manage class schedules and timetables for {currentType || 'all school types'}
               </p>
             </div>
-            <Button
-              variant="primary"
-              onClick={() => setShowCreateModal(true)}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Create Timetable
-            </Button>
+            <PermissionGate resource={PermissionResource.TIMETABLES} type={PermissionType.WRITE}>
+              <Button
+                variant="primary"
+                onClick={() => setShowCreateModal(true)}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Create Timetable
+              </Button>
+            </PermissionGate>
           </div>
         </motion.div>
 
@@ -941,10 +945,12 @@ export default function TimetablesPage() {
                   <p className="text-light-text-secondary dark:text-dark-text-secondary mb-4">
                     No timetable periods found for {selectedClass?.name}.
                   </p>
-                  <Button onClick={() => setShowCreateModal(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Timetable
-                  </Button>
+                  <PermissionGate resource={PermissionResource.TIMETABLES} type={PermissionType.WRITE}>
+                    <Button onClick={() => setShowCreateModal(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Timetable
+                    </Button>
+                  </PermissionGate>
                 </div>
               ) : (
                 <>

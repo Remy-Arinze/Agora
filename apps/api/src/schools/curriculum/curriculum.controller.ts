@@ -26,12 +26,15 @@ import { NerdcSubjectDto, NerdcCurriculumDto, GetNerdcSubjectsQueryDto } from '.
 import { ResponseDto } from '../../common/dto/response.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { SchoolDataAccessGuard } from '../../common/guards/school-data-access.guard';
+import { PermissionGuard } from '../../common/guards/permission.guard';
+import { RequirePermission } from '../../common/decorators/permission.decorator';
+import { PermissionResource, PermissionType } from '../dto/permission.dto';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { UserWithContext } from '../../auth/types/user-with-context.type';
 
 @ApiTags('curriculum')
 @Controller('schools/:schoolId/curriculum')
-@UseGuards(JwtAuthGuard, SchoolDataAccessGuard)
+@UseGuards(JwtAuthGuard, SchoolDataAccessGuard, PermissionGuard)
 @ApiBearerAuth()
 export class CurriculumController {
   constructor(
@@ -44,6 +47,7 @@ export class CurriculumController {
   // ============================================
 
   @Get('nerdc/subjects')
+  @RequirePermission(PermissionResource.CURRICULUM, PermissionType.READ)
   @ApiOperation({ summary: 'Get NERDC subjects list' })
   @ApiParam({ name: 'schoolId', description: 'School ID' })
   @ApiQuery({ name: 'schoolType', required: false, description: 'Filter by school type (PRIMARY, SECONDARY)' })
@@ -57,6 +61,7 @@ export class CurriculumController {
   }
 
   @Get('nerdc/template')
+  @RequirePermission(PermissionResource.CURRICULUM, PermissionType.READ)
   @ApiOperation({ summary: 'Get NERDC curriculum template' })
   @ApiParam({ name: 'schoolId', description: 'School ID' })
   @ApiQuery({ name: 'subjectCode', description: 'Subject code (e.g., MTH, ENG)' })
@@ -84,6 +89,7 @@ export class CurriculumController {
   // ============================================
 
   @Get('class-level/:classLevelId/subjects')
+  @RequirePermission(PermissionResource.CURRICULUM, PermissionType.READ)
   @ApiOperation({ summary: 'Get subjects from timetable for a class level' })
   @ApiParam({ name: 'schoolId', description: 'School ID' })
   @ApiParam({ name: 'classLevelId', description: 'Class Level ID' })
@@ -99,6 +105,7 @@ export class CurriculumController {
   }
 
   @Get('class-level/:classLevelId/summary')
+  @RequirePermission(PermissionResource.CURRICULUM, PermissionType.READ)
   @ApiOperation({ summary: 'Get curriculum summary for all subjects in a class level' })
   @ApiParam({ name: 'schoolId', description: 'School ID' })
   @ApiParam({ name: 'classLevelId', description: 'Class Level ID' })
@@ -118,6 +125,7 @@ export class CurriculumController {
   // ============================================
 
   @Post()
+  @RequirePermission(PermissionResource.CURRICULUM, PermissionType.WRITE)
   @ApiOperation({ summary: 'Create a new curriculum (manual)' })
   @ApiParam({ name: 'schoolId', description: 'School ID' })
   @ApiResponse({ status: 201, description: 'Curriculum created successfully' })
@@ -133,6 +141,7 @@ export class CurriculumController {
   }
 
   @Post('generate')
+  @RequirePermission(PermissionResource.CURRICULUM, PermissionType.WRITE)
   @ApiOperation({ summary: 'Generate curriculum from NERDC template' })
   @ApiParam({ name: 'schoolId', description: 'School ID' })
   @ApiResponse({ status: 201, description: 'Curriculum generated successfully' })
@@ -146,6 +155,7 @@ export class CurriculumController {
   }
 
   @Post('generate-bulk')
+  @RequirePermission(PermissionResource.CURRICULUM, PermissionType.WRITE)
   @ApiOperation({ summary: 'Bulk generate curricula from NERDC templates' })
   @ApiParam({ name: 'schoolId', description: 'School ID' })
   @ApiResponse({ status: 201, description: 'Curricula generated successfully' })
@@ -159,6 +169,7 @@ export class CurriculumController {
   }
 
   @Get(':curriculumId')
+  @RequirePermission(PermissionResource.CURRICULUM, PermissionType.READ)
   @ApiOperation({ summary: 'Get curriculum by ID' })
   @ApiParam({ name: 'schoolId', description: 'School ID' })
   @ApiParam({ name: 'curriculumId', description: 'Curriculum ID' })
@@ -173,6 +184,7 @@ export class CurriculumController {
   }
 
   @Get('classes/:classId')
+  @RequirePermission(PermissionResource.CURRICULUM, PermissionType.READ)
   @ApiOperation({ summary: 'Get curriculum for a class (legacy)' })
   @ApiParam({ name: 'schoolId', description: 'School ID' })
   @ApiParam({ name: 'classId', description: 'Class ID' })
@@ -200,6 +212,7 @@ export class CurriculumController {
   }
 
   @Patch(':curriculumId')
+  @RequirePermission(PermissionResource.CURRICULUM, PermissionType.WRITE)
   @ApiOperation({ summary: 'Update curriculum' })
   @ApiParam({ name: 'schoolId', description: 'School ID' })
   @ApiParam({ name: 'curriculumId', description: 'Curriculum ID' })
@@ -216,6 +229,7 @@ export class CurriculumController {
   }
 
   @Delete(':curriculumId')
+  @RequirePermission(PermissionResource.CURRICULUM, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Delete curriculum' })
   @ApiParam({ name: 'schoolId', description: 'School ID' })
   @ApiParam({ name: 'curriculumId', description: 'Curriculum ID' })
@@ -235,6 +249,7 @@ export class CurriculumController {
   // ============================================
 
   @Post(':curriculumId/submit')
+  @RequirePermission(PermissionResource.CURRICULUM, PermissionType.WRITE)
   @ApiOperation({ summary: 'Submit curriculum for admin approval' })
   @ApiParam({ name: 'schoolId', description: 'School ID' })
   @ApiParam({ name: 'curriculumId', description: 'Curriculum ID' })
@@ -249,6 +264,7 @@ export class CurriculumController {
   }
 
   @Post(':curriculumId/approve')
+  @RequirePermission(PermissionResource.CURRICULUM, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Approve curriculum (admin only)' })
   @ApiParam({ name: 'schoolId', description: 'School ID' })
   @ApiParam({ name: 'curriculumId', description: 'Curriculum ID' })
@@ -263,6 +279,7 @@ export class CurriculumController {
   }
 
   @Post(':curriculumId/reject')
+  @RequirePermission(PermissionResource.CURRICULUM, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Reject curriculum (admin only)' })
   @ApiParam({ name: 'schoolId', description: 'School ID' })
   @ApiParam({ name: 'curriculumId', description: 'Curriculum ID' })
@@ -278,6 +295,7 @@ export class CurriculumController {
   }
 
   @Post(':curriculumId/activate')
+  @RequirePermission(PermissionResource.CURRICULUM, PermissionType.WRITE)
   @ApiOperation({ summary: 'Activate curriculum (start teaching)' })
   @ApiParam({ name: 'schoolId', description: 'School ID' })
   @ApiParam({ name: 'curriculumId', description: 'Curriculum ID' })
@@ -296,6 +314,7 @@ export class CurriculumController {
   // ============================================
 
   @Post(':curriculumId/weeks/:weekNumber/complete')
+  @RequirePermission(PermissionResource.CURRICULUM, PermissionType.WRITE)
   @ApiOperation({ summary: 'Mark a week as complete' })
   @ApiParam({ name: 'schoolId', description: 'School ID' })
   @ApiParam({ name: 'curriculumId', description: 'Curriculum ID' })
@@ -319,6 +338,7 @@ export class CurriculumController {
   }
 
   @Post(':curriculumId/weeks/:weekNumber/in-progress')
+  @RequirePermission(PermissionResource.CURRICULUM, PermissionType.WRITE)
   @ApiOperation({ summary: 'Mark a week as in progress' })
   @ApiParam({ name: 'schoolId', description: 'School ID' })
   @ApiParam({ name: 'curriculumId', description: 'Curriculum ID' })
@@ -340,6 +360,7 @@ export class CurriculumController {
   }
 
   @Post(':curriculumId/weeks/:weekNumber/skip')
+  @RequirePermission(PermissionResource.CURRICULUM, PermissionType.WRITE)
   @ApiOperation({ summary: 'Skip a week with reason' })
   @ApiParam({ name: 'schoolId', description: 'School ID' })
   @ApiParam({ name: 'curriculumId', description: 'Curriculum ID' })

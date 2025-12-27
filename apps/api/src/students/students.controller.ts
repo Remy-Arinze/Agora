@@ -9,6 +9,7 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFile,
+  NotFoundException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
@@ -23,6 +24,9 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../common/guards/tenant.guard';
 import { SchoolDataAccessGuard } from '../common/guards/school-data-access.guard';
+import { PermissionGuard } from '../common/guards/permission.guard';
+import { RequirePermission } from '../common/decorators/permission.decorator';
+import { PermissionResource, PermissionType } from '../schools/dto/permission.dto';
 import { TenantId } from '../common/decorators/tenant.decorator';
 import { StudentsService } from './students.service';
 import { StudentAdmissionService } from './student-admission.service';
@@ -106,7 +110,7 @@ export class StudentsController {
 
 @ApiTags('schools')
 @Controller('schools/:schoolId/students')
-@UseGuards(JwtAuthGuard, SchoolDataAccessGuard)
+@UseGuards(JwtAuthGuard, SchoolDataAccessGuard, PermissionGuard)
 @ApiBearerAuth('JWT-auth')
 export class SchoolStudentAdmissionController {
   constructor(
@@ -118,6 +122,7 @@ export class SchoolStudentAdmissionController {
   ) {}
 
   @Get()
+  @RequirePermission(PermissionResource.STUDENTS, PermissionType.READ)
   @ApiOperation({ summary: 'Get paginated list of students for a school' })
   @ApiResponse({
     status: 200,
@@ -134,6 +139,7 @@ export class SchoolStudentAdmissionController {
   }
 
   @Get('by-class/:classLevel')
+  @RequirePermission(PermissionResource.STUDENTS, PermissionType.READ)
   @ApiOperation({ summary: 'Get students enrolled in a specific class' })
   @ApiParam({ name: 'classLevel', description: 'Class level/name', example: 'JSS1' })
   @ApiResponse({
@@ -150,6 +156,7 @@ export class SchoolStudentAdmissionController {
   }
 
   @Get(':id')
+  @RequirePermission(PermissionResource.STUDENTS, PermissionType.READ)
   @ApiOperation({ summary: 'Get student by ID for a school' })
   @ApiParam({ name: 'schoolId', description: 'School ID' })
   @ApiParam({ name: 'id', description: 'Student ID', example: 'clx1234567890' })
@@ -168,6 +175,7 @@ export class SchoolStudentAdmissionController {
   }
 
   @Post('admit')
+  @RequirePermission(PermissionResource.STUDENTS, PermissionType.WRITE)
   @ApiOperation({ summary: 'Add a new student to the school' })
   @ApiResponse({
     status: 201,
@@ -184,6 +192,7 @@ export class SchoolStudentAdmissionController {
   }
 
   @Post('bulk-import')
+  @RequirePermission(PermissionResource.STUDENTS, PermissionType.WRITE)
   @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({ 
     summary: 'Bulk import students from CSV/Excel file',
@@ -205,6 +214,7 @@ export class SchoolStudentAdmissionController {
   }
 
   @Post(':id/image')
+  @RequirePermission(PermissionResource.STUDENTS, PermissionType.WRITE)
   @UseInterceptors(
     FileInterceptor('image', {
       storage: memoryStorage(),
@@ -250,6 +260,7 @@ export class SchoolStudentAdmissionController {
   }
 
   @Post(':id/resend-password-reset')
+  @RequirePermission(PermissionResource.STUDENTS, PermissionType.WRITE)
   @ApiOperation({ summary: 'Resend password reset email for a student' })
   @ApiResponse({
     status: 200,
@@ -279,6 +290,7 @@ export class SchoolStudentAdmissionController {
   }
 
   @Patch(':id')
+  @RequirePermission(PermissionResource.STUDENTS, PermissionType.WRITE)
   @ApiOperation({ summary: 'Update student profile' })
   @ApiResponse({
     status: 200,

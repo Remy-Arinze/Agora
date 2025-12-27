@@ -5,6 +5,7 @@ import { useSelector } from 'react-redux';
 import { RootState } from '@/lib/store/store';
 import { useSchoolType } from '@/hooks/useSchoolType';
 import { getTerminology, Terminology } from '@/lib/utils/terminology';
+import { useCurrentAdminPermissions, PermissionResource } from '@/hooks/usePermissions';
 import {
   LayoutDashboard,
   Building2,
@@ -31,6 +32,8 @@ export interface NavItem {
   roles?: string[];
   schoolTypes?: Array<'PRIMARY' | 'SECONDARY' | 'TERTIARY'>;
   badge?: string | number;
+  /** Permission resource required to view this item (school admin only) */
+  permission?: PermissionResource;
 }
 
 export interface SidebarSection {
@@ -70,12 +73,12 @@ export function useSidebarConfig(): {
       ];
     }
 
-    // School Admin sidebar - dynamic based on school type
+    // School Admin sidebar - dynamic based on school type and permissions
     if (role === 'SCHOOL_ADMIN') {
       const baseItems: NavItem[] = [
-        { label: 'Overview', href: '/dashboard/school/overview', icon: LayoutDashboard },
-        { label: 'Students', href: '/dashboard/school/students', icon: GraduationCap },
-        { label: 'Staff', href: '/dashboard/school/teachers', icon: Users },
+        { label: 'Overview', href: '/dashboard/school/overview', icon: LayoutDashboard, permission: PermissionResource.OVERVIEW },
+        { label: 'Students', href: '/dashboard/school/students', icon: GraduationCap, permission: PermissionResource.STUDENTS },
+        { label: 'Staff', href: '/dashboard/school/teachers', icon: Users, permission: PermissionResource.STAFF },
       ];
 
       // Add Faculties for tertiary (before Departments/Classes)
@@ -85,6 +88,7 @@ export function useSidebarConfig(): {
           href: '/dashboard/school/faculties',
           icon: Library,
           schoolTypes: ['TERTIARY'],
+          permission: PermissionResource.CLASSES,
         });
       }
 
@@ -93,16 +97,17 @@ export function useSidebarConfig(): {
         label: currentType === 'TERTIARY' ? 'Departments' : terminology.courses,
         href: '/dashboard/school/courses',
         icon: BookOpen,
+        permission: PermissionResource.CLASSES,
       });
 
       // Common items after Classes/Departments
       baseItems.push(
-        { label: currentType === 'TERTIARY' ? 'Courses' : 'Subjects', href: '/dashboard/school/subjects', icon: BookMarked },
-        { label: 'Timetables', href: '/dashboard/school/timetables', icon: Clock },
-        { label: 'Calendar', href: '/dashboard/school/calendar', icon: Calendar },
-        { label: 'Admissions', href: '/dashboard/school/admissions', icon: UserPlus },
-        { label: 'Transfers', href: '/dashboard/school/transfers', icon: ArrowRightLeft },
-        { label: 'Subscription', href: '/dashboard/school/subscription', icon: CreditCard }
+        { label: currentType === 'TERTIARY' ? 'Courses' : 'Subjects', href: '/dashboard/school/subjects', icon: BookMarked, permission: PermissionResource.SUBJECTS },
+        { label: 'Timetables', href: '/dashboard/school/timetables', icon: Clock, permission: PermissionResource.TIMETABLES },
+        { label: 'Calendar', href: '/dashboard/school/calendar', icon: Calendar, permission: PermissionResource.CALENDAR },
+        { label: 'Admissions', href: '/dashboard/school/admissions', icon: UserPlus, permission: PermissionResource.ADMISSIONS },
+        { label: 'Transfers', href: '/dashboard/school/transfers', icon: ArrowRightLeft, permission: PermissionResource.ADMISSIONS }, // Transfers use same permission as admissions
+        { label: 'Subscription', href: '/dashboard/school/subscription', icon: CreditCard, permission: PermissionResource.SUBSCRIPTIONS }
       );
 
       return [{ items: baseItems }];
@@ -167,5 +172,55 @@ export function useSidebarConfig(): {
 export function useFlatNavItems(): NavItem[] {
   const { sections } = useSidebarConfig();
   return sections.flatMap((section) => section.items);
+}
+
+/**
+ * Hook to get sidebar items filtered by user permissions
+ * For school admins, items are filtered based on READ permission
+ */
+export function usePermissionFilteredSidebar(): {
+  sections: SidebarSection[];
+  terminology: Terminology;
+  currentType: 'PRIMARY' | 'SECONDARY' | 'TERTIARY' | null;
+  isLoadingPermissions: boolean;
+} {
+  const { sections, terminology, currentType } = useSidebarConfig();
+  const user = useSelector((state: RootState) => state.auth.user);
+  const { canView, isLoading: isLoadingPermissions, isPrincipal } = useCurrentAdminPermissions();
+  
+  const filteredSections = useMemo(() => {
+    // Only filter for school admins
+    if (user?.role !== 'SCHOOL_ADMIN') {
+      return sections;
+    }
+    
+    // Principals have permanent full access - see everything (no loading needed)
+    if (isPrincipal) {
+      return sections;
+    }
+    
+    // While loading permissions, show empty sidebar to prevent flash
+    if (isLoadingPermissions) {
+      return sections.map((section) => ({ ...section, items: [] }));
+    }
+    
+    // Filter items based on permissions
+    return sections.map((section) => ({
+      ...section,
+      items: section.items.filter((item) => {
+        // If no permission specified, show the item
+        if (!item.permission) return true;
+        // Check if user has READ access to this resource
+        return canView(item.permission);
+      }),
+    }));
+  }, [sections, user?.role, isLoadingPermissions, isPrincipal, canView]);
+  
+  return {
+    sections: filteredSections,
+    terminology,
+    currentType,
+    isLoadingPermissions,
+  };
 }
 

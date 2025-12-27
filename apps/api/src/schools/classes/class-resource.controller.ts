@@ -18,16 +18,20 @@ import { ClassResourceDto, CreateClassResourceDto } from '../dto/class-resource.
 import { ResponseDto } from '../../common/dto/response.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { SchoolDataAccessGuard } from '../../common/guards/school-data-access.guard';
+import { PermissionGuard } from '../../common/guards/permission.guard';
+import { RequirePermission } from '../../common/decorators/permission.decorator';
+import { PermissionResource, PermissionType } from '../dto/permission.dto';
 import { Response } from 'express';
 
 @ApiTags('schools')
 @Controller('schools/:schoolId/classes/:classId/resources')
-@UseGuards(JwtAuthGuard, SchoolDataAccessGuard)
+@UseGuards(JwtAuthGuard, SchoolDataAccessGuard, PermissionGuard)
 @ApiBearerAuth()
 export class ClassResourceController {
   constructor(private readonly resourceService: ClassResourceService) {}
 
   @Post('upload')
+  @RequirePermission(PermissionResource.RESOURCES, PermissionType.WRITE)
   @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({ summary: 'Upload a resource to a class' })
   @ApiConsumes('multipart/form-data')
@@ -51,6 +55,7 @@ export class ClassResourceController {
   }
 
   @Get()
+  @RequirePermission(PermissionResource.RESOURCES, PermissionType.READ)
   @ApiOperation({ summary: 'Get all resources for a class' })
   @ApiResponse({
     status: 200,
@@ -67,6 +72,7 @@ export class ClassResourceController {
   }
 
   @Get(':resourceId')
+  @RequirePermission(PermissionResource.RESOURCES, PermissionType.READ)
   @ApiOperation({ summary: 'Get a single resource' })
   @ApiResponse({
     status: 200,
@@ -84,6 +90,7 @@ export class ClassResourceController {
   }
 
   @Get(':resourceId/download')
+  @RequirePermission(PermissionResource.RESOURCES, PermissionType.READ)
   @ApiOperation({ summary: 'Download a resource file' })
   @ApiResponse({
     status: 200,
@@ -105,6 +112,7 @@ export class ClassResourceController {
   }
 
   @Delete(':resourceId')
+  @RequirePermission(PermissionResource.RESOURCES, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Delete a resource' })
   @ApiResponse({
     status: 200,

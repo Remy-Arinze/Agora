@@ -21,6 +21,8 @@ import {
 } from 'lucide-react';
 import { AutoGenerateButton } from '@/components/ui/AutoGenerateButton';
 import { EntityAvatar } from '@/components/ui/EntityAvatar';
+import { PermissionGate } from '@/components/permissions/PermissionGate';
+import { PermissionResource, PermissionType } from '@/hooks/usePermissions';
 import { useGetMySchoolQuery } from '@/lib/store/api/schoolAdminApi';
 import { useFaculties } from '@/hooks/useFaculties';
 import { useSchoolType } from '@/hooks/useSchoolType';
@@ -191,24 +193,26 @@ export default function FacultiesPage() {
                 Manage faculties and their departments
               </p>
             </div>
-            <div className="flex items-center gap-3">
-              <Button
-                variant="secondary"
-                onClick={() => generateDefaults()}
-                disabled={isGenerating}
-              >
-                {isGenerating ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Library className="h-4 w-4 mr-2" />
-                )}
-                {isGenerating ? 'Generating...' : 'Generate Defaults'}
-              </Button>
-              <Button variant="primary" onClick={() => setShowCreateModal(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Faculty
-              </Button>
-            </div>
+            <PermissionGate resource={PermissionResource.CLASSES} type={PermissionType.WRITE}>
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={() => generateDefaults()}
+                  disabled={isGenerating}
+                >
+                  {isGenerating ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Library className="h-4 w-4 mr-2" />
+                  )}
+                  {isGenerating ? 'Generating...' : 'Generate Defaults'}
+                </Button>
+                <Button variant="primary" onClick={() => setShowCreateModal(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Faculty
+                </Button>
+              </div>
+            </PermissionGate>
           </div>
         </motion.div>
 
@@ -251,10 +255,12 @@ export default function FacultiesPage() {
                     <span className="text-xs">or</span>
                     <span className="h-px w-8 bg-light-border dark:bg-dark-border" />
                   </div>
-                  <Button variant="secondary" onClick={() => setShowCreateModal(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Custom Faculty
-                  </Button>
+                  <PermissionGate resource={PermissionResource.CLASSES} type={PermissionType.WRITE}>
+                    <Button variant="secondary" onClick={() => setShowCreateModal(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Custom Faculty
+                    </Button>
+                  </PermissionGate>
                 </div>
               )}
             </CardContent>

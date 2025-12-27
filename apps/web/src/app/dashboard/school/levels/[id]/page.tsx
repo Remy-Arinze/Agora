@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { BackButton } from '@/components/ui/BackButton';
 import { SearchInput } from '@/components/ui/SearchInput';
+import { PermissionGate } from '@/components/permissions/PermissionGate';
+import { PermissionResource, PermissionType } from '@/hooks/usePermissions';
 import { motion } from 'framer-motion';
 import {
   Users,
@@ -250,10 +252,12 @@ export default function LevelDetailPage() {
                       placeholder="Search students..."
                       size="md"
                     />
-                    <Button variant="primary" size="sm">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Student
-                    </Button>
+                    <PermissionGate resource={PermissionResource.STUDENTS} type={PermissionType.WRITE}>
+                      <Button variant="primary" size="sm">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Student
+                      </Button>
+                    </PermissionGate>
                   </div>
                 </div>
               </CardHeader>
