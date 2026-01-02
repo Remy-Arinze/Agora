@@ -12,6 +12,7 @@ out/
 build
 dist
 bdc.js
+cgh.js
 
 # Production
 *.log
