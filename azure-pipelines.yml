@@ -17,35 +17,19 @@ stages:
   displayName: 'Analyze Changed Paths'
   jobs:
   - job: Check
-    displayName: 'Check Git Diff'
+    displayName: 'Force Trigger'
     steps:
-    - checkout: self
-      fetchDepth: 0
+    - checkout: none # We don't even need to download code for this step now
     
-    # CHANGED: Replaced 'bash' with 'powershell' to work on Windows Agent
+    # REPLACEMENT: Force both variables to 'true' immediately
     - powershell: |
-        Write-Host "Checking for changes..."
+        Write-Host "Forcing deployment for API and Web..."
         
-        # Capture the git diff output into a variable
-        $changes = git diff --name-only HEAD~1 HEAD
+        # Force API to TRUE
+        Write-Host "##vso[task.setvariable variable=apiChanged;isOutput=true]true"
         
-        # Check if apps/api folder was touched using regex matching
-        if ($changes -match "^apps/api/") {
-          Write-Host "Changes detected in apps/api"
-          Write-Host "##vso[task.setvariable variable=apiChanged;isOutput=true]true"
-        } else {
-          Write-Host "No changes in apps/api"
-          Write-Host "##vso[task.setvariable variable=apiChanged;isOutput=true]false"
-        }
-        
-        # Check if apps/web folder was touched
-        if ($changes -match "^apps/web/") {
-          Write-Host "Changes detected in apps/web"
-          Write-Host "##vso[task.setvariable variable=webChanged;isOutput=true]true"
-        } else {
-          Write-Host "No changes in apps/web"
-          Write-Host "##vso[task.setvariable variable=webChanged;isOutput=true]false"
-        }
+        # Force Web to TRUE
+        Write-Host "##vso[task.setvariable variable=webChanged;isOutput=true]true"
       name: CheckStep
 
 # ==========================================================
