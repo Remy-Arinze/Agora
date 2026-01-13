@@ -27,7 +27,7 @@ export function SessionWizardInfoModal({ isOpen, onClose }: SessionWizardInfoMod
               What is the Session Wizard?
             </h3>
             <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-              The Session Wizard helps you transition your school from "Holiday" to "Active Term" by managing academic sessions and terms. 
+              The Session Wizard helps you transition your school from &quot;Holiday&quot; to &quot;Active Term&quot; by managing academic sessions and terms. 
               This is the operational heartbeat of your school system.
             </p>
           </div>
@@ -99,7 +99,7 @@ export function SessionWizardInfoModal({ isOpen, onClose }: SessionWizardInfoMod
 
         <div className="flex justify-end pt-4">
           <Button variant="primary" onClick={onClose}>
-            Got it, let's start
+            Got it, let&apos;s start
           </Button>
         </div>
       </div>

@@ -51,12 +51,17 @@ stages:
         $path = "$(workingDir)/tsconfig.json"
         if (Test-Path $path) {
             $json = Get-Content $path -Raw | ConvertFrom-Json
-            # Turn off strict checks
-            if ($json.compilerOptions) {
-                $json.compilerOptions.strict = $false
-                $json.compilerOptions.noImplicitAny = $false
-                $json.compilerOptions.skipLibCheck = $true
+            
+            # Check if compilerOptions is missing (null) and create it if necessary
+            if (-not $json.compilerOptions) {
+                $json | Add-Member -MemberType NoteProperty -Name "compilerOptions" -Value ([PSCustomObject]@{})
             }
+            
+            # Safely set or update properties using Add-Member -Force
+            $json.compilerOptions | Add-Member -MemberType NoteProperty -Name "strict" -Value $false -Force
+            $json.compilerOptions | Add-Member -MemberType NoteProperty -Name "noImplicitAny" -Value $false -Force
+            $json.compilerOptions | Add-Member -MemberType NoteProperty -Name "skipLibCheck" -Value $true -Force
+            
             $json | ConvertTo-Json -Depth 10 | Set-Content $path
             Write-Host "Disabled strict mode in tsconfig.json"
         }

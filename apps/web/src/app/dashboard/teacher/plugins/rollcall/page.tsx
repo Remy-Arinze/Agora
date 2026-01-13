@@ -117,7 +117,7 @@ export default function RollCallPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
-                Today's Attendance
+                Today&apos;s Attendance
               </CardTitle>
             </CardHeader>
             <CardContent>

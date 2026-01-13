@@ -108,7 +108,7 @@ export default function SocratesAIPage() {
                 <div className="p-4 bg-gray-50 dark:bg-dark-surface rounded-lg text-center">
                   <Image className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-2" />
                   <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mb-4">
-                    Upload a photo of a student's handwritten essay
+                    Upload a photo of a student&apos;s handwritten essay
                   </p>
                   <input
                     type="file"

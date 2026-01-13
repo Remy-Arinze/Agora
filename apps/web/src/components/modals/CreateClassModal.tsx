@@ -320,7 +320,7 @@ export function CreateClassModal({ isOpen, onClose, schoolId }: CreateClassModal
                         <p className="text-sm text-red-500 mt-1">{errors.armName}</p>
                       )}
                       <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-1">
-                        This will create "{classLevels.find(l => l.id === classLevelId)?.name || 'Class Level'} {armName || 'Arm'}"
+                        This will create &quot;{classLevels.find(l => l.id === classLevelId)?.name || 'Class Level'} {armName || 'Arm'}&quot;
                       </p>
                     </div>
 

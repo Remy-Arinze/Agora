@@ -192,7 +192,7 @@ export default function StudentOverviewPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary">
-                    Today's Classes
+                    Today&apos;s Classes
                   </p>
                   <p className="text-3xl font-bold text-light-text-primary dark:text-dark-text-primary mt-2">
                     {todaySchedule.length}
@@ -213,7 +213,7 @@ export default function StudentOverviewPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
-                  Today's Schedule
+                  Today&apos;s Schedule
                 </CardTitle>
                 <Link href="/dashboard/student/timetables">
                   <Button variant="ghost" size="sm" className="text-blue-600 dark:text-blue-400">

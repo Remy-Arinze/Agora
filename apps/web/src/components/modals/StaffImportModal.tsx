@@ -112,7 +112,7 @@ admin,Peter,Williams,peter.w@school.com,+2348012345681,Administrator,,,`;
                     <div>
                       <strong className="text-blue-900 dark:text-blue-100">Required columns (all staff):</strong>
                       <ul className="list-disc list-inside ml-2 text-blue-800 dark:text-blue-200">
-                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">type</code> - Must be "teacher" or "admin"</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">type</code> - Must be &quot;teacher&quot; or &quot;admin&quot;</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">firstName</code> - First name</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">lastName</code> - Last name</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">email</code> - Email address</li>
@@ -122,15 +122,15 @@ admin,Peter,Williams,peter.w@school.com,+2348012345681,Administrator,,,`;
                     <div>
                       <strong className="text-blue-900 dark:text-blue-100">For teachers (optional):</strong>
                       <ul className="list-disc list-inside ml-2 text-blue-800 dark:text-blue-200">
-                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">subject</code> - Subject name (must match an existing subject in your school, e.g., "Mathematics")</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">subject</code> - Subject name (must match an existing subject in your school, e.g., &quot;Mathematics&quot;)</li>
                         <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">employeeId</code> - Employee ID</li>
-                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">isTemporary</code> - "true" or "false"</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">isTemporary</code> - &quot;true&quot; or &quot;false&quot;</li>
                       </ul>
                     </div>
                     <div>
                       <strong className="text-blue-900 dark:text-blue-100">For admins (required):</strong>
                       <ul className="list-disc list-inside ml-2 text-blue-800 dark:text-blue-200">
-                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">role</code> - Admin role (e.g., "Bursar", "Vice Principal")</li>
+                        <li><code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">role</code> - Admin role (e.g., &quot;Bursar&quot;, &quot;Vice Principal&quot;)</li>
                       </ul>
                     </div>
                   </div>
@@ -146,9 +146,9 @@ admin,Peter,Williams,peter.w@school.com,+2348012345681,Administrator,,,`;
                   <ul className="list-disc list-inside space-y-1 text-sm text-amber-800 dark:text-amber-200">
                     <li>Email and phone must be unique within your school</li>
                     <li>If a principal already exists, you cannot add another one</li>
-                    <li>Teaching roles (e.g., "Teacher", "Instructor") cannot be used for admin type</li>
-                    <li><strong>For subject assignment:</strong> Generate subjects first, then use the exact subject name (e.g., "Mathematics", "English Language")</li>
-                    <li>Each row will be processed individually - errors in one row won't stop others</li>
+                    <li>Teaching roles (e.g., &quot;Teacher&quot;, &quot;Instructor&quot;) cannot be used for admin type</li>
+                    <li><strong>For subject assignment:</strong> Generate subjects first, then use the exact subject name (e.g., &quot;Mathematics&quot;, &quot;English Language&quot;)</li>
+                    <li>Each row will be processed individually - errors in one row won&apos;t stop others</li>
                     <li>Password reset emails will be sent automatically to imported staff</li>
                   </ul>
                 </div>

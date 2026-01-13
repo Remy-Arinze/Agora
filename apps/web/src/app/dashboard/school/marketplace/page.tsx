@@ -166,7 +166,7 @@ export default function MarketplacePage() {
                 Plugin Marketplace
               </h1>
               <p className="text-light-text-secondary dark:text-dark-text-secondary">
-                Discover and subscribe to plugins to enhance your school's Agora experience
+                Discover and subscribe to plugins to enhance your school&apos;s Agora experience
               </p>
             </div>
           </div>

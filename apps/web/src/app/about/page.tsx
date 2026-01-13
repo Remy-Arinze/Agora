@@ -87,7 +87,7 @@ export default function AboutPage() {
               About <span className="text-blue-600 dark:text-blue-400">Agora</span>
             </h1>
             <p className="text-xl text-gray-600 dark:text-gray-300 leading-relaxed">
-              We're on a mission to give every African student a permanent, verifiable digital education identity 
+              We&apos;re on a mission to give every African student a permanent, verifiable digital education identity 
               that follows them from their first day of primary school to university graduation and beyond.
             </p>
           </motion.div>
@@ -113,7 +113,7 @@ export default function AboutPage() {
               <p className="text-lg text-gray-600 dark:text-gray-300 leading-relaxed">
                 To build the digital infrastructure that connects every stage of African education—creating 
                 a Chain-of-Trust Registry where schools verify teachers, teachers verify data, and parents 
-                claim their children's identities forever. No more lost records. No more fraudulent certificates. 
+                claim their children&apos;s identities forever. No more lost records. No more fraudulent certificates. 
                 Just truth, verified and immutable.
               </p>
             </motion.div>
@@ -201,7 +201,7 @@ export default function AboutPage() {
           >
             <h2 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">The Problem We Solve</h2>
             <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-              Africa's education system faces critical challenges that Agora is designed to address
+              Africa&apos;s education system faces critical challenges that Agora is designed to address
             </p>
           </motion.div>
 
@@ -219,7 +219,7 @@ export default function AboutPage() {
                   <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-3">Lost Records</h3>
                   <p className="text-gray-600 dark:text-gray-300">
                     Millions of student records are lost every year due to paper-based systems, fires, floods, 
-                    and administrative chaos. A student's academic history shouldn't disappear with their old school.
+                    and administrative chaos. A student&apos;s academic history shouldn&apos;t disappear with their old school.
                   </p>
                 </CardContent>
               </Card>

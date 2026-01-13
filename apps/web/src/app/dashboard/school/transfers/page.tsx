@@ -1097,7 +1097,7 @@ export default function TransfersPage() {
           >
             <div className="space-y-4">
               <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                Search and select a student to generate a TAC. Share this TAC with the receiving school along with the student's ID.
+                Search and select a student to generate a TAC. Share this TAC with the receiving school along with the student&apos;s ID.
               </p>
               <div>
                 <label className="text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2 block">
@@ -1117,7 +1117,7 @@ export default function TransfersPage() {
                 <div className="max-h-60 overflow-y-auto border border-light-border dark:border-dark-border rounded-lg">
                   {filteredStudents.length === 0 ? (
                     <div className="p-4 text-center text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                      No students found matching "{studentSearchQuery}"
+                      No students found matching &quot;{studentSearchQuery}&quot;
                     </div>
                   ) : (
                     <div className="divide-y divide-light-border dark:divide-dark-border">

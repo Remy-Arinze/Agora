@@ -510,7 +510,7 @@ export default function SchoolDetailPage() {
               />
             ) : (
               <div className="text-center py-8 text-gray-500 dark:text-dark-text-secondary">
-                No principal assigned. Click "Add Principal" to assign one.
+                No principal assigned. Click &quot;Add Principal&quot; to assign one.
               </div>
             )}
           </CardContent>

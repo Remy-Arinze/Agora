@@ -168,7 +168,7 @@ export default function TeacherOverviewPage() {
                 <div className="flex items-center justify-between">
                   <CardTitle className="flex items-center gap-2 text-lg font-semibold text-light-text-primary dark:text-dark-text-primary">
                     <Calendar className="h-5 w-5 text-blue-600" />
-                    Today's Schedule
+                    Today&apos;s Schedule
                   </CardTitle>
                   <span className="text-sm text-light-text-muted dark:text-dark-text-muted">
                     {todaysPeriods.filter((p) => p.type === 'LESSON').length} lessons

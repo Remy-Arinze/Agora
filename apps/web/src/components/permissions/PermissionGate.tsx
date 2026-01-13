@@ -144,7 +144,7 @@ function AccessDenied({ resource }: { resource: PermissionResource }) {
         Access Denied
       </h2>
       <p className="text-gray-600 dark:text-gray-400 max-w-md">
-        You don't have permission to access <span className="font-medium">{resourceLabels[resource]}</span>.
+        You don&apos;t have permission to access <span className="font-medium">{resourceLabels[resource]}</span>.
         Please contact your school administrator if you believe this is an error.
       </p>
     </div>

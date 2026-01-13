@@ -149,7 +149,7 @@ export default function OverviewPage() {
             {schools.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-light-text-secondary dark:text-dark-text-secondary">
-                  No schools found. Click "Add School" to create one.
+                  No schools found. Click &quot;Add School&quot; to create one.
                 </p>
               </div>
             ) : (

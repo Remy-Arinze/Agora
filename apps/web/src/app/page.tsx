@@ -259,7 +259,7 @@ Stop leaving student history behind. Connect every school, every grade, and ever
               <span className="font-semibold text-blue-600 dark:text-blue-400">Agora is the Chain-of-Trust Registry</span> connecting the African education ecosystem.
             </p>
             <p className="text-lg text-gray-600 dark:text-gray-300 max-w-4xl mx-auto leading-relaxed">
-              We are moving beyond standard Learning Management Systems. Agora creates a secure digital handshake where Schools verify Teachers, Teachers verify Data, and Parents claim their children's identities forever.
+              We are moving beyond standard Learning Management Systems. Agora creates a secure digital handshake where Schools verify Teachers, Teachers verify Data, and Parents claim their children&apos;s identities forever.
             </p>
           </motion.div>
 
@@ -293,7 +293,7 @@ Stop leaving student history behind. Connect every school, every grade, and ever
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
                     </svg>
                   </div>
-                  <CardTitle className="text-2xl dark:text-white mb-2">The "Forever" Passport</CardTitle>
+                  <CardTitle className="text-2xl dark:text-white mb-2">The &quot;Forever&quot; Passport</CardTitle>
                   <p className="text-sm font-medium text-blue-600 dark:text-blue-400">Lifelong Identity</p>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -306,7 +306,7 @@ Stop leaving student history behind. Connect every school, every grade, and ever
                   <div className="bg-blue-100/50 dark:bg-blue-900/20 rounded-xl p-4 border-l-4 border-blue-500">
                     <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2">The Benefit</p>
                     <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                      Grades, vaccinations, and awards from every school they've ever attended are secured in one unbreakable digital timeline. <span className="font-semibold text-blue-600 dark:text-blue-400">No more lost files.</span>
+                      Grades, vaccinations, and awards from every school they&apos;ve ever attended are secured in one unbreakable digital timeline. <span className="font-semibold text-blue-600 dark:text-blue-400">No more lost files.</span>
                     </p>
                   </div>
                 </CardContent>

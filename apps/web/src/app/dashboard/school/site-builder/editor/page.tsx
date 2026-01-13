@@ -373,7 +373,7 @@ function SiteBuilderEditorContent() {
                   </div>
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
-                      What's included:
+                      What&apos;s included:
                     </p>
                     <ul className="space-y-1 text-sm text-light-text-secondary dark:text-dark-text-secondary">
                       <li className="flex items-center">

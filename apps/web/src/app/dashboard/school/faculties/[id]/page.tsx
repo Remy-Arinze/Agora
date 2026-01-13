@@ -117,7 +117,7 @@ export default function FacultyDetailPage() {
             Faculty Not Found
           </h2>
           <p className="text-light-text-secondary dark:text-dark-text-secondary mb-4">
-            The faculty you're looking for doesn't exist or you don't have access to it.
+            The faculty you&apos;re looking for doesn&apos;t exist or you don&apos;t have access to it.
           </p>
           <BackButton />
         </div>

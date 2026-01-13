@@ -119,7 +119,7 @@ export default function ForgotPasswordPage() {
                 </Alert>
                 <div className="text-center space-y-2">
                   <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                    Didn't receive the email? Check your spam folder or try again.
+                    Didn&apos;t receive the email? Check your spam folder or try again.
                   </p>
                   <Button
                     variant="outline"

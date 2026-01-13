@@ -972,7 +972,7 @@ export default function ClassDetailPage() {
                             </div>
                             <div>
                               <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                                Today's Attendance
+                                Today&apos;s Attendance
                               </p>
                               <p className="text-2xl font-bold text-light-text-primary dark:text-dark-text-primary">
                                 {/* TODO: Replace with real attendance data when API is ready */}

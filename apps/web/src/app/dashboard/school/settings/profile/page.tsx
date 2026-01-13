@@ -241,7 +241,7 @@ export default function SchoolProfilePage() {
             <Alert className="bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800">
               <AlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
               <AlertDescription className="text-orange-800 dark:text-orange-400">
-                You are changing the school type. This requires email verification. Click "Request Verification" to receive a verification token via email.
+                You are changing the school type. This requires email verification. Click &quot;Request Verification&quot; to receive a verification token via email.
               </AlertDescription>
             </Alert>
           </motion.div>

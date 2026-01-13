@@ -226,7 +226,7 @@ export default function TeacherPluginsPage() {
                   </h3>
                   <p className="text-sm text-blue-800 dark:text-blue-400">
                     These plugins have been subscribed to by your school. You can access and use them 
-                    at no additional cost. If you need a plugin that's not listed here, contact your 
+                    at no additional cost. If you need a plugin that&apos;s not listed here, contact your 
                     school administrator to request a subscription.
                   </p>
                 </div>

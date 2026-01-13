@@ -399,7 +399,7 @@ export default function SessionWizardPage() {
             Start New {termLabel}
           </h1>
           <p className="text-light-text-secondary dark:text-dark-text-secondary">
-            Transition your school from "Holiday" to "Active {termLabel}"
+            Transition your school from &quot;Holiday&quot; to &quot;Active {termLabel}&quot;
           </p>
         </motion.div>
 
@@ -509,7 +509,7 @@ export default function SessionWizardPage() {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium mb-2 text-light-text-primary dark:text-dark-text-primary">
-                      Session Name (e.g., "2025/2026")
+                      Session Name (e.g., &quot;2025/2026&quot;)
                     </label>
                     <Input
                       value={sessionName}
@@ -587,7 +587,7 @@ export default function SessionWizardPage() {
                     ) : sessions.length === 0 ? (
                       <div className="p-4 border border-yellow-300 dark:border-yellow-700 rounded-lg bg-yellow-50 dark:bg-yellow-900/20">
                         <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                          <strong>No sessions found{isMixed ? ` for ${getSchoolTypeLabel(currentType)}` : ''}.</strong> Please select "New Session" to start a new academic year first.
+                          <strong>No sessions found{isMixed ? ` for ${getSchoolTypeLabel(currentType)}` : ''}.</strong> Please select &quot;New Session&quot; to start a new academic year first.
                         </p>
                       </div>
                     ) : availableTerms.length === 0 ? (

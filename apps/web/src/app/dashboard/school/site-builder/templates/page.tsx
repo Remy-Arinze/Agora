@@ -105,7 +105,7 @@ export default function TemplateSelectionPage() {
             Choose a Template
           </h1>
           <p className="text-light-text-secondary dark:text-dark-text-secondary">
-            Select a template to start building your school's website. You can customize everything later.
+            Select a template to start building your school&apos;s website. You can customize everything later.
           </p>
         </motion.div>
 

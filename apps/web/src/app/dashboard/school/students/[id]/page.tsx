@@ -915,7 +915,7 @@ export default function StudentDetailPage() {
                         No Grades Available
                       </h3>
                       <p className="text-light-text-secondary dark:text-dark-text-secondary">
-                        This student doesn't have any grades recorded yet.
+                        This student doesn&apos;t have any grades recorded yet.
                       </p>
                     </div>
                   </CardContent>
@@ -1138,7 +1138,7 @@ export default function StudentDetailPage() {
                         No Transcript Available
                       </h3>
                       <p className="text-light-text-secondary dark:text-dark-text-secondary">
-                        This student doesn't have any academic records yet.
+                        This student doesn&apos;t have any academic records yet.
                       </p>
                     </div>
                   </CardContent>
