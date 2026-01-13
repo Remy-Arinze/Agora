@@ -89,12 +89,14 @@ stages:
         startUpCommand: 'node dist/main'
 
 # ==========================================================
-# STAGE 3: FRONTEND DEPLOY (WEB) - ERRORS IGNORED
+# STAGE 3: FRONTEND DEPLOY (WEB) 
 # ==========================================================
+
 - stage: Frontend
-  displayName: 'Deploy Frontend (Web)'
+  displayName: 'Deploy Frontend'
   dependsOn: CheckChanges
-  condition: eq(dependencies.CheckChanges.outputs['Check.CheckStep.webChanged'], 'true')
+  # Deploy if web changed OR if we force it (you can remove 'true' later)
+  condition: or(eq(dependencies.CheckChanges.outputs['Check.CheckStep.webChanged'], 'true'), eq(variables['Build.Reason'], 'Manual'))
   variables:
     workingDir: 'apps/web'
   jobs:
@@ -103,44 +105,29 @@ stages:
     - task: NodeTool@0
       inputs:
         versionSpec: '20.x'
-
+    
+    # Install dependencies
     - script: npm ci
       workingDirectory: $(workingDir)
-      displayName: 'Install Web Dependencies'
-
-    # HACK: Force Next.js to ignore errors
-    # This creates a minimal next.config.js if complex editing fails, 
-    # OR you can rely on the fact that we are injecting the TypeScript ignore rule.
-    - powershell: |
-        $path = "$(workingDir)/next.config.js"
-        # We append the ignore config to the file content
-        $content = Get-Content $path -Raw
-        
-        # Simple string replacement to inject the ignore rules
-        # This assumes standard module.exports syntax
-        $newContent = $content -replace "module.exports = nextConfig;", "nextConfig.typescript = { ignoreBuildErrors: true }; nextConfig.eslint = { ignoreDuringBuilds: true }; module.exports = nextConfig;"
-        
-        Set-Content -Path $path -Value $newContent
-        Write-Host "Injected ignoreBuildErrors into next.config.js"
-      displayName: 'Disable Next.js Build Errors'
-
+      displayName: 'Install Web Deps'
+      
+    # Build Next.js
     - script: npm run build
       workingDirectory: $(workingDir)
-      displayName: 'Build Next.js'
-      env:
-        NODE_OPTIONS: '--max-old-space-size=4096'
-
-    - powershell: |
-        New-Item -ItemType Directory -Force -Path .next/standalone/apps/web/public
-        New-Item -ItemType Directory -Force -Path .next/standalone/apps/web/.next/static
-        Copy-Item -Path "public\*" -Destination ".next/standalone/apps/web/public" -Recurse -Force
-        Copy-Item -Path ".next/static\*" -Destination ".next/standalone/apps/web/.next/static" -Recurse -Force
+      displayName: 'Build Web'
+      
+    # Copy public assets (Images/Icons) to the standalone build
+    - script: |
+        cp -r public .next/standalone/apps/web/public
+        cp -r .next/static .next/standalone/apps/web/.next/static
       workingDirectory: $(workingDir)
       displayName: 'Copy Static Assets'
 
+    # --- THE CRITICAL FIX IS HERE ---
+    # We are zipping '.next/standalone', NOT '.next/standalone/apps/web'
+    # This ensures 'node_modules' is included in the zip.
     - task: ArchiveFiles@2
       inputs:
-        # We zip the PARENT folder to include 'node_modules'
         rootFolderOrFile: '$(workingDir)/.next/standalone' 
         includeRootFolder: false
         archiveType: 'zip'
@@ -153,4 +140,5 @@ stages:
         appType: 'webAppLinux'
         appName: $(webAppName)
         package: '$(Build.ArtifactStagingDirectory)/web.zip'
-        startUpCommand: 'node server.js'
+        # The correct startup command for this structure
+        startUpCommand: 'node apps/web/server.js'
