@@ -27,7 +27,7 @@ stages:
       name: CheckStep
 
 # ==========================================================
-# STAGE 2: BACKEND DEPLOY (API) - STRICT MODE DISABLED
+# STAGE 2: BACKEND DEPLOY (API)
 # ==========================================================
 - stage: Backend
   displayName: 'Deploy Backend (API)'
@@ -46,24 +46,23 @@ stages:
       workingDirectory: $(workingDir)
       displayName: 'Install API Dependencies'
 
-    # HACK: Disable TypeScript Strict Mode on the fly
+    # --- THIS IS THE MISSING MAGIC STEP ---
+    # It creates 'TransferStatus', 'TermStatus', etc. inside node_modules
+    - script: npx prisma generate --schema=../../packages/database/prisma/schema.prisma
+      workingDirectory: $(workingDir)
+      displayName: 'Generate Prisma Client'
+
+    # (Keep the rest of your HACK/Build scripts exactly as they were...)
     - powershell: |
         $path = "$(workingDir)/tsconfig.json"
         if (Test-Path $path) {
             $json = Get-Content $path -Raw | ConvertFrom-Json
-            
-            # Check if compilerOptions is missing (null) and create it if necessary
-            if (-not $json.compilerOptions) {
-                $json | Add-Member -MemberType NoteProperty -Name "compilerOptions" -Value ([PSCustomObject]@{})
+            if ($json.compilerOptions) {
+                $json.compilerOptions.strict = $false
+                $json.compilerOptions.noImplicitAny = $false
+                $json.compilerOptions.skipLibCheck = $true
             }
-            
-            # Safely set or update properties using Add-Member -Force
-            $json.compilerOptions | Add-Member -MemberType NoteProperty -Name "strict" -Value $false -Force
-            $json.compilerOptions | Add-Member -MemberType NoteProperty -Name "noImplicitAny" -Value $false -Force
-            $json.compilerOptions | Add-Member -MemberType NoteProperty -Name "skipLibCheck" -Value $true -Force
-            
             $json | ConvertTo-Json -Depth 10 | Set-Content $path
-            Write-Host "Disabled strict mode in tsconfig.json"
         }
       displayName: 'Disable Strict TypeScript Checks'
 
