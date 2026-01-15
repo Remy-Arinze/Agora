@@ -167,7 +167,7 @@ export class StudentTranscriptService {
     hasSecondary: boolean;
     hasTertiary: boolean;
   }): 'PRIMARY' | 'SECONDARY' | 'TERTIARY' | 'MIXED' {
-    const levels = [];
+    const levels: string[] = [];
     if (school.hasPrimary) levels.push('PRIMARY');
     if (school.hasSecondary) levels.push('SECONDARY');
     if (school.hasTertiary) levels.push('TERTIARY');
