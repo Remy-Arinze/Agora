@@ -229,7 +229,7 @@ export class ResourcesService {
     }
 
     // Create ClassLevels
-    const createdLevels = [];
+    const createdLevels: any[] = [];
     for (const levelData of levelsToCreate) {
       const level = await this.classLevelModel.create({
         data: {
