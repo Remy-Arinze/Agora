@@ -11,7 +11,7 @@ variables:
 
 stages:
 # ==========================================================
-# STAGE 1: SMART CHANGE DETECTION (V2 - ROBUST)
+# STAGE 1: SMART CHANGE DETECTION
 # ==========================================================
 - stage: CheckChanges
   displayName: 'Analyze Changed Paths'
@@ -72,7 +72,7 @@ stages:
       inputs:
         versionSpec: '20.x'
     
-    # 1. Install at ROOT to ensure all dependencies (including hoisted ones) are present
+    # 1. Install at ROOT to ensure all dependencies are present
     - script: npm ci
       workingDirectory: . 
       displayName: 'Install All Dependencies (Root)'
@@ -105,56 +105,61 @@ stages:
       env:
         NODE_OPTIONS: '--max-old-space-size=4096'
 
-    # 5. PREPARE DEPLOYMENT ARTIFACTS (CRITICAL FIX)
-    # This script assembles 'dist', 'package.json', and 'node_modules' into a deploy folder
+    # 5. PREPARE DEPLOYMENT ARTIFACTS (FIXED PATHS)
     - powershell: |
         $rootSource = "$(Build.SourcesDirectory)"
         $appDir = "$rootSource/apps/api"
+        # The build output is INSIDE apps/api/dist because of workingDirectory
+        $buildDist = "$appDir/dist" 
         $deployDir = "$rootSource/deploy_api"
         
+        Write-Host "Checking for build artifacts in: $buildDist"
+        
+        if (-not (Test-Path $buildDist)) {
+             Write-Host "##vso[task.logissue type=error]CRITICAL: 'dist' folder not found at $buildDist"
+             Write-Host "Listing apps/api:"
+             Get-ChildItem $appDir
+             exit 1
+        }
+
         Write-Host "Preparing deployment package at $deployDir..."
         New-Item -ItemType Directory -Force -Path $deployDir | Out-Null
 
-        # A. Copy package.json (Required for startup)
+        # A. Copy package.json
         Copy-Item -Path "$appDir/package.json" -Destination $deployDir -Force
 
-        # B. Find and Copy built files (dist/main.js)
-        # Search recursively for main.js because NestJS might nest it (dist/apps/api/main.js)
-        $mainFile = Get-ChildItem -Path "$rootSource/dist" -Filter "main.js" -Recurse | Select-Object -First 1
+        # B. Find and Copy built files (recursive search for main.js)
+        # We search inside apps/api/dist
+        $mainFile = Get-ChildItem -Path $buildDist -Filter "main.js" -Recurse | Select-Object -First 1
         
         if ($mainFile) {
-            Write-Host "Found compiled app at: $($mainFile.FullName)"
-            # Copy the folder containing main.js to 'deploy_dist/dist'
-            $sourceDist = $mainFile.Directory.FullName
+            Write-Host "Found compiled entry point at: $($mainFile.FullName)"
+            
+            # The folder containing main.js is what we want to be our 'dist'
+            $sourceDistContent = $mainFile.Directory.FullName
             $targetDist = "$deployDir/dist"
             New-Item -ItemType Directory -Force -Path $targetDist | Out-Null
-            Copy-Item -Path "$sourceDist/*" -Destination $targetDist -Recurse -Force
-            Write-Host "Copied compiled code to $targetDist"
+            
+            Write-Host "Flattening structure: Copying content from $sourceDistContent to $targetDist"
+            Copy-Item -Path "$sourceDistContent/*" -Destination $targetDist -Recurse -Force
         } else {
-            Write-Host "##vso[task.logissue type=error]CRITICAL: Could not find compiled 'main.js'!"
+            Write-Host "##vso[task.logissue type=error]CRITICAL: Could not find 'main.js' inside $buildDist"
+            Write-Host "Listing dist contents for debugging:"
+            Get-ChildItem $buildDist -Recurse
             exit 1
         }
 
         # C. Copy node_modules (Fixes 'Cannot find module' error)
-        # We copy from ROOT node_modules to ensure we get hoisted dependencies like @nestjs/core
         Write-Host "Copying dependencies from Root node_modules..."
         $rootModules = "$rootSource/node_modules"
         $targetModules = "$deployDir/node_modules"
         
-        # Robust copy using Robocopy (standard on Windows agents) for speed and symlink handling
-        # /E = Recursive, /SL = Copy symlink links (don't follow forever), /NFL = No File List (quiet)
         robocopy $rootModules $targetModules /E /SL /NFL /NDL /XO
-        
-        # Robocopy exit codes 0-7 are success
-        if ($LASTEXITCODE -gt 7) { 
-            Write-Host "##vso[task.logissue type=warning]Robocopy finished with code $LASTEXITCODE (Check logs)" 
-        } else {
-            Write-Host "Dependencies copied successfully."
-        }
+        if ($LASTEXITCODE -gt 7) { Write-Host "##vso[task.logissue type=warning]Robocopy finished with code $LASTEXITCODE" }
 
       displayName: 'Assemble Deployment Package'
 
-    # 6. Archive the PREPARED folder, not the source folder
+    # 6. Archive the PREPARED folder
     - task: ArchiveFiles@2
       inputs:
         rootFolderOrFile: '$(Build.SourcesDirectory)/deploy_api'
