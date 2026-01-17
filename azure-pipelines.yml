@@ -20,14 +20,14 @@ stages:
     displayName: 'Check Git Diff'
     steps:
     - checkout: self
-      fetchDepth: 0 # Fetch all history so we can compare properly
+      fetchDepth: 0 
 
     - powershell: |
         Write-Host "Checking for changes..."
         try {
             $changes = git diff --name-only origin/develop..HEAD
         } catch {
-            Write-Host "Git diff failed (likely first run), defaulting to DEPLOY ALL."
+            Write-Host "Git diff failed, defaulting to DEPLOY ALL."
             $changes = "apps/api apps/web azure-pipelines.yml"
         }
         
@@ -72,16 +72,17 @@ stages:
       inputs:
         versionSpec: '20.x'
     
+    # 1. Install at ROOT to ensure all dependencies (including hoisted ones) are present
     - script: npm ci
-      workingDirectory: $(workingDir)
-      displayName: 'Install API Dependencies'
+      workingDirectory: . 
+      displayName: 'Install All Dependencies (Root)'
 
-    # 1. Generate Prisma Client
-    - script: npx prisma generate --schema=../../packages/database/prisma/schema.prisma
-      workingDirectory: $(workingDir)
+    # 2. Generate Prisma Client
+    - script: npx prisma generate --schema=packages/database/prisma/schema.prisma
+      workingDirectory: .
       displayName: 'Generate Prisma Client'
 
-    # 2. Force Disable Strict Mode
+    # 3. Force Disable Strict Mode
     - powershell: |
         $path = "$(workingDir)/tsconfig.json"
         if (Test-Path $path) {
@@ -97,69 +98,66 @@ stages:
         }
       displayName: 'Disable Strict TypeScript Checks'
 
+    # 4. Build the API
     - script: npm run build
       workingDirectory: $(workingDir)
       displayName: 'Build NestJS'
       env:
         NODE_OPTIONS: '--max-old-space-size=4096'
 
-    # --- 3. FIX: SMART ARTIFACT FLATTENER ---
-    # This script searches for main.js recursively and moves it to the root of dist/
+    # 5. PREPARE DEPLOYMENT ARTIFACTS (CRITICAL FIX)
+    # This script assembles 'dist', 'package.json', and 'node_modules' into a deploy folder
     - powershell: |
-        $localDist = "dist"
-        $rootDist = "../../dist/apps/api"
+        $rootSource = "$(Build.SourcesDirectory)"
+        $appDir = "$rootSource/apps/api"
+        $deployDir = "$rootSource/deploy_api"
         
-        Write-Host "--- Checking Build Output ---"
+        Write-Host "Preparing deployment package at $deployDir..."
+        New-Item -ItemType Directory -Force -Path $deployDir | Out-Null
+
+        # A. Copy package.json (Required for startup)
+        Copy-Item -Path "$appDir/package.json" -Destination $deployDir -Force
+
+        # B. Find and Copy built files (dist/main.js)
+        # Search recursively for main.js because NestJS might nest it (dist/apps/api/main.js)
+        $mainFile = Get-ChildItem -Path "$rootSource/dist" -Filter "main.js" -Recurse | Select-Object -First 1
         
-        # 1. Check if NestJS dropped files in the Monorepo Root (common behavior)
-        if (Test-Path $rootDist) {
-            Write-Host "Found build artifacts in root ($rootDist). Copying to local dist..."
-            if (-not (Test-Path $localDist)) { New-Item -ItemType Directory -Force -Path $localDist }
-            Copy-Item -Path "$rootDist/*" -Destination $localDist -Recurse -Force
-        } 
-        
-        # 2. Find where main.js is actually hiding
-        $mainFile = Get-ChildItem -Path $localDist -Filter "main.js" -Recurse | Select-Object -First 1
-        
-        if (-not $mainFile) {
-            Write-Host "##vso[task.logissue type=error]CRITICAL: 'main.js' was not found anywhere in the dist folder!"
-            Write-Host "Listing all files in dist for debugging:"
-            Get-ChildItem $localDist -Recurse | Format-Table FullName
+        if ($mainFile) {
+            Write-Host "Found compiled app at: $($mainFile.FullName)"
+            # Copy the folder containing main.js to 'deploy_dist/dist'
+            $sourceDist = $mainFile.Directory.FullName
+            $targetDist = "$deployDir/dist"
+            New-Item -ItemType Directory -Force -Path $targetDist | Out-Null
+            Copy-Item -Path "$sourceDist/*" -Destination $targetDist -Recurse -Force
+            Write-Host "Copied compiled code to $targetDist"
+        } else {
+            Write-Host "##vso[task.logissue type=error]CRITICAL: Could not find compiled 'main.js'!"
             exit 1
         }
+
+        # C. Copy node_modules (Fixes 'Cannot find module' error)
+        # We copy from ROOT node_modules to ensure we get hoisted dependencies like @nestjs/core
+        Write-Host "Copying dependencies from Root node_modules..."
+        $rootModules = "$rootSource/node_modules"
+        $targetModules = "$deployDir/node_modules"
         
-        Write-Host "Found entry point at: $($mainFile.FullName)"
+        # Robust copy using Robocopy (standard on Windows agents) for speed and symlink handling
+        # /E = Recursive, /SL = Copy symlink links (don't follow forever), /NFL = No File List (quiet)
+        robocopy $rootModules $targetModules /E /SL /NFL /NDL /XO
         
-        # 3. If main.js is nested (e.g. dist/src/main.js), move everything up
-        if ($mainFile.Directory.Name -ne "dist") {
-            Write-Host "Artifacts are nested inside '$($mainFile.Directory.Name)'. Flattening structure..."
-            
-            $sourceDir = $mainFile.Directory.FullName
-            # Copy all files from the nested folder to the main dist folder
-            Copy-Item -Path "$sourceDir/*" -Destination $localDist -Recurse -Force
-            
-            Write-Host "Files moved to $localDist successfully."
+        # Robocopy exit codes 0-7 are success
+        if ($LASTEXITCODE -gt 7) { 
+            Write-Host "##vso[task.logissue type=warning]Robocopy finished with code $LASTEXITCODE (Check logs)" 
         } else {
-            Write-Host "Artifacts are already in the correct structure."
+            Write-Host "Dependencies copied successfully."
         }
 
-        # 4. Final Verification
-        if (Test-Path "$localDist/main.js") {
-            Write-Host "SUCCESS: dist/main.js is ready for deployment."
-        } else {
-            Write-Host "##vso[task.logissue type=error]ERROR: Failed to prepare dist/main.js."
-            exit 1
-        }
-      workingDirectory: $(workingDir)
-      displayName: 'Normalize Build Artifacts'
+      displayName: 'Assemble Deployment Package'
 
-    - script: npm prune --production
-      workingDirectory: $(workingDir)
-      displayName: 'Prune Dev Dependencies'
-
+    # 6. Archive the PREPARED folder, not the source folder
     - task: ArchiveFiles@2
       inputs:
-        rootFolderOrFile: '$(workingDir)'
+        rootFolderOrFile: '$(Build.SourcesDirectory)/deploy_api'
         includeRootFolder: false
         archiveType: 'zip'
         archiveFile: '$(Build.ArtifactStagingDirectory)/api.zip'
