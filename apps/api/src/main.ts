@@ -51,9 +51,14 @@ async function bootstrap() {
   );
 
   // CORS configuration - allow credentials for httpOnly cookies
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  // Always allow both the configured FRONTEND_URL and localhost for development
+  const frontendUrl = process.env.FRONTEND_URL;
+  const allowedOrigins = ['http://localhost:3000'];
+  if (frontendUrl && frontendUrl !== 'http://localhost:3000') {
+    allowedOrigins.push(frontendUrl);
+  }
   app.enableCors({
-    origin: frontendUrl,
+    origin: allowedOrigins,
     credentials: true, // Required for cookies
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-tenant-id'],
