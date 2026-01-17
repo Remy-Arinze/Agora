@@ -11,19 +11,49 @@ variables:
 
 stages:
 # ==========================================================
-# STAGE 1: FORCE TRIGGER
+# STAGE 1: SMART CHANGE DETECTION
 # ==========================================================
 - stage: CheckChanges
   displayName: 'Analyze Changed Paths'
   jobs:
   - job: Check
-    displayName: 'Force Trigger'
+    displayName: 'Check Git Diff'
     steps:
-    - checkout: none
+    # 1. Checkout code with depth 2 to compare HEAD vs previous commit
+    - checkout: self
+      fetchDepth: 2
+
+    # 2. Run logic to detect where changes happened
     - powershell: |
-        Write-Host "Forcing deployment..."
-        Write-Host "##vso[task.setvariable variable=apiChanged;isOutput=true]true"
-        Write-Host "##vso[task.setvariable variable=webChanged;isOutput=true]true"
+        Write-Host "Checking for changes..."
+        
+        # Get list of changed files between current and previous commit
+        # We use 'git diff' to look at file names only
+        $changes = git diff HEAD~1 HEAD --name-only
+        
+        Write-Host "Files changed in this push:"
+        Write-Host $changes
+
+        # Initialize flags
+        $apiChanged = "false"
+        $webChanged = "false"
+
+        # --- LOGIC ---
+        # If 'apps/api' OR 'packages' (shared) changes -> Deploy Backend
+        if ($changes -match "apps/api" -or $changes -match "packages") {
+            $apiChanged = "true"
+            Write-Host "Detected changes in API or Packages."
+        }
+
+        # If 'apps/web' OR 'packages' (shared) changes -> Deploy Frontend
+        if ($changes -match "apps/web" -or $changes -match "packages") {
+            $webChanged = "true"
+            Write-Host "Detected changes in Web or Packages."
+        }
+
+        # Set Output Variables for next stages
+        Write-Host "##vso[task.setvariable variable=apiChanged;isOutput=true]$apiChanged"
+        Write-Host "##vso[task.setvariable variable=webChanged;isOutput=true]$webChanged"
       name: CheckStep
 
 # ==========================================================
@@ -32,7 +62,8 @@ stages:
 - stage: Backend
   displayName: 'Deploy Backend (API)'
   dependsOn: CheckChanges
-  condition: eq(dependencies.CheckChanges.outputs['Check.CheckStep.apiChanged'], 'true')
+  # Deploy if API changed OR if triggered Manually
+  condition: or(eq(dependencies.CheckChanges.outputs['Check.CheckStep.apiChanged'], 'true'), eq(variables['Build.Reason'], 'Manual'))
   variables:
     workingDir: 'apps/api'
   jobs:
@@ -46,23 +77,21 @@ stages:
       workingDirectory: $(workingDir)
       displayName: 'Install API Dependencies'
 
-    # 1. Generate Prisma Client (Fixes 'TransferStatus' errors)
+    # 1. Generate Prisma Client (Critical for build)
     - script: npx prisma generate --schema=../../packages/database/prisma/schema.prisma
       workingDirectory: $(workingDir)
       displayName: 'Generate Prisma Client'
 
-    # 2. Force Disable Strict Mode (Fixes 'Property strict cannot be found' error)
+    # 2. Force Disable Strict Mode (Critical for build success)
     - powershell: |
         $path = "$(workingDir)/tsconfig.json"
         if (Test-Path $path) {
             $json = Get-Content $path -Raw | ConvertFrom-Json
             
-            # Create compilerOptions object if missing
             if (-not $json.PSObject.Properties['compilerOptions']) {
                 $json | Add-Member -MemberType NoteProperty -Name 'compilerOptions' -Value @{}
             }
 
-            # Force add properties (works even if they don't exist)
             $json.compilerOptions | Add-Member -MemberType NoteProperty -Name "strict" -Value $false -Force
             $json.compilerOptions | Add-Member -MemberType NoteProperty -Name "noImplicitAny" -Value $false -Force
             $json.compilerOptions | Add-Member -MemberType NoteProperty -Name "skipLibCheck" -Value $true -Force
@@ -101,11 +130,10 @@ stages:
 # ==========================================================
 # STAGE 3: FRONTEND DEPLOY (WEB) 
 # ==========================================================
-
 - stage: Frontend
   displayName: 'Deploy Frontend'
   dependsOn: CheckChanges
-  # Runs if web changed OR if triggered manually
+  # Deploy if Web changed OR if triggered Manually
   condition: or(eq(dependencies.CheckChanges.outputs['Check.CheckStep.webChanged'], 'true'), eq(variables['Build.Reason'], 'Manual'))
   variables:
     workingDir: 'apps/web'
@@ -120,26 +148,19 @@ stages:
       workingDirectory: $(workingDir)
       displayName: 'Install Dependencies'
 
-    # --- FIX APPLIED HERE: Added -- --no-lint to skip ESLint errors ---
+    # Fix: Skip Linting
     - script: npm run build -- --no-lint
       workingDirectory: $(workingDir)
       displayName: 'Build Next.js App (No Lint)'
 
-   # NEW (Works on Windows)
+    # Fix: Use PowerShell for Windows Agent
     - powershell: |
-        # Copy 'public' folder
         Copy-Item -Path "public" -Destination ".next/standalone/apps/web" -Recurse -Force
-        
-        # Create the .next folder structure if it doesn't exist
         New-Item -Path ".next/standalone/apps/web/.next" -ItemType Directory -Force
-        
-        # Copy 'static' folder
         Copy-Item -Path ".next/static" -Destination ".next/standalone/apps/web/.next" -Recurse -Force
       workingDirectory: $(workingDir)
       displayName: 'Copy Static Assets to Standalone'
 
-    # ROOT CAUSE FIX 2: Archive the PARENT folder
-    # We zip '.next/standalone' (which contains node_modules), NOT 'apps/web'.
     - task: ArchiveFiles@2
       inputs:
         rootFolderOrFile: '$(workingDir)/.next/standalone' 
@@ -154,5 +175,4 @@ stages:
         appType: 'webAppLinux'
         appName: $(webAppName)
         package: '$(Build.ArtifactStagingDirectory)/web.zip'
-        # ROOT CAUSE FIX 3: Point to the nested server file
         startUpCommand: 'node apps/web/server.js'
