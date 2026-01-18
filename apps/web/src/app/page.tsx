@@ -203,124 +203,128 @@ export default function Home() {
             <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
               Infrastructure, Not Just Software
             </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-4xl mx-auto leading-relaxed mb-4">
-              <span className="font-semibold text-agora-blue">Agora is the Chain-of-Trust Registry</span> connecting the African education ecosystem.
-            </p>
-            <p className="text-lg text-gray-600 dark:text-gray-300 max-w-4xl mx-auto leading-relaxed">
-              We are moving beyond standard Learning Management Systems. Agora creates a secure digital handshake where Schools verify Teachers, Teachers verify Data, and Parents claim their children&apos;s identities forever.
+            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-4xl mx-auto leading-relaxed">
+              Agora creates a borderless academic identity for every student, making it possible for them to have their entire educational history in their pocket, securedly.
             </p>
           </motion.div>
+        </div>
+      </section>
 
-          {/* The Three Pillars Badge */}
+      {/* Key Features Section */}
+      <section data-navbar-light="true" className="py-24 bg-[var(--light-bg)] dark:bg-[var(--dark-bg)]">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-center mb-12"
+            viewport={{ once: true, margin: "-100px" }}
+            transition={{ duration: 0.6 }}
+            className="text-center mb-20"
           >
-            <span className="inline-block px-4 py-2 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-full text-sm font-semibold">
-              The Three Pillars
-            </span>
+            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
+              Key Features
+            </h2>
+            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+              Everything you need to manage and verify education identities
+            </p>
           </motion.div>
 
-          <motion.div
-            variants={staggerContainer}
-            initial="initial"
-            whileInView="animate"
-            viewport={{ once: true }}
-            className="grid grid-cols-1 md:grid-cols-3 gap-8"
-          >
-            {/* Pillar 1: The "Forever" Passport */}
-            <motion.div variants={fadeInUp}>
-              <Card className="h-full border-0 shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 overflow-hidden relative group">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-agora-blue to-indigo-500" />
-                <CardHeader className="pb-2">
-                  <div className="w-16 h-16 bg-gradient-to-br from-agora-blue to-indigo-600 rounded-2xl flex items-center justify-center mb-5 shadow-lg group-hover:scale-110 transition-transform">
-                    <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
-                    </svg>
-                  </div>
-                  <CardTitle className="text-2xl dark:text-white mb-2">The &quot;Forever&quot; Passport</CardTitle>
-                  <p className="text-sm font-medium text-agora-blue">Lifelong Identity</p>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="bg-white/60 dark:bg-white/5 rounded-xl p-4">
-                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 font-sans">The Concept</p>
-                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                      Every student receives a Universal ID (UID) that stays with them from Primary 1 to University.
-                    </p>
-                  </div>
-                  <div className="bg-blue-100/50 dark:bg-blue-900/20 rounded-xl p-4 border-l-4 border-agora-blue">
-                    <p className="text-xs font-semibold text-agora-blue uppercase tracking-wider mb-2 font-sans">The Benefit</p>
-                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed font-medium">
-                      Grades, vaccinations, and awards are secured in one digital timeline. <span className="text-agora-accent underline decoration-agora-accent/30 underline-offset-4">No more lost files.</span>
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <motion.div
+              initial={{ opacity: 0, x: -30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.6 }}
+              className="flex gap-6 p-8 rounded-3xl hover:bg-white dark:hover:bg-white/5 border border-transparent hover:border-agora-blue/20 transition-all duration-300 group shadow-sm hover:shadow-xl"
+            >
+              <div className="flex-shrink-0">
+                <div className="w-16 h-16 bg-agora-blue/10 rounded-2xl flex items-center justify-center group-hover:bg-agora-blue transition-colors duration-300">
+                  <svg className="w-8 h-8 text-agora-blue group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold text-agora-text dark:text-white mb-3">
+                  Multi-Tenant Architecture
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
+                  Each school gets a white-label portal with total isolation. Perfect for districts, networks, and government systems.
+                </p>
+              </div>
             </motion.div>
 
-            {/* Pillar 2: The Chain-of-Trust */}
-            <motion.div variants={fadeInUp}>
-              <Card className="h-full border-0 shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/50 dark:to-teal-950/50 overflow-hidden relative group">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-agora-success to-teal-500" />
-                <CardHeader className="pb-2">
-                  <div className="w-16 h-16 bg-gradient-to-br from-agora-success to-teal-600 rounded-2xl flex items-center justify-center mb-5 shadow-lg group-hover:scale-110 transition-transform">
-                    <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                    </svg>
-                  </div>
-                  <CardTitle className="text-2xl dark:text-white mb-2">The Chain-of-Trust</CardTitle>
-                  <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">Verification</p>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="bg-white/60 dark:bg-white/5 rounded-xl p-4">
-                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 font-sans">The Concept</p>
-                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                      Every grade is signed by verified teachers. Schools verify teachers, and teachers verify data via digital signatures.
-                    </p>
-                  </div>
-                  <div className="bg-emerald-100/50 dark:bg-emerald-900/20 rounded-xl p-4 border-l-4 border-agora-success">
-                    <p className="text-xs font-semibold text-agora-success uppercase tracking-wider mb-2 font-sans">The Benefit</p>
-                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed font-medium">
-                      Immutable academic provenance. <span className="text-agora-accent">Records are verified</span> and travel with students wherever they go.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+            <motion.div
+              initial={{ opacity: 0, x: 30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.6 }}
+              className="flex gap-6 p-8 rounded-3xl hover:bg-white dark:hover:bg-white/5 border border-transparent hover:border-agora-success/20 transition-all duration-300 group shadow-sm hover:shadow-xl"
+            >
+              <div className="flex-shrink-0">
+                <div className="w-16 h-16 bg-agora-success/10 rounded-2xl flex items-center justify-center group-hover:bg-agora-success transition-colors duration-300">
+                  <svg className="w-8 h-8 text-agora-success group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold text-agora-text dark:text-white mb-3">
+                  Secure & Immutable
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
+                  Once a parent claims a profile, it becomes locked. We prevent identity fraud and ensure academic trust.
+                </p>
+              </div>
             </motion.div>
 
-            {/* Pillar 3: Seamless Transfers */}
-            <motion.div variants={fadeInUp}>
-              <Card className="h-full border-0 shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/50 dark:to-orange-950/50 overflow-hidden relative group">
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-agora-accent to-orange-500" />
-                <CardHeader className="pb-2">
-                  <div className="w-16 h-16 bg-gradient-to-br from-agora-accent to-orange-600 rounded-2xl flex items-center justify-center mb-5 shadow-lg group-hover:scale-110 transition-transform">
-                    <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                    </svg>
-                  </div>
-                  <CardTitle className="text-2xl dark:text-white mb-2">Seamless Transfers</CardTitle>
-                  <p className="text-sm font-medium text-amber-600 dark:text-amber-400">Mobility</p>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="bg-white/60 dark:bg-white/5 rounded-xl p-4">
-                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 font-sans">The Concept</p>
-                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                      Transfer between schools using Transfer Access Codes (TAC). Data moves automatically.
-                    </p>
-                  </div>
-                  <div className="bg-amber-100/50 dark:bg-amber-900/20 rounded-xl p-4 border-l-4 border-agora-accent">
-                    <p className="text-xs font-semibold text-agora-accent uppercase tracking-wider mb-2 font-sans">The Benefit</p>
-                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed font-medium">
-                      No more manual record transfers. <span className="text-agora-blue"> Continuity is guaranteed</span> across the entire ecosystem.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+            <motion.div
+              initial={{ opacity: 0, x: -30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.6 }}
+              className="flex gap-6 p-8 rounded-3xl hover:bg-white dark:hover:bg-white/5 border border-transparent hover:border-agora-accent/20 transition-all duration-300 group shadow-sm hover:shadow-xl"
+            >
+              <div className="flex-shrink-0">
+                <div className="w-16 h-16 bg-agora-accent/10 rounded-2xl flex items-center justify-center group-hover:bg-agora-accent transition-colors duration-300">
+                  <svg className="w-8 h-8 text-agora-accent group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold text-agora-text dark:text-white mb-3">
+                  Seamless Transfers
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
+                  Move between schools with complete academic history. Debt checking ensures clean transfers for institutions.
+                </p>
+              </div>
             </motion.div>
-          </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: 30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.6 }}
+              className="flex gap-6 p-8 rounded-3xl hover:bg-white dark:hover:bg-white/5 border border-transparent hover:border-agora-blue/20 transition-all duration-300 group shadow-sm hover:shadow-xl"
+            >
+              <div className="flex-shrink-0">
+                <div className="w-16 h-16 bg-agora-blue/10 rounded-2xl flex items-center justify-center group-hover:bg-agora-blue transition-colors duration-300">
+                  <svg className="w-8 h-8 text-agora-blue group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                  </svg>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold text-agora-text dark:text-white mb-3">
+                  Offline-First
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
+                  Works offline with local persistence. Perfect for areas with unreliable internet connectivity.
+                </p>
+              </div>
+            </motion.div>
+          </div>
         </div>
       </section>
 
@@ -543,124 +547,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Key Features Section */}
-      <section data-navbar-light="true" className="py-24 bg-[var(--light-bg)] dark:bg-[var(--dark-bg)]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-100px" }}
-            transition={{ duration: 0.6 }}
-            className="text-center mb-20"
-          >
-            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
-              Key Features
-            </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-              Everything you need to manage and verify education identities
-            </p>
-          </motion.div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true, margin: "-50px" }}
-              transition={{ duration: 0.6 }}
-              className="flex gap-6 p-8 rounded-3xl hover:bg-white dark:hover:bg-white/5 border border-transparent hover:border-agora-blue/20 transition-all duration-300 group shadow-sm hover:shadow-xl"
-            >
-              <div className="flex-shrink-0">
-                <div className="w-16 h-16 bg-agora-blue/10 rounded-2xl flex items-center justify-center group-hover:bg-agora-blue transition-colors duration-300">
-                  <svg className="w-8 h-8 text-agora-blue group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                  </svg>
-                </div>
-              </div>
-              <div>
-                <h3 className="text-2xl font-bold text-agora-text dark:text-white mb-3">
-                  Multi-Tenant Architecture
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-                  Each school gets a white-label portal with total isolation. Perfect for districts, networks, and government systems.
-                </p>
-              </div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, x: 30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true, margin: "-50px" }}
-              transition={{ duration: 0.6 }}
-              className="flex gap-6 p-8 rounded-3xl hover:bg-white dark:hover:bg-white/5 border border-transparent hover:border-agora-success/20 transition-all duration-300 group shadow-sm hover:shadow-xl"
-            >
-              <div className="flex-shrink-0">
-                <div className="w-16 h-16 bg-agora-success/10 rounded-2xl flex items-center justify-center group-hover:bg-agora-success transition-colors duration-300">
-                  <svg className="w-8 h-8 text-agora-success group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                  </svg>
-                </div>
-              </div>
-              <div>
-                <h3 className="text-2xl font-bold text-agora-text dark:text-white mb-3">
-                  Secure & Immutable
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-                  Once a parent claims a profile, it becomes locked. We prevent identity fraud and ensure academic trust.
-                </p>
-              </div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true, margin: "-50px" }}
-              transition={{ duration: 0.6 }}
-              className="flex gap-6 p-8 rounded-3xl hover:bg-white dark:hover:bg-white/5 border border-transparent hover:border-agora-accent/20 transition-all duration-300 group shadow-sm hover:shadow-xl"
-            >
-              <div className="flex-shrink-0">
-                <div className="w-16 h-16 bg-agora-accent/10 rounded-2xl flex items-center justify-center group-hover:bg-agora-accent transition-colors duration-300">
-                  <svg className="w-8 h-8 text-agora-accent group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                  </svg>
-                </div>
-              </div>
-              <div>
-                <h3 className="text-2xl font-bold text-agora-text dark:text-white mb-3">
-                  Seamless Transfers
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-                  Move between schools with complete academic history. Debt checking ensures clean transfers for institutions.
-                </p>
-              </div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, x: 30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true, margin: "-50px" }}
-              transition={{ duration: 0.6 }}
-              className="flex gap-6 p-8 rounded-3xl hover:bg-white dark:hover:bg-white/5 border border-transparent hover:border-agora-blue/20 transition-all duration-300 group shadow-sm hover:shadow-xl"
-            >
-              <div className="flex-shrink-0">
-                <div className="w-16 h-16 bg-agora-blue/10 rounded-2xl flex items-center justify-center group-hover:bg-agora-blue transition-colors duration-300">
-                  <svg className="w-8 h-8 text-agora-blue group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                  </svg>
-                </div>
-              </div>
-              <div>
-                <h3 className="text-2xl font-bold text-agora-text dark:text-white mb-3">
-                  Offline-First
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
-                  Works offline with local persistence. Perfect for areas with unreliable internet connectivity.
-                </p>
-              </div>
-            </motion.div>
-          </div>
-        </div>
-      </section>
-
       {/* CTA Section */}
       <section className="py-24 bg-agora-text relative overflow-hidden">
         {/* Animated background elements */}
@@ -685,24 +571,6 @@ export default function Home() {
               Join schools, parents, and students building the future of
               digital education identity.
             </p>
-            <div className="flex flex-col sm:flex-row gap-6 justify-center">
-              <Button
-                size="lg"
-                onClick={handleGetStarted}
-                className="bg-agora-accent hover:bg-orange-600 text-white shadow-[0_10px_30px_rgba(255,83,42,0.3)] hover:shadow-[0_15px_40px_rgba(255,83,42,0.5)] transition-all duration-300 text-lg px-12 py-8 font-bold hover:scale-105 rounded-2xl"
-              >
-                {isLoggedIn ? 'Go to Dashboard' : 'Get Started Free'}
-              </Button>
-              <Link href="/auth/login">
-                <Button
-                  size="lg"
-                  variant="outline"
-                  className="border-2 border-white/20 text-white hover:bg-white/10 backdrop-blur-sm shadow-xl text-lg px-12 py-8 font-bold hover:scale-105 transition-all duration-300 rounded-2xl"
-                >
-                  Sign In
-                </Button>
-              </Link>
-            </div>
           </motion.div>
         </div>
       </section>

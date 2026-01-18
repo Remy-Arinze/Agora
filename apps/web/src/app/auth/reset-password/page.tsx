@@ -10,6 +10,8 @@ import { Alert } from '@/components/ui/Alert';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { motion } from 'framer-motion';
 import { Lock, Eye, EyeOff } from 'lucide-react';
+import Link from 'next/link';
+import Image from 'next/image';
 
 function ResetPasswordContent() {
   const router = useRouter();
@@ -129,13 +131,17 @@ function ResetPasswordContent() {
         className="w-full max-w-md"
       >
         {/* Agora Logo */}
-        <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
-            <div className="w-6 h-6 bg-white rounded-sm"></div>
-          </div>
-          <h1 className="text-3xl font-bold text-light-text-primary dark:text-dark-text-primary">
-            Agora
-          </h1>
+        <div className="flex items-center justify-center mb-8">
+          <Link href="/" className="flex items-center">
+            <Image
+              src="/assets/logos/agora_worded_white.png"
+              alt="Agora"
+              width={180}
+              height={48}
+              className="h-12 w-auto brightness-0 dark:brightness-100"
+              priority
+            />
+          </Link>
         </div>
 
         <Card>

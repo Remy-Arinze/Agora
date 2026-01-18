@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import Link from 'next/link';
+import Image from 'next/image';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 function LoginContent() {
@@ -100,11 +101,17 @@ function LoginContent() {
     <div className="min-h-screen flex items-center justify-center bg-[var(--light-bg)] dark:bg-dark-bg py-12 px-4 sm:px-6 lg:px-8">
       <div className="w-full max-w-md">
         {/* Logo */}
-        <div className="flex items-center justify-center gap-3 mb-8">
-          <div className="h-10 w-12 bg-blue-600 dark:bg-blue-500 rounded-br-lg rounded-tr-sm rounded-tl-lg rounded-bl-sm flex-shrink-0" />
-          <h1 className="text-3xl font-bold text-light-text-primary dark:text-dark-text-primary">
-            Agora
-          </h1>
+        <div className="flex items-center justify-center mb-8">
+          <Link href="/" className="flex items-center">
+            <Image
+              src="/assets/logos/agora_worded_white.png"
+              alt="Agora"
+              width={180}
+              height={48}
+              className="h-12 w-auto brightness-0 dark:brightness-100"
+              priority
+            />
+          </Link>
         </div>
         
         <Card>

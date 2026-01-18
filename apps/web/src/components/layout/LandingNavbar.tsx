@@ -14,6 +14,7 @@ export function LandingNavbar() {
     // Initialize based on pathname to match server render
     const [isLightSection, setIsLightSection] = useState(!isHomePage);
     const [isMounted, setIsMounted] = useState(false);
+    const [hasScrolled, setHasScrolled] = useState(false);
 
     // Ensure component is mounted before applying dynamic styles
     useEffect(() => {
@@ -28,67 +29,62 @@ export function LandingNavbar() {
             return;
         }
 
-        // Use Intersection Observer to detect which section is in view
-        const observerOptions = {
-            root: null,
-            rootMargin: '-100px 0px -50% 0px', // Trigger when section is near top of viewport
-            threshold: [0, 0.1, 0.5, 1],
-        };
-
-        const observerCallback = (entries: IntersectionObserverEntry[]) => {
-            // Find sections that are currently intersecting
-            const intersectingSections = entries.filter(entry => entry.isIntersecting);
-            
-            if (intersectingSections.length > 0) {
-                // Get the section closest to the top
-                const topSection = intersectingSections.reduce((prev, current) => {
-                    const prevTop = prev.boundingClientRect.top;
-                    const currentTop = current.boundingClientRect.top;
-                    return currentTop < prevTop ? current : prev;
-                });
-
-                const section = topSection.target as HTMLElement;
-                const needsLightNavbar = section.dataset.navbarLight === 'true';
-                setIsLightSection(needsLightNavbar);
-            }
-        };
-
-        const observer = new IntersectionObserver(observerCallback, observerOptions);
-
-        // Observe all sections on the page
-        const sections = document.querySelectorAll('section');
-        sections.forEach((section) => observer.observe(section));
-
-        // Check initial scroll position
+        // Check which section is dominant in viewport
         const checkInitialSection = () => {
             const sections = document.querySelectorAll('section');
-            let topSection: HTMLElement | null = null;
+            const viewportHeight = window.innerHeight;
+            
+            // Hero section is always the first section
+            const heroSection = sections[0] as HTMLElement | undefined;
+            
+            if (heroSection) {
+                const heroRect = heroSection.getBoundingClientRect();
+                // Calculate visible height of hero section in viewport
+                const heroTop = Math.max(0, heroRect.top);
+                const heroBottom = Math.min(viewportHeight, heroRect.bottom);
+                const heroVisibleHeight = Math.max(0, heroBottom - heroTop);
+                const heroVisiblePercent = heroVisibleHeight / viewportHeight;
+                
+                // Keep white navbar if hero is still more than 30% visible
+                if (heroVisiblePercent > 0.3) {
+                    setIsLightSection(false);
+                    return;
+                }
+            }
+            
+            // Hero is mostly scrolled past, check if we're over a light section
+            let topLightSection: HTMLElement | null = null;
             let minTop = Infinity;
 
             sections.forEach((section) => {
                 const rect = section.getBoundingClientRect();
-                if (rect.top >= -100 && rect.top < minTop) {
+                const needsLightNavbar = section.dataset.navbarLight === 'true';
+                
+                // Find the topmost light section that's in or near viewport
+                if (needsLightNavbar && rect.top >= -200 && rect.top < minTop) {
                     minTop = rect.top;
-                    topSection = section as HTMLElement;
+                    topLightSection = section as HTMLElement;
                 }
             });
 
-            if (topSection) {
-                const needsLightNavbar = topSection.dataset.navbarLight === 'true';
-                setIsLightSection(needsLightNavbar);
-            } else {
-                // Default to hero section (white navbar)
-                setIsLightSection(false);
-            }
+            // Switch to light navbar if we're over a light section
+            setIsLightSection(!!topLightSection);
         };
 
         // Check on mount and scroll
         checkInitialSection();
-        const handleScroll = () => checkInitialSection();
+        const handleScroll = () => {
+            // Track if user has scrolled
+            if (window.scrollY > 50) {
+                setHasScrolled(true);
+            } else {
+                setHasScrolled(false);
+            }
+            checkInitialSection();
+        };
         window.addEventListener('scroll', handleScroll, { passive: true });
 
         return () => {
-            observer.disconnect();
             window.removeEventListener('scroll', handleScroll);
         };
     }, [isHomePage, isMounted]);
@@ -117,8 +113,10 @@ export function LandingNavbar() {
         ? 'text-blue-600 dark:text-blue-400'
         : 'text-white';
     const navBg = useLightNavbar 
-        ? 'bg-[var(--light-bg)]/80 dark:bg-dark-bg/80 backdrop-blur-md border-b border-gray-200/50 dark:border-gray-800/50'
-        : 'bg-transparent';
+        ? 'bg-[var(--light-bg)]/80 dark:bg-dark-bg/80 backdrop-blur-md'
+        : hasScrolled 
+            ? 'bg-transparent backdrop-blur-md'
+            : 'bg-transparent';
 
     return (
         <nav className={`transition-all duration-300 fixed top-0 right-0 left-0 z-30 ${navBg}`}>
