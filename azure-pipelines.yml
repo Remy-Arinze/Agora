@@ -196,9 +196,25 @@ stages:
       workingDirectory: $(workingDir)
       displayName: 'Install Dependencies'
 
+    - powershell: |
+        if ([string]::IsNullOrEmpty($env:NEXT_PUBLIC_API_URL)) {
+          Write-Host "##vso[task.logissue type=error]NEXT_PUBLIC_API_URL is not set! Please add it as a Pipeline Variable in Azure DevOps."
+          Write-Host "Go to: Pipelines > Edit > Variables > Add variable"
+          Write-Host "Name: NEXT_PUBLIC_API_URL"
+          Write-Host "Value: https://your-api-url.azurewebsites.net/api (or your production API URL)"
+          exit 1
+        } else {
+          Write-Host "NEXT_PUBLIC_API_URL is set (value is masked for security)"
+        }
+      displayName: 'Verify NEXT_PUBLIC_API_URL is Set'
+      env:
+        NEXT_PUBLIC_API_URL: $(NEXT_PUBLIC_API_URL)
+
     - script: npm run build -- --no-lint
       workingDirectory: $(workingDir)
       displayName: 'Build Next.js App (No Lint)'
+      env:
+        NEXT_PUBLIC_API_URL: $(NEXT_PUBLIC_API_URL)
 
     - powershell: |
         Copy-Item -Path "public" -Destination ".next/standalone/apps/web" -Recurse -Force
