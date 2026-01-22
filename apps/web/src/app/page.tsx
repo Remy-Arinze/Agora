@@ -97,10 +97,10 @@ export default function Home() {
               video.style.display = 'none';
             }}
           >
-            <source src="/course-video.mp4" type="video/mp4" />
+            <source src="/course-video2.mp4" type="video/mp4" />
           </video>
           {/* Gradient Overlay - More sophisticated */}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/50 to-black/70" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/80 to-black/100" />
           <div className="absolute inset-0 bg-gradient-to-r from-blue-900/30 to-indigo-900/30" />
         </div>
         
