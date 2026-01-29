@@ -2,7 +2,7 @@ trigger:
   - develop
 
 pool:
-  vmImage: 'ubuntu-latest' # <--- CRITICAL: Must use Linux to generate Linux binaries
+  name: SandboxAgent
 
 variables:
   azureSubscription: 'agora-current-sc'
