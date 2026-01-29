@@ -2,7 +2,7 @@ trigger:
   - develop
 
 pool:
-  vmImage: 'ubuntu-latest' # <--- CRITICAL CHANGE: Build on Linux to get Linux binaries
+  name: SandboxAgent
 
 variables:
   azureSubscription: 'agora-current-sc'
@@ -22,7 +22,6 @@ stages:
     - checkout: self
       fetchDepth: 0 
 
-    # Use 'pwsh' (PowerShell Core) which works natively on Linux
     - pwsh: |
         Write-Host "Checking for changes..."
         try {
@@ -71,30 +70,32 @@ stages:
       inputs:
         versionSpec: '20.x'
     
-    # 1. Install at ROOT (Gets Linux binaries now!)
+    # 1. Install at ROOT (Linux Agent = Linux Binaries)
     - script: npm ci
       workingDirectory: . 
-      displayName: 'Install All Dependencies (Root)'
+      displayName: 'Install Dependencies (Root)'
 
-    # 2. Generate Prisma Client (Gets Linux Engine now!)
+    # 2. Generate Prisma Client
     - script: npx prisma generate --schema=packages/database/prisma/schema.prisma
       workingDirectory: .
       displayName: 'Generate Prisma Client'
 
-    # 3. Force Disable Strict Mode (pwsh works on Linux too)
-    - pwsh: |
-        $path = "$(workingDir)/tsconfig.json"
-        if (Test-Path $path) {
-            $json = Get-Content $path -Raw | ConvertFrom-Json
-            if (-not $json.PSObject.Properties['compilerOptions']) {
-                $json | Add-Member -MemberType NoteProperty -Name 'compilerOptions' -Value @{}
-            }
-            $json.compilerOptions | Add-Member -MemberType NoteProperty -Name "strict" -Value $false -Force
-            $json.compilerOptions | Add-Member -MemberType NoteProperty -Name "noImplicitAny" -Value $false -Force
-            $json.compilerOptions | Add-Member -MemberType NoteProperty -Name "skipLibCheck" -Value $true -Force
-            $json | ConvertTo-Json -Depth 10 | Set-Content $path
-            Write-Host "Disabled strict mode in tsconfig.json"
-        }
+    # 3. Disable Strict Mode (Bash version for Linux)
+    - bash: |
+        path="apps/api/tsconfig.json"
+        if [ -f "$path" ]; then
+            # Use node to manipulate JSON safely
+            node -e "
+                const fs = require('fs');
+                const tsconfig = JSON.parse(fs.readFileSync('$path'));
+                if (!tsconfig.compilerOptions) tsconfig.compilerOptions = {};
+                tsconfig.compilerOptions.strict = false;
+                tsconfig.compilerOptions.noImplicitAny = false;
+                tsconfig.compilerOptions.skipLibCheck = true;
+                fs.writeFileSync('$path', JSON.stringify(tsconfig, null, 2));
+            "
+            echo "Disabled strict mode in tsconfig.json"
+        fi
       displayName: 'Disable Strict TypeScript Checks'
 
     # 4. Build the API
@@ -107,10 +108,9 @@ stages:
     # 5. Prune Dev Dependencies
     - script: npm prune --production
       workingDirectory: .
-      displayName: 'Remove Dev Dependencies'
+      displayName: 'Prune Dev Dependencies'
 
-    # 6. ASSEMBLE DEPLOYMENT (Linux Version)
-    # We replaced 'robocopy' (Windows only) with 'cp' (Linux)
+    # 6. ASSEMBLE DEPLOYMENT (Linux)
     - bash: |
         ROOT=$(Build.SourcesDirectory)
         DEPLOY_DIR=$ROOT/deploy_api
@@ -123,7 +123,6 @@ stages:
         cp $ROOT/apps/api/package.json $DEPLOY_DIR/
 
         # B. Find and copy compiled main.js
-        # We search for main.js in dist folders
         MAIN_FILE=$(find $ROOT -type f -name "main.js" | grep "/dist/" | head -n 1)
         
         if [ -z "$MAIN_FILE" ]; then
@@ -132,12 +131,11 @@ stages:
         fi
 
         echo "Found compiled entry point at: $MAIN_FILE"
-        # Copy the content of the folder containing main.js
         SOURCE_DIR=$(dirname "$MAIN_FILE")
         mkdir -p $DEPLOY_DIR/dist
         cp -r $SOURCE_DIR/* $DEPLOY_DIR/dist/
 
-        # C. Copy node_modules (Dereference symlinks with -L)
+        # C. Copy node_modules (Dereference symlinks to include local packages)
         echo "Copying node_modules..."
         cp -r -L $ROOT/node_modules $DEPLOY_DIR/
         
@@ -182,7 +180,7 @@ stages:
 
     - pwsh: |
         if ([string]::IsNullOrEmpty($env:NEXT_PUBLIC_API_URL)) {
-          Write-Host "##vso[task.logissue type=warning]NEXT_PUBLIC_API_URL is not set. Frontend might fail to fetch data."
+          Write-Host "##vso[task.logissue type=warning]NEXT_PUBLIC_API_URL is not set."
         } else {
           Write-Host "NEXT_PUBLIC_API_URL is set."
         }
@@ -196,7 +194,6 @@ stages:
       env:
         NEXT_PUBLIC_API_URL: $(NEXT_PUBLIC_API_URL)
 
-    # Linux version of the copy script
     - bash: |
         echo "Copying static assets..."
         cp -r public .next/standalone/apps/web/
