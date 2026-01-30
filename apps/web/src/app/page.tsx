@@ -11,6 +11,12 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useGetPublicSchoolsQuery, useGetPlatformStatsQuery } from '@/lib/store/api/publicApi';
 import { useState, useEffect } from 'react';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: 'Borderless Academic Identity | Agora',
+  description: 'Agora turns static paper trails into a living, portable digital profile. Every student achievement, certification, and growth secured on a global ledger.',
+};
 
 const fadeInUp = {
   initial: { opacity: 0, y: 60 },
@@ -97,7 +103,7 @@ export default function Home() {
               video.style.display = 'none';
             }}
           >
-            <source src="/course-video2.mp4" type="video/mp4" />
+            <source src="/video.mp4" type="video/mp4" />
           </video>
           {/* Gradient Overlay - More sophisticated */}
           <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/80 to-black/100" />
@@ -201,10 +207,11 @@ export default function Home() {
             className="text-center mb-20"
           >
             <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-6">
-              Infrastructure, Not Just Software
+              A Borderless Academic Identity for Every Student
             </h2>
             <p className="text-xl text-gray-600 dark:text-gray-300 max-w-4xl mx-auto leading-relaxed">
-              Agora creates a borderless academic identity for every student, making it possible for them to have their entire educational history in their pocket, securedly.
+              Agora transforms traditional, fragmented transcripts into a lifelong asset that follows the learner from their first day of primary school to university graduation.
+              We turn static paper trails into a living, portable digital profile, ensuring achievements and certifications are never lost to bureaucracy or geography.
             </p>
           </motion.div>
         </div>
@@ -221,10 +228,10 @@ export default function Home() {
             className="text-center mb-20"
           >
             <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
-              Key Features
+              Powerful Unified Management System
             </h2>
             <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-              Everything you need to manage and verify education identities
+              Everything schools need to digitize legacy records and verify student identities.
             </p>
           </motion.div>
 
@@ -582,7 +589,7 @@ export default function Home() {
             <div className="col-span-1 md:col-span-1">
               <Image
                 src="/assets/logos/agora_worded_white.png"
-                alt="Agora"
+                alt="Agora - Verified Academic History Logo"
                 width={140}
                 height={38}
                 className="h-8 w-auto mb-6 opacity-90"

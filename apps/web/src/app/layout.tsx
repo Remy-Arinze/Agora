@@ -33,8 +33,52 @@ const acuminPro = localFont({
 });
 
 export const metadata: Metadata = {
-  title: 'Agora - Digital Education Identity',
-  description: 'Multi-Tenant Digital Public Infrastructure for Education',
+  metadataBase: new URL('https://agora-web-dev.azurewebsites.net'),
+  title: {
+    default: 'Agora | Global Student Identity Ledger & School Management System',
+    template: '%s | Agora'
+  },
+  description: 'Agora creates a borderless academic identity for every student, turning static paper trails into a living, portable digital profile secured by a global student ledger.',
+  keywords: [
+    'Digital Student Identity', 
+    'Global Student Ledger', 
+    'School Management System', 
+    'Digital Transcripts', 
+    'Academic Identity', 
+    'Verified Education Records', 
+    'EdTech Africa',
+    'Student Data Portability',
+    'Immutable Academic Records',
+    'Blockchain Education Registry'
+  ],
+  authors: [{ name: 'Agora Team' }],
+  creator: 'Agora',
+  publisher: 'Agora',
+  alternates: {
+    canonical: '/',
+  },
+  openGraph: {
+    type: 'website',
+    locale: 'en_US',
+    url: 'https://agora-web-dev.azurewebsites.net',
+    siteName: 'Agora',
+    title: 'Agora - The Digital Chain-of-Trust for Education',
+    description: 'A borderless academic identity for every student. Secured, portable, and immutable records on a global ledger.',
+    images: [
+      {
+        url: '/assets/logos/agora_main.png',
+        width: 1200,
+        height: 630,
+        alt: 'Agora - Digital Education Identity',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Agora - Digital Education Identity',
+    description: 'Transforming traditional transcripts into a lifelong asset. Verified, immutable, and instantly accessible student data.',
+    images: ['/assets/logos/agora_main.png'],
+  },
   icons: {
     icon: [
       { url: '/assets/favicon.ico' },
@@ -54,6 +98,44 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Organization Schema */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Organization',
+              name: 'Agora',
+              url: 'https://agora-web-dev.azurewebsites.net',
+              logo: 'https://agora-web-dev.azurewebsites.net/assets/logos/agora_main.png',
+              description: 'Agora creates a borderless academic identity for every student, anchoring educational history in a global student ledger.',
+              sameAs: [
+                'https://twitter.com/agora_edu',
+                'https://linkedin.com/company/agora-edu'
+              ]
+            })
+          }}
+        />
+        {/* Service/Product Schema */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Service',
+              name: 'Agora Student Identity Ledger',
+              provider: {
+                '@type': 'Organization',
+                name: 'Agora'
+              },
+              description: 'A unified management system that turns static paper trails into a living, portable digital profile for students.',
+              areaServed: 'Global',
+              serviceType: 'Education Management'
+            })
+          }}
+        />
+      </head>
       <body className={acuminPro.variable}>
         <ThemeProvider>
           <StoreProvider>
