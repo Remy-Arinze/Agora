@@ -1178,7 +1178,8 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
         formData.append('logo', file);
 
         // Get base URL - use the same as apiSlice
-        const baseUrl = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL) || 'http://localhost:4000/api';
+        const envUrl = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL;
+        const baseUrl = envUrl || 'http://localhost:4000';
 
         try {
           const response = await fetch(`${baseUrl}/school-admin/school/logo`, {
@@ -2228,7 +2229,8 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
         // Get tenant ID
         const tenantId = typeof window !== 'undefined' ? (localStorage.getItem('tenantId') || window.location.hostname.split('.')[0]) : null;
         
-        const baseUrl = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL) || 'http://localhost:4000/api';
+        const envUrl = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL;
+        const baseUrl = envUrl || 'http://localhost:4000';
         const url = `${baseUrl}/schools/${schoolId}/classes/${classId}/resources/upload`;
         
         const headers: HeadersInit = {};
@@ -2692,7 +2694,8 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
 
         const tenantId = typeof window !== 'undefined' ? (localStorage.getItem('tenantId') || window.location.hostname.split('.')[0]) : null;
 
-        const baseUrl = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL) || 'http://localhost:4000/api';
+        const envUrl = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL;
+        const baseUrl = envUrl || 'http://localhost:4000';
         const url = `${baseUrl}/schools/${schoolId}/students/${studentId}/image`;
 
         const headers: HeadersInit = {};
@@ -2738,7 +2741,8 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
         
         const tenantId = typeof window !== 'undefined' ? (localStorage.getItem('tenantId') || window.location.hostname.split('.')[0]) : null;
         
-        const baseUrl = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL) || 'http://localhost:4000/api';
+        const envUrl = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL;
+        const baseUrl = envUrl || 'http://localhost:4000';
         const url = `${baseUrl}/schools/${schoolId}/staff/bulk-import`;
         
         const headers: HeadersInit = {};
@@ -2776,7 +2780,8 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
         
         const tenantId = typeof window !== 'undefined' ? (localStorage.getItem('tenantId') || window.location.hostname.split('.')[0]) : null;
         
-        const baseUrl = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL) || 'http://localhost:4000/api';
+        const envUrl = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL;
+        const baseUrl = envUrl || 'http://localhost:4000';
         const url = `${baseUrl}/schools/${schoolId}/students/bulk-import`;
         
         const headers: HeadersInit = {};

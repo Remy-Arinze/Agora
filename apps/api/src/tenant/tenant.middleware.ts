@@ -7,39 +7,41 @@ export class TenantMiddleware implements NestMiddleware {
   constructor(private readonly tenantService: TenantService) {}
 
   async use(req: Request, res: Response, next: NextFunction) {
-    // Get the request path (could be /auth/login or /api/auth/login depending on setup)
+    // Get the request path (routes are now directly accessible without /api prefix)
     const path = req.path;
     const url = req.url;
+    const originalUrl = req.originalUrl || url;
 
     // Skip tenant validation for auth routes (login, verify-otp, etc.)
     // These routes don't require tenant context since user isn't authenticated yet
-    // Check both path and url to handle different NestJS configurations
     const isAuthRoute =
       path.startsWith('/auth') ||
-      path.startsWith('/api/auth') ||
       url.startsWith('/auth') ||
-      url.startsWith('/api/auth');
+      originalUrl.startsWith('/auth');
 
     // Skip tenant validation for super admin routes
     const isSuperAdminRoute =
       path.startsWith('/super-admin') ||
-      path.startsWith('/api/super-admin') ||
       url.startsWith('/super-admin') ||
-      url.startsWith('/api/super-admin');
+      originalUrl.startsWith('/super-admin');
 
     // Skip tenant validation for swagger/docs routes
+    // /api is now the Swagger documentation endpoint
     const isSwaggerRoute =
       path.startsWith('/swagger') ||
-      path.startsWith('/api/swagger') ||
+      path === '/api' ||
       url.startsWith('/swagger') ||
-      url.startsWith('/api/swagger');
+      url === '/api' ||
+      originalUrl.startsWith('/swagger') ||
+      originalUrl === '/api' ||
+      originalUrl.startsWith('/api/') && originalUrl.includes('swagger');
 
     // Skip tenant validation for public routes (landing page data)
     const isPublicRoute =
       path.startsWith('/public') ||
-      path.startsWith('/api/public') ||
       url.startsWith('/public') ||
-      url.startsWith('/api/public');
+      originalUrl.startsWith('/public') ||
+      originalUrl.includes('/public/');
 
     if (isAuthRoute || isSuperAdminRoute || isSwaggerRoute || isPublicRoute) {
       // Allow these routes to proceed without tenant validation

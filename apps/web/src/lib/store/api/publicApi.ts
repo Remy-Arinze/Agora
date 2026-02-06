@@ -24,7 +24,12 @@ interface ResponseDto<T> {
 export const publicApi = createApi({
   reducerPath: 'publicApi',
   baseQuery: fetchBaseQuery({
-    baseUrl: (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL) || 'http://localhost:4000/api',
+    baseUrl: (() => {
+      const envUrl = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL;
+      const baseUrl = envUrl || 'http://localhost:4000';
+      // Routes are directly accessible without /api prefix
+      return baseUrl;
+    })(),
   }),
   endpoints: (builder) => ({
     getPublicSchools: builder.query<PublicSchool[], void>({

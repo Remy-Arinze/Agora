@@ -23,7 +23,12 @@ const getTenantId = (): string | null => {
 };
 
 const baseQuery = fetchBaseQuery({
-  baseUrl: (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL) || 'http://localhost:4000/api',
+  baseUrl: (() => {
+    const envUrl = typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL;
+    const baseUrl = envUrl || 'http://localhost:4000';
+    // Routes are directly accessible without /api prefix
+    return baseUrl;
+  })(),
   prepareHeaders: (headers, { getState }) => {
     // Get token from Redux state
     const state = getState() as { auth: { accessToken?: string | null; token?: string | null } };

@@ -11,8 +11,8 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
 
-  // Set global prefix for all routes
-  app.setGlobalPrefix('api');
+  // Removed global prefix - routes are directly accessible
+  // Swagger docs will be available at /api
 
   // Security: Helmet middleware for HTTP security headers
   // Protects against XSS, clickjacking, MIME sniffing, and other attacks
@@ -93,7 +93,8 @@ async function bootstrap() {
       .build();
 
     const document = SwaggerModule.createDocument(app, config);
-    SwaggerModule.setup('swagger', app, document, {
+    // Setup swagger at /api to serve as API documentation endpoint
+    SwaggerModule.setup('api', app, document, {
       swaggerOptions: {
         persistAuthorization: true,
       },
@@ -105,9 +106,9 @@ async function bootstrap() {
     });
 
     logger.log(
-      `📚 Swagger docs available at http://localhost:${process.env.PORT || 4000}/api/swagger`
+      `📚 Swagger docs available at http://localhost:${process.env.PORT || 4000}/api`
     );
-    logger.log(`📦 Swagger JSON at http://localhost:${process.env.PORT || 4000}/api/swagger-json`);
+    logger.log(`📦 Swagger JSON at http://localhost:${process.env.PORT || 4000}/swagger-json`);
   } else {
     logger.log('🔒 Swagger documentation disabled in production');
   }
