@@ -53,8 +53,11 @@ async function bootstrap() {
   // CORS configuration - allow credentials for httpOnly cookies
   // Always allow both the configured FRONTEND_URL and localhost for development
   const frontendUrl = process.env.FRONTEND_URL;
-  const allowedOrigins = ['http://localhost:3000'];
-  if (frontendUrl && frontendUrl !== 'http://localhost:3000') {
+  const allowedOrigins = [
+    'http://localhost:3000',
+    'https://www.agora-schools.com',
+  ];
+  if (frontendUrl && frontendUrl !== 'http://localhost:3000' && !allowedOrigins.includes(frontendUrl)) {
     allowedOrigins.push(frontendUrl);
   }
   app.enableCors({

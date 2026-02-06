@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useGetPublicSchoolsQuery, useGetPlatformStatsQuery } from '@/lib/store/api/publicApi';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 const fadeInUp = {
   initial: { opacity: 0, y: 60 },
@@ -43,11 +43,39 @@ export default function HomeContent() {
   const user = useSelector((state: RootState) => state.auth.user);
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
+  const [videoError, setVideoError] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
   
   // Ensure component is mounted before using persisted auth state
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // Ensure video plays after mount (handles browser autoplay policies)
+  useEffect(() => {
+    if (videoRef.current && !videoError) {
+      const video = videoRef.current;
+      const playPromise = video.play();
+      
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log('Video autoplay started');
+          })
+          .catch((error) => {
+            console.log('Video autoplay prevented:', error);
+            // Try to play on user interaction
+            const handleInteraction = () => {
+              video.play().catch(console.error);
+              document.removeEventListener('click', handleInteraction);
+              document.removeEventListener('touchstart', handleInteraction);
+            };
+            document.addEventListener('click', handleInteraction, { once: true });
+            document.addEventListener('touchstart', handleInteraction, { once: true });
+          });
+      }
+    }
+  }, [isMounted, videoError]);
   
   // Fetch real platform data
   const { data: stats, error: statsError, isLoading: statsLoading } = useGetPlatformStatsQuery();
@@ -85,18 +113,46 @@ export default function HomeContent() {
         {/* Video Background */}
         <div className="absolute inset-0 w-full h-full z-0">
           <video
+            ref={videoRef}
             autoPlay
             loop
             muted
             playsInline
+            preload="auto"
             className="absolute inset-0 w-full h-full object-cover scale-105"
-            style={{ minHeight: '100%', minWidth: '100%' }}
+            style={{ minHeight: '100%', minWidth: '100%', opacity: videoError ? 0 : 1, transition: 'opacity 0.3s' }}
             onError={(e) => {
               const video = e.currentTarget;
-              video.style.display = 'none';
+              const error = video.error;
+              console.error('Video load error:', {
+                code: error?.code,
+                message: error?.message,
+                networkState: video.networkState,
+                readyState: video.readyState
+              });
+              // Only set error if it's a real loading error, not just a play error
+              if (error && error.code !== 0) {
+                setVideoError(true);
+              }
+            }}
+            onLoadedData={() => {
+              console.log('Video loaded successfully');
+              setVideoError(false);
+            }}
+            onCanPlay={() => {
+              console.log('Video can play');
+              setVideoError(false);
+            }}
+            onPlaying={() => {
+              console.log('Video is playing');
+              setVideoError(false);
             }}
           >
-            <source src="/video.mp4" type="video/mp4" />
+            {/* Cloudinary video URL - using direct URL for maximum compatibility */}
+            <source 
+              src="https://res.cloudinary.com/dstm3asg5/video/upload/v1770365585/Untitled_design_wnix9c.mp4" 
+              type="video/mp4" 
+            />
           </video>
           {/* Gradient Overlay - More sophisticated */}
           <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/80 to-black/100" />
