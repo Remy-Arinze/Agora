@@ -55,6 +55,7 @@ async function bootstrap() {
   const frontendUrl = process.env.FRONTEND_URL;
   const allowedOrigins = [
     'http://localhost:3000',
+    'https://agora-schools.com',
     'https://www.agora-schools.com',
   ];
   if (frontendUrl && frontendUrl !== 'http://localhost:3000' && !allowedOrigins.includes(frontendUrl)) {
