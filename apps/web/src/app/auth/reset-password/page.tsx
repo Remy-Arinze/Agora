@@ -99,7 +99,7 @@ function ResetPasswordContent() {
 
   if (!token) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-light-bg dark:bg-dark-bg py-12 px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--dark-bg)] py-12 px-4 sm:px-6 lg:px-8">
         <Card className="w-full max-w-md">
           <CardHeader>
             <CardTitle className="text-2xl font-bold text-light-text-primary dark:text-dark-text-primary text-center">
@@ -252,7 +252,7 @@ function ResetPasswordContent() {
 export default function ResetPasswordPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-light-bg dark:bg-dark-bg">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--dark-bg)]">
         <LoadingSpinner />
       </div>
     }>

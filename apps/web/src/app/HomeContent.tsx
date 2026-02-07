@@ -51,6 +51,17 @@ export default function HomeContent() {
     setIsMounted(true);
   }, []);
 
+  // Hide scrollbar on landing page
+  useEffect(() => {
+    document.documentElement.classList.add('scrollbar-hide');
+    document.body.classList.add('scrollbar-hide');
+    
+    return () => {
+      document.documentElement.classList.remove('scrollbar-hide');
+      document.body.classList.remove('scrollbar-hide');
+    };
+  }, []);
+
   // Ensure video plays after mount (handles browser autoplay policies)
   useEffect(() => {
     if (videoRef.current && !videoError) {
@@ -212,18 +223,18 @@ export default function HomeContent() {
               className="flex flex-wrap gap-4"
             >
               <Button 
-                size="lg" 
+                size="md" 
                 variant="primary"
                 onClick={handleGetStarted}
-                className="px-8 py-4 text-lg rounded-full transform hover:-translate-y-1 transition-all duration-300 font-bold"
+                className="px-6 py-3 text-base rounded-full transform hover:-translate-y-1 transition-all duration-300 font-bold"
               >
                 {isLoggedIn ? 'Go to Dashboard' : 'Get Started Free'}
               </Button>
               <Link href="#how-it-works">
                 <Button 
                   variant="white" 
-                  size="lg"
-                  className="px-8 py-4 text-base rounded-full transform hover:-translate-y-1 transition-all duration-300 font-bold"
+                  size="md"
+                  className="px-6 py-3 text-sm rounded-full transform hover:-translate-y-1 transition-all duration-300 font-bold"
                 >
                   How it works
                 </Button>

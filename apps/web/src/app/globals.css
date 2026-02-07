@@ -29,19 +29,8 @@
     --card-padding: 1.25rem; /* 20px - Standard card padding */
     --card-padding-large: 1.5rem; /* 24px - Large card padding */
     
-    /* Light Mode Colors - using hex for better compatibility */
-    --light-bg: #e4edff; /* gray-200 */
-    --light-card: #ffffff; /* Pure white for cards */
-    --light-surface: #f8fafc; /* slate-50 - subtle surface color */
-    --light-hover: #f1f5f9; /* slate-100 - hover background */
-    --light-input: #ffffff; /* White input background */
-    --light-text-primary: #02173D; /* Agora text color */
-    --light-text-secondary: #4b5563; /* gray-600 */
-    --light-text-muted: #6b7280; /* gray-500 */
-    --light-border: #1a3262; /* gray-100 - very light gray border */
-    
     /* Dark Mode Colors - PRAX IQ inspired dark theme */
-    --dark-bg: #0f1419; /* Dark grey background (same for sidebar and main) */
+    --dark-bg: #10151b; /* Dark grey background (same for sidebar and main) */
     --dark-surface: #151a23; /* Slightly lighter for cards */
     --dark-border: #1a1f2e; /* Border color for demarcation */
     --dark-input: #1e2433; /* Dark bluish grey for inputs */
@@ -113,19 +102,7 @@
   }
 
   /* ========================================
-     Form Elements Focus Styles
-     ======================================== */
-  
-  /* Light mode input focus */
-  input:focus,
-  select:focus,
-  textarea:focus {
-    border-color: var(--agora-blue) !important;
-    outline: none;
-  }
-  
-  /* ========================================
-     Dark Mode Form Elements
+     Form Elements Styles (Dark Mode Only)
      ======================================== */
   
   /* Force dark color scheme for native browser elements */
@@ -133,47 +110,47 @@
     color-scheme: dark;
   }
 
-  /* All form inputs in dark mode */
-  .dark input,
-  .dark select,
-  .dark textarea {
+  /* All form inputs */
+  input,
+  select,
+  textarea {
     background-color: var(--dark-input) !important;
     color: var(--dark-text-primary) !important;
     border-color: var(--dark-border) !important;
   }
 
-  .dark input::placeholder,
-  .dark textarea::placeholder {
+  input::placeholder,
+  textarea::placeholder {
     color: var(--dark-text-muted) !important;
   }
 
-  .dark input:focus,
-  .dark select:focus,
-  .dark textarea:focus {
+  input:focus,
+  select:focus,
+  textarea:focus {
     border-color: var(--agora-blue) !important;
     outline: none;
   }
 
-  .dark input:disabled,
-  .dark select:disabled,
-  .dark textarea:disabled {
+  input:disabled,
+  select:disabled,
+  textarea:disabled {
     background-color: #1f2937 !important;
     color: var(--dark-text-muted) !important;
     opacity: 0.7;
   }
 
   /* Date/Time picker icons */
-  .dark input[type="date"]::-webkit-calendar-picker-indicator,
-  .dark input[type="time"]::-webkit-calendar-picker-indicator,
-  .dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
-  .dark input[type="month"]::-webkit-calendar-picker-indicator,
-  .dark input[type="week"]::-webkit-calendar-picker-indicator {
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+  input[type="month"]::-webkit-calendar-picker-indicator,
+  input[type="week"]::-webkit-calendar-picker-indicator {
     filter: invert(0.8);
     cursor: pointer;
   }
 
   /* Select dropdown arrow */
-  .dark select {
+  select {
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e") !important;
     background-position: right 0.5rem center;
     background-repeat: no-repeat;
@@ -184,43 +161,31 @@
     appearance: none;
   }
 
-  /* Light mode select arrow (for consistency) */
-  select {
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
-    background-position: right 0.5rem center;
-    background-repeat: no-repeat;
-    background-size: 1.5em 1.5em;
-    padding-right: 2.5rem;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-  }
-
   /* Autofill background override */
-  .dark input:-webkit-autofill,
-  .dark input:-webkit-autofill:hover,
-  .dark input:-webkit-autofill:focus,
-  .dark select:-webkit-autofill,
-  .dark textarea:-webkit-autofill {
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  select:-webkit-autofill,
+  textarea:-webkit-autofill {
     -webkit-box-shadow: 0 0 0 30px var(--dark-input) inset !important;
     -webkit-text-fill-color: var(--dark-text-primary) !important;
     caret-color: var(--dark-text-primary) !important;
   }
 
   /* Number input spinners */
-  .dark input[type="number"]::-webkit-inner-spin-button,
-  .dark input[type="number"]::-webkit-outer-spin-button {
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
     filter: invert(0.8);
   }
 
   /* Checkbox and Radio */
-  .dark input[type="checkbox"],
-  .dark input[type="radio"] {
+  input[type="checkbox"],
+  input[type="radio"] {
     accent-color: var(--agora-blue);
   }
 
   /* File input button */
-  .dark input[type="file"]::file-selector-button {
+  input[type="file"]::file-selector-button {
     background-color: var(--dark-hover);
     color: var(--dark-text-primary);
     border: 1px solid var(--dark-border);
@@ -229,7 +194,7 @@
     cursor: pointer;
   }
 
-  .dark input[type="file"]::file-selector-button:hover {
+  input[type="file"]::file-selector-button:hover {
     background-color: #334155;
   }
 }

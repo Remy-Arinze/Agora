@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useDispatch } from 'react-redux';
 import { Eye, EyeOff } from 'lucide-react';
 import { setCredentials } from '@/lib/store/slices/authSlice';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
@@ -239,22 +238,8 @@ function LoginContent() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--light-bg)] dark:bg-dark-bg py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--dark-bg)] py-12 px-4 sm:px-6 lg:px-8">
       <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="flex items-center justify-center mb-8">
-          <Link href="/" className="flex items-center">
-            <Image
-              src="/assets/logos/agora_word_blue.png"
-              alt="Agora"
-              width={180}
-              height={48}
-              className="h-12 w-auto"
-              priority
-            />
-          </Link>
-        </div>
-
         {requiresOtp && otpSessionId && otpEmail ? (
           <>
             <OtpVerification
@@ -265,104 +250,131 @@ function LoginContent() {
               isLoading={isLoading}
               error={error}
             />
-            <div className="mt-4 text-center">
+            <div className="mt-6 text-center">
               <button
                 onClick={handleBackToLogin}
-                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                className="text-sm text-[#9ca3af] hover:text-white hover:underline transition-colors"
               >
                 ← Back to login
               </button>
             </div>
           </>
         ) : (
-          <Card>
-          <CardHeader>
-            <CardTitle className="text-2xl text-center">Sign in to your account</CardTitle>
-          </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {sessionExpired && (
-              <Alert variant="warning">
-                <div>
-                  <p className="font-semibold">Session Expired</p>
-                  <p className="text-sm mt-1">Your session has expired for security reasons. Please log in again to continue.</p>
+          <>
+            {/* Logo */}
+            <div className="flex items-center justify-center mb-8">
+                <Image
+                  src="/assets/logos/agora_worded_white.png"
+                  alt="Agora"
+                  width={100}
+                  height={24}
+                  className="h-6 w-auto"
+                  priority
+                />
+            </div>
+
+            {/* Heading */}
+            <h1 className="text-3xl font-bold text-white mb-3 text-center">
+              Sign in to your account
+            </h1>
+
+            <form onSubmit={handleSubmit} className="space-y-6 mt-8">
+              {sessionExpired && (
+                <div className="mb-4">
+                  <Alert variant="warning">
+                    <div>
+                      <p className="font-semibold">Session Expired</p>
+                      <p className="text-sm mt-1">Your session has expired for security reasons. Please log in again to continue.</p>
+                    </div>
+                  </Alert>
                 </div>
-              </Alert>
-            )}
-            {error && !sessionExpired && (
-              <Alert variant="error">{error}</Alert>
-            )}
+              )}
+              {error && !sessionExpired && (
+                <div className="mb-4">
+                  <Alert variant="error">{error}</Alert>
+                </div>
+              )}
 
-            <Input
-              label="Email or Public ID"
-              type="text"
-              placeholder="superadmin@agora.com or AG-SCHL-A3B5C7"
-              value={formData.emailOrPublicId}
-              onChange={(e) =>
-                setFormData({ ...formData, emailOrPublicId: e.target.value })
-              }
-              required
-            />
-
-            <div className="w-full">
-              <label
-                htmlFor="password-input"
-                className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1"
-              >
-                Password
-              </label>
-              <div className="relative">
+              <div className="w-full">
+                <label
+                  htmlFor="email-input"
+                  className="block text-sm font-medium text-white mb-2"
+                >
+                  Email or Public ID
+                </label>
                 <input
-                  id="password-input"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter your password"
-                  value={formData.password}
+                  id="email-input"
+                  type="text"
+                  placeholder="superadmin@agora.com or AG-SCHL-A3B5C7"
+                  value={formData.emailOrPublicId}
                   onChange={(e) =>
-                    setFormData({ ...formData, password: e.target.value })
+                    setFormData({ ...formData, emailOrPublicId: e.target.value })
                   }
                   required
-                  minLength={8}
-                  className="w-full px-4 py-2 pr-10 border rounded-lg bg-light-card dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary placeholder-light-text-muted dark:placeholder-dark-text-muted focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors border-light-border dark:border-dark-border"
+                  className="w-full px-4 py-3 border-2 rounded-lg bg-[#151a23] text-white placeholder-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#2490FD] focus:border-[#2490FD] transition-all border-[#1a1f2e]"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-light-text-muted dark:text-dark-text-muted hover:text-light-text-primary dark:hover:text-dark-text-primary transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 rounded p-1"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  tabIndex={-1}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5" />
-                  ) : (
-                    <Eye className="h-5 w-5" />
-                  )}
-                </button>
               </div>
-            </div>
 
-            <Button
-              type="submit"
-              className="w-full"
-              isLoading={isLoading}
-              disabled={
-                !formData.password || 
-                formData.password.length < 8 ||
-                !formData.emailOrPublicId
-              }
-            >
-              Sign In
-            </Button>
+              <div className="w-full">
+                <label
+                  htmlFor="password-input"
+                  className="block text-sm font-medium text-white mb-2"
+                >
+                  Password
+                </label>
+                <div className="relative">
+                  <input
+                    id="password-input"
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Enter your password"
+                    value={formData.password}
+                    onChange={(e) =>
+                      setFormData({ ...formData, password: e.target.value })
+                    }
+                    required
+                    minLength={8}
+                    className="w-full px-4 py-3 pr-10 border-2 rounded-lg bg-[#151a23] text-white placeholder-[#6b7280] focus:outline-none focus:ring-2 focus:ring-[#2490FD] focus:border-[#2490FD] transition-all border-[#1a1f2e]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9ca3af] hover:text-white transition-colors focus:outline-none focus:ring-2 focus:ring-[#2490FD] rounded p-1"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    tabIndex={-1}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+              </div>
 
-            <div className="text-center space-y-2 text-sm">
-              <p>
-                <Link href="/auth/forgot-password" className="text-blue-600 dark:text-blue-400 hover:underline">
+              <Button
+                type="submit"
+                variant="primary"
+                className="w-full py-3.5"
+                isLoading={isLoading}
+                disabled={
+                  !formData.password || 
+                  formData.password.length < 8 ||
+                  !formData.emailOrPublicId
+                }
+              >
+                Sign In
+              </Button>
+
+              <div className="text-center pt-2">
+                <Link 
+                  href="/auth/forgot-password" 
+                  className="text-sm text-[#9ca3af] hover:text-[#2490FD] hover:underline transition-colors"
+                >
                   Forgot your password?
                 </Link>
-              </p>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+              </div>
+            </form>
+          </>
         )}
       </div>
     </div>
@@ -372,7 +384,7 @@ function LoginContent() {
 export default function LoginPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-[var(--light-bg)] dark:bg-dark-bg">
+      <div className="min-h-screen flex items-center justify-center bg-[var(--dark-bg)]">
         <LoadingSpinner />
       </div>
     }>

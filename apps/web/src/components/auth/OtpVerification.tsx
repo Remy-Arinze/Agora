@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useRef, useEffect, FormEvent } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Alert } from '@/components/ui/Alert';
 import { Loader2 } from 'lucide-react';
+import Image from 'next/image';
 
 interface OtpVerificationProps {
   email: string;
@@ -119,84 +119,102 @@ export function OtpVerification({
   }, []);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-2xl text-center">Verify Your Email</CardTitle>
-        <p className="text-sm text-center text-light-text-secondary dark:text-dark-text-secondary mt-2">
-          We&apos;ve sent a 6-digit verification code to
-          <br />
-          <span className="font-medium text-light-text-primary dark:text-dark-text-primary">
-            {email}
-          </span>
-        </p>
-      </CardHeader>
-      <CardContent>
-        <form
-          onSubmit={(e: FormEvent) => {
-            e.preventDefault();
-            handleSubmit();
-          }}
-          className="space-y-6"
+    <div className="w-full max-w-md">
+      {/* Logo */}
+      <div className="flex items-center justify-center mb-8">
+        <div className="flex items-center gap-2 px-3 py-1.5 ">
+          <Image
+            src="/assets/logos/agora_worded_white.png"
+            alt="Agora"
+            width={100}
+            height={24}
+            className="h-6 w-auto"
+            priority
+          />
+        </div>
+      </div>
+
+
+
+      {/* Instructions */}
+      <p className="text-sm text-[#9ca3af] mb-8 text-center leading-relaxed">
+        A 6-digit code has been sent to your email, <span className="text-white">{email}</span>. Please enter it below to sign in.
+      </p>
+
+      {/* Error Alert */}
+      {error && (
+        <div className="mb-6">
+          <Alert variant="error">{error}</Alert>
+        </div>
+      )}
+
+      <form
+        onSubmit={(e: FormEvent) => {
+          e.preventDefault();
+          handleSubmit();
+        }}
+        className="space-y-6"
+      >
+        {/* Enter Code Label */}
+        <label className="block text-sm font-medium text-white mb-3">
+          Enter Code
+        </label>
+
+        {/* OTP Input Fields */}
+        <div className="flex justify-between  gap-3 mb-6">
+          {otp.map((digit, index) => (
+            <input
+              key={index}
+              ref={(el) => { inputRefs.current[index] = el; }}
+              type="text"
+              inputMode="numeric"
+              maxLength={1}
+              value={digit}
+              onChange={(e) => handleChange(index, e.target.value)}
+              onKeyDown={(e) => handleKeyDown(index, e)}
+              onPaste={index === 0 ? handlePaste : undefined}
+              placeholder="-"
+              className="w-14 h-14 text-center text-2xl font-semibold border-2 rounded-lg bg-[#151a23] text-white border-[#1a1f2e] focus:outline-none focus:ring-2 focus:ring-[#2490FD] focus:border-[#2490FD] transition-all disabled:opacity-50 disabled:cursor-not-allowed placeholder:text-[#6b7280]"
+              disabled={isLoading}
+            />
+          ))}
+        </div>
+
+        {/* Verify Button */}
+        <Button
+          type="submit"
+          variant="primary"
+          className="w-full py-3.5"
+          isLoading={isLoading}
+          disabled={otp.some((digit) => !digit) || isLoading}
         >
-          {error && <Alert variant="error">{error}</Alert>}
+          Verify OTP
+        </Button>
 
-          <div className="flex justify-center gap-2">
-            {otp.map((digit, index) => (
-              <input
-                key={index}
-                ref={(el) => (inputRefs.current[index] = el)}
-                type="text"
-                inputMode="numeric"
-                maxLength={1}
-                value={digit}
-                onChange={(e) => handleChange(index, e.target.value)}
-                onKeyDown={(e) => handleKeyDown(index, e)}
-                onPaste={index === 0 ? handlePaste : undefined}
-                className="w-12 h-14 text-center text-2xl font-semibold border-2 rounded-lg bg-light-card dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary border-light-border dark:border-dark-border focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-transparent transition-colors"
-                disabled={isLoading}
-              />
-            ))}
-          </div>
-
-          <Button
-            type="submit"
-            className="w-full"
-            isLoading={isLoading}
-            disabled={otp.some((digit) => !digit) || isLoading}
-          >
-            Verify Code
-          </Button>
-
-          <div className="text-center space-y-2">
-            <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-              Didn&apos;t receive the code?
-            </p>
+        {/* Resend Link */}
+        <div className="text-center pt-2">
+          <p className="text-sm text-[#9ca3af]">
+            Didn&apos;t get the code?{' '}
             <button
               type="button"
               onClick={handleResend}
               disabled={resendCooldown > 0 || isResending || isLoading}
-              className="text-blue-600 dark:text-blue-400 hover:underline disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+              className="text-[#2490FD] hover:text-[#2a9fff] hover:underline disabled:opacity-50 disabled:cursor-not-allowed font-medium transition-colors"
             >
               {isResending ? (
-                <span className="flex items-center gap-2">
+                <span className="flex items-center justify-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Sending...
                 </span>
               ) : resendCooldown > 0 ? (
-                `Resend code in ${resendCooldown}s`
+                `Resend it! (${resendCooldown}s)`
               ) : (
-                'Resend code'
+                'Resend it!'
               )}
             </button>
-          </div>
-
-          <div className="text-center">
-            <p className="text-xs text-light-text-muted dark:text-dark-text-muted">
-              The code will expire in 10 minutes
-            </p>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+          </p>
+        </div>
+      </form>
+    </div>
   );
 }

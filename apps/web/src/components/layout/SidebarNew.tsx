@@ -22,25 +22,14 @@ function LogoSection() {
         href="/"
         className="font-normal flex items-center justify-center md:justify-start py-1 relative z-20"
       >
-        {open ? (
-          <Image
-            src="/assets/logos/agora_worded_white.png"
-            alt="Agora"
-            width={120}
-            height={32}
-            className="h-8 w-auto object-contain"
-            priority
-          />
-        ) : (
-          <Image
-            src="/assets/logos/agora_main.png"
-            alt="Agora"
-            width={40}
-            height={40}
-            className="h-8 w-8 object-contain"
-            priority
-          />
-        )}
+        <Image
+          src="/assets/logos/agora_main.png"
+          alt="Agora"
+          width={40}
+          height={40}
+          className="h-8 w-8 object-contain"
+          priority
+        />
       </Link>
     </div>
   );
@@ -161,7 +150,7 @@ export function SidebarNew() {
       </div>
 
       {/* Logout Button at Bottom */}
-      <div className="pt-4 border-t border-gray-200 dark:border-[#1a1f2e]">
+      <div className="pt-4 border-t border-[var(--dark-border)]">
         <LogoutButton />
       </div>
     </SidebarBody>
