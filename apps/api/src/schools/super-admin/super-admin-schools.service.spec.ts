@@ -9,6 +9,7 @@ import { SchoolValidatorService } from '../shared/school-validator.service';
 import { StaffValidatorService } from '../shared/staff-validator.service';
 import { PrismaService } from '../../database/prisma.service';
 import { AuthService } from '../../auth/auth.service';
+import { TestUtils } from '../../common/test/test-utils';
 
 describe('SuperAdminSchoolsService', () => {
   let service: SuperAdminSchoolsService;
@@ -73,10 +74,7 @@ describe('SuperAdminSchoolsService', () => {
         {
           provide: PrismaService,
           useValue: {
-            school: {
-              findUnique: jest.fn(),
-              findMany: jest.fn(),
-            },
+            ...TestUtils.createMockPrismaService(),
             $transaction: jest.fn((callback) => callback(prisma)),
           },
         },
@@ -124,7 +122,7 @@ describe('SuperAdminSchoolsService', () => {
         };
         return callback(mockTx);
       });
-      prisma.school.findUnique.mockResolvedValue({
+      (prisma.school.findUnique as jest.Mock).mockResolvedValue({
         id: 'school-1',
         admins: [],
         teachers: [],
@@ -150,7 +148,7 @@ describe('SuperAdminSchoolsService', () => {
   describe('findAll', () => {
     it('should return all schools', async () => {
       const mockSchools = [{ id: 'school-1' }, { id: 'school-2' }];
-      prisma.school.findMany.mockResolvedValue(mockSchools as any);
+      (prisma.school.findMany as jest.Mock).mockResolvedValue(mockSchools as any);
       schoolMapper.toDtoArray.mockReturnValue(mockSchools as any);
 
       const result = await service.findAll();
@@ -164,7 +162,7 @@ describe('SuperAdminSchoolsService', () => {
     it('should return a school by ID', async () => {
       const mockSchool = { id: 'school-1' };
       schoolRepository.findByIdOrSubdomain.mockResolvedValue(mockSchool as any);
-      prisma.school.findUnique.mockResolvedValue({
+      (prisma.school.findUnique as jest.Mock).mockResolvedValue({
         ...mockSchool,
         admins: [],
         teachers: [],

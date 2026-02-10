@@ -35,8 +35,8 @@ async function bootstrap() {
   // Cookie parser for httpOnly refresh token cookies
   app.use(cookieParser());
 
-  // Global exception filter for better error messages
-  app.useGlobalFilters(new HttpExceptionFilter());
+  // Global exception filter is now registered as a provider in AppModule
+  // to enable dependency injection for ErrorsService
 
   // Global validation pipe with strict transformation
   app.useGlobalPipes(

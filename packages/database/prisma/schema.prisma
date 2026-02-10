@@ -44,6 +44,20 @@ enum DayOfWeek {
   SUNDAY
 }
 
+enum ErrorSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ErrorStatus {
+  UNRESOLVED
+  INVESTIGATING
+  RESOLVED
+  IGNORED
+}
+
 enum PeriodType {
   LESSON
   BREAK
@@ -73,20 +87,20 @@ enum GradeType {
 
 // Curriculum Status Workflow
 enum CurriculumStatus {
-  DRAFT       // Teacher is still editing
-  SUBMITTED   // Submitted for admin approval
-  APPROVED    // Admin approved, ready to use
-  ACTIVE      // Currently being taught
-  COMPLETED   // Term ended, archived
-  REJECTED    // Admin rejected, needs revision
+  DRAFT // Teacher is still editing
+  SUBMITTED // Submitted for admin approval
+  APPROVED // Admin approved, ready to use
+  ACTIVE // Currently being taught
+  COMPLETED // Term ended, archived
+  REJECTED // Admin rejected, needs revision
 }
 
 // Week completion status for curriculum items
 enum WeekStatus {
-  PENDING     // Not yet taught
+  PENDING // Not yet taught
   IN_PROGRESS // Currently teaching
-  COMPLETED   // Done teaching
-  SKIPPED     // Skipped (with reason in notes)
+  COMPLETED // Done teaching
+  SKIPPED // Skipped (with reason in notes)
 }
 
 model User {
@@ -99,6 +113,8 @@ model User {
   deviceId      String?
   firstName     String?
   lastName      String?
+  profileImage  String? // Cloudinary URL for user profile image (used for SUPER_ADMIN)
+  publicId      String? // Public ID for Cloudinary image
   lastLoginAt   DateTime?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
@@ -112,6 +128,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
   googleCalendarSyncs GoogleCalendarSync[]
   loginSessions       LoginSession[]
+  errors              ApplicationError[]
 
   @@index([email])
   @@index([phone])
@@ -285,7 +302,8 @@ model School {
   subscription        Subscription?
   toolAccess          SchoolToolAccess[]
   profileEditTokens   SchoolProfileEditToken[]
-  assessmentTemplates AssessmentTemplate[]     // Assessment templates for this school
+  assessmentTemplates AssessmentTemplate[] // Assessment templates for this school
+  errors              ApplicationError[]
 
   @@index([subdomain])
   @@index([schoolId])
@@ -322,25 +340,25 @@ model Class {
 }
 
 model ClassTeacher {
-  id         String   @id @default(cuid())
-  classId    String? // For TERTIARY or schools without ClassArms
-  classArmId String? // For PRIMARY/SECONDARY schools using ClassArms
-  teacherId  String
-  subjectId  String? // NEW: Proper relation to Subject (for SECONDARY)
-  subject    String? // DEPRECATED: Keep for backward compatibility, use subjectId instead
-  sessionId  String? // NEW: Scope assignment to academic session
+  id            String   @id @default(cuid())
+  classId       String? // For TERTIARY or schools without ClassArms
+  classArmId    String? // For PRIMARY/SECONDARY schools using ClassArms
+  teacherId     String
+  subjectId     String? // NEW: Proper relation to Subject (for SECONDARY)
+  subject       String? // DEPRECATED: Keep for backward compatibility, use subjectId instead
+  sessionId     String? // NEW: Scope assignment to academic session
   // For tertiary: course module/topic the teacher handles
   // For primary: can be "Class Teacher" or null
-  isPrimary  Boolean  @default(false) // For primary: main class teacher, For secondary: form teacher
-  isFormTeacher Boolean @default(false) // NEW: Explicit form teacher flag for SECONDARY
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  isPrimary     Boolean  @default(false) // For primary: main class teacher, For secondary: form teacher
+  isFormTeacher Boolean  @default(false) // NEW: Explicit form teacher flag for SECONDARY
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  class    Class?           @relation(fields: [classId], references: [id], onDelete: Cascade)
-  classArm ClassArm?        @relation(fields: [classArmId], references: [id], onDelete: Cascade)
-  teacher  Teacher          @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  subjectRef Subject?       @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  session  AcademicSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  class      Class?           @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classArm   ClassArm?        @relation(fields: [classArmId], references: [id], onDelete: Cascade)
+  teacher    Teacher          @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  subjectRef Subject?         @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  session    AcademicSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@unique([classArmId, subjectId, sessionId]) // One teacher per subject per class per session
   @@unique([classId, classArmId, teacherId, subject]) // Legacy: Allows same teacher in multiple arms
@@ -515,10 +533,10 @@ model Subject {
   classLevel          ClassLevel?          @relation(fields: [classLevelId], references: [id], onDelete: SetNull)
   timetablePeriods    TimetablePeriod[]
   subjectTeachers     SubjectTeacher[]
-  classTeachers       ClassTeacher[]       // Teachers assigned to teach this subject in specific classes
+  classTeachers       ClassTeacher[] // Teachers assigned to teach this subject in specific classes
   courseRegistrations CourseRegistration[] // For TERTIARY: Students registered for this subject
-  curricula           Curriculum[]         // Curricula for this subject
-  grades              Grade[]              // Grades for this subject
+  curricula           Curriculum[] // Curricula for this subject
+  grades              Grade[] // Grades for this subject
   assessmentTemplates AssessmentTemplate[] // Assessment templates for this subject
 
   @@unique([schoolId, code, schoolType])
@@ -654,20 +672,20 @@ model Grade {
 model AssessmentTemplate {
   id          String    @id @default(cuid())
   schoolId    String
-  subjectId   String?   // Optional: subject-specific templates (null = all subjects)
-  schoolType  String?   // PRIMARY, SECONDARY, TERTIARY (null = all types)
-  name        String    // e.g., "First CA", "Mid-Term Test", "Final Exam"
+  subjectId   String? // Optional: subject-specific templates (null = all subjects)
+  schoolType  String? // PRIMARY, SECONDARY, TERTIARY (null = all types)
+  name        String // e.g., "First CA", "Mid-Term Test", "Final Exam"
   gradeType   GradeType // CA, ASSIGNMENT, EXAM
   maxScore    Decimal   @default(100)
-  weight      Decimal?  // Optional: weight for grade calculation (e.g., 0.3 for 30%)
-  sequence    Int?      // Order in term (1, 2, 3...)
-  description String?   // Description of the assessment
+  weight      Decimal? // Optional: weight for grade calculation (e.g., 0.3 for 30%)
+  sequence    Int? // Order in term (1, 2, 3...)
+  description String? // Description of the assessment
   isActive    Boolean   @default(true)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  school     School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  subject    Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  school  School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  subject Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
 
   @@unique([schoolId, name, subjectId, schoolType, gradeType])
   @@index([schoolId])
@@ -710,18 +728,66 @@ model PasswordResetToken {
 }
 
 model SchoolProfileEditToken {
-  id        String    @id @default(cuid())
-  token     String    @unique
+  id        String                        @id @default(cuid())
+  token     String                        @unique
   schoolId  String
-  school    School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  school    School                        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
   changes   Json // Store the proposed changes as JSON
   expiresAt DateTime
   usedAt    DateTime?
-  createdAt DateTime  @default(now())
+  createdAt DateTime                      @default(now())
+  auditLogs SchoolProfileEditTokenAudit[]
 
   @@index([schoolId])
   @@index([token])
   @@index([expiresAt])
+}
+
+model SchoolProfileEditTokenAudit {
+  id          String                  @id @default(cuid())
+  token       String
+  tokenRecord SchoolProfileEditToken? @relation(fields: [token], references: [token], onDelete: Cascade)
+  schoolId    String
+  userId      String?
+  event       String // 'REQUESTED' | 'VERIFIED' | 'USED' | 'FAILED'
+  ipAddress   String?
+  userAgent   String?
+  details     Json? // Additional context (error messages, etc.)
+  createdAt   DateTime                @default(now())
+
+  @@index([token])
+  @@index([schoolId])
+  @@index([userId])
+  @@index([event])
+  @@index([createdAt])
+  @@index([ipAddress])
+}
+
+model ApplicationError {
+  id          String        @id @default(cuid())
+  errorId     String        @unique // ERR-{timestamp}-{hash}
+  schoolId    String?
+  school      School?       @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  userId      String?
+  user        User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  errorType   String // Error class/type (e.g., "BadRequestException", "PrismaClientKnownRequestError")
+  message     String
+  stackTrace  String?
+  context     Json? // Request context: method, path, query, body, headers, IP, userAgent
+  severity    ErrorSeverity
+  status      ErrorStatus   @default(UNRESOLVED)
+  resolvedBy  String?
+  resolvedAt  DateTime?
+  occurrences Int           @default(1)
+  firstSeen   DateTime      @default(now())
+  lastSeen    DateTime      @default(now())
+
+  @@index([schoolId])
+  @@index([errorType])
+  @@index([severity])
+  @@index([status])
+  @@index([firstSeen])
+  @@index([lastSeen])
 }
 
 model Fee {
@@ -899,16 +965,16 @@ model StudentResource {
 
 model NerdcSubject {
   id          String   @id @default(cuid())
-  name        String   // "English Language", "Mathematics"
+  name        String // "English Language", "Mathematics"
   code        String   @unique // "ENG", "MTH", "BSC"
-  category    String?  // "CORE", "ELECTIVE", "VOCATIONAL"
+  category    String? // "CORE", "ELECTIVE", "VOCATIONAL"
   schoolTypes String[] // ["PRIMARY"], ["PRIMARY", "SECONDARY"], etc.
   description String?
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  curricula   NerdcCurriculum[]
+  curricula NerdcCurriculum[]
 
   @@index([code])
   @@index([isActive])
@@ -917,15 +983,15 @@ model NerdcSubject {
 model NerdcCurriculum {
   id          String   @id @default(cuid())
   subjectId   String
-  classLevel  String   // "PRIMARY_1", "PRIMARY_2", "JSS_1", "SS_1"
-  term        Int      // 1, 2, or 3
+  classLevel  String // "PRIMARY_1", "PRIMARY_2", "JSS_1", "SS_1"
+  term        Int // 1, 2, or 3
   description String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  subject         NerdcSubject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subject         NerdcSubject          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   weeks           NerdcCurriculumWeek[]
-  schoolCurricula Curriculum[]        // School curricula based on this template
+  schoolCurricula Curriculum[] // School curricula based on this template
 
   @@unique([subjectId, classLevel, term])
   @@index([classLevel])
@@ -933,20 +999,20 @@ model NerdcCurriculum {
 }
 
 model NerdcCurriculumWeek {
-  id            String   @id @default(cuid())
-  curriculumId  String
-  weekNumber    Int      // 1-13 (Nigerian school term)
-  topic         String   // Main topic
-  subTopics     String[] // Sub-topics within the week
-  objectives    String[] // Learning objectives
-  activities    String[] // Suggested activities
-  resources     String[] // Required resources
-  assessment    String?  // Assessment method
-  duration      String?  // e.g., "5 periods of 40 minutes"
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(cuid())
+  curriculumId String
+  weekNumber   Int // 1-13 (Nigerian school term)
+  topic        String // Main topic
+  subTopics    String[] // Sub-topics within the week
+  objectives   String[] // Learning objectives
+  activities   String[] // Suggested activities
+  resources    String[] // Required resources
+  assessment   String? // Assessment method
+  duration     String? // e.g., "5 periods of 40 minutes"
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  curriculum    NerdcCurriculum @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  curriculum NerdcCurriculum @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
 
   @@unique([curriculumId, weekNumber])
   @@index([curriculumId])
@@ -957,33 +1023,33 @@ model NerdcCurriculumWeek {
 // ============================================
 
 model Curriculum {
-  id              String   @id @default(cuid())
-  schoolId        String?  // Direct link to school (nullable for migration)
-  classId         String?  // For TERTIARY (courses)
-  classLevelId    String?  // For PRIMARY/SECONDARY
-  subjectId       String?  // Link to Subject (nullable for migration)
-  termId          String?  // Link to Term (nullable for migration)
-  teacherId       String
-  academicYear    String
+  id           String  @id @default(cuid())
+  schoolId     String? // Direct link to school (nullable for migration)
+  classId      String? // For TERTIARY (courses)
+  classLevelId String? // For PRIMARY/SECONDARY
+  subjectId    String? // Link to Subject (nullable for migration)
+  termId       String? // Link to Term (nullable for migration)
+  teacherId    String
+  academicYear String
 
   // Legacy field - will be deprecated
-  subject         String?  // For backward compatibility (use subjectId instead)
+  subject String? // For backward compatibility (use subjectId instead)
 
   // NERDC Integration
-  nerdcCurriculumId String?  // Reference to NERDC template used
-  isNerdcBased    Boolean  @default(false) // Was it generated from NERDC?
-  customizations  Int      @default(0)     // Number of custom changes made
+  nerdcCurriculumId String? // Reference to NERDC template used
+  isNerdcBased      Boolean @default(false) // Was it generated from NERDC?
+  customizations    Int     @default(0) // Number of custom changes made
 
   // Status & Approval
   status          CurriculumStatus @default(DRAFT)
   submittedAt     DateTime?
-  approvedBy      String?          // Admin who approved
+  approvedBy      String? // Admin who approved
   approvedAt      DateTime?
-  rejectionReason String?          // Reason for rejection
+  rejectionReason String? // Reason for rejection
 
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
   school          School?          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
@@ -1007,34 +1073,34 @@ model Curriculum {
 }
 
 model CurriculumItem {
-  id              String   @id @default(cuid())
-  curriculumId    String
-  weekNumber      Int      // Week number (1-13)
-  topic           String
-  subTopics       String[] // Sub-topics within the week
-  objectives      String[] // Learning objectives
-  activities      String[] // Suggested activities
-  resources       String[] // Required resources
-  assessment      String?  // Assessment method for this week
-  order           Int      @default(0)
+  id           String   @id @default(cuid())
+  curriculumId String
+  weekNumber   Int // Week number (1-13)
+  topic        String
+  subTopics    String[] // Sub-topics within the week
+  objectives   String[] // Learning objectives
+  activities   String[] // Suggested activities
+  resources    String[] // Required resources
+  assessment   String? // Assessment method for this week
+  order        Int      @default(0)
 
   // Legacy field alias
-  week            Int?     // Deprecated - use weekNumber
+  week Int? // Deprecated - use weekNumber
 
   // Customization tracking (for NERDC-based curricula)
-  isCustomized    Boolean  @default(false) // Was this modified from NERDC?
-  originalTopic   String?  // What NERDC had (if customized)
+  isCustomized  Boolean @default(false) // Was this modified from NERDC?
+  originalTopic String? // What NERDC had (if customized)
 
   // Progress tracking
-  status          WeekStatus @default(PENDING)
-  taughtAt        DateTime?  // When this week was taught
-  teacherNotes    String?    // Teacher's notes after teaching
-  completedBy     String?    // Teacher ID who marked complete
+  status       WeekStatus @default(PENDING)
+  taughtAt     DateTime? // When this week was taught
+  teacherNotes String? // Teacher's notes after teaching
+  completedBy  String? // Teacher ID who marked complete
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  curriculum      Curriculum @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  curriculum Curriculum @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
 
   @@unique([curriculumId, weekNumber])
   @@index([curriculumId])

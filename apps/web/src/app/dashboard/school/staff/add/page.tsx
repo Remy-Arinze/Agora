@@ -24,6 +24,7 @@ import { useUploadTeacherImageMutation, useUploadAdminImageMutation, AdminPermis
 import { SubjectMultiSelect } from '@/components/teachers/SubjectMultiSelect';
 import { PermissionSelector, getDefaultReadPermissions } from '@/components/permissions';
 import toast from 'react-hot-toast';
+import { isPrincipalRole } from '@/lib/constants/roles';
 
 type StaffType = 'teacher' | 'admin';
 
@@ -246,15 +247,14 @@ export default function AddStaffPage() {
         router.push('/dashboard/school/teachers');
       } else {
         // Check if the role is a Principal role - they don't need custom permissions
-        const isPrincipalRole = ['principal', 'school principal', 'head teacher', 'headmaster', 'headmistress']
-          .includes(capitalizeWords(adminRole).toLowerCase());
+        const isPrincipalRoleCheck = isPrincipalRole(adminRole);
 
         // Debug logging
         console.log('🔐 [AddStaff] Permission assignment debug:', {
           role: capitalizeWords(adminRole),
-          isPrincipalRole,
+          isPrincipalRole: isPrincipalRoleCheck,
           adminPermissionsCount: adminPermissions.length,
-          willSendPermissions: !isPrincipalRole,
+          willSendPermissions: !isPrincipalRoleCheck,
         });
 
         const adminData = {
@@ -266,7 +266,7 @@ export default function AddStaffPage() {
           employeeId: formData.employeeId.trim() || undefined,
           profileImage: profileImageUrl,
           // Only include permissions for non-principal roles
-          permissions: isPrincipalRole ? undefined : adminPermissions,
+          permissions: isPrincipalRoleCheck ? undefined : adminPermissions,
         };
 
         console.log('🔐 [AddStaff] Sending admin data with permissions:', {

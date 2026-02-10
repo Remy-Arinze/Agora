@@ -8,6 +8,7 @@ import { IdGeneratorService } from '../../shared/id-generator.service';
 import { StaffValidatorService } from '../../shared/staff-validator.service';
 import { PrismaService } from '../../../database/prisma.service';
 import { AuthService } from '../../../auth/auth.service';
+import { TestUtils } from '../../../common/test/test-utils';
 
 describe('TeacherService', () => {
   let service: TeacherService;
@@ -61,6 +62,7 @@ describe('TeacherService', () => {
         {
           provide: PrismaService,
           useValue: {
+            ...TestUtils.createMockPrismaService(),
             $transaction: jest.fn((callback) => callback(prisma)),
           },
         },
@@ -76,6 +78,7 @@ describe('TeacherService', () => {
     service = module.get<TeacherService>(TeacherService);
     schoolRepository = module.get(SchoolRepository);
     staffRepository = module.get(StaffRepository);
+    staffMapper = module.get(StaffMapper);
     idGenerator = module.get(IdGeneratorService);
     staffValidator = module.get(StaffValidatorService);
     prisma = module.get(PrismaService);

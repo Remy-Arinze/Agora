@@ -135,7 +135,7 @@ export default function StaffPage() {
     }
     
     return (
-      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 flex items-center justify-center text-white font-semibold text-sm border-2 border-[#1a1f2e] dark:border-[#1a1f2e] shadow-sm flex-shrink-0">
+      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 flex items-center justify-center text-white font-semibold border-2 border-[#1a1f2e] dark:border-[#1a1f2e] shadow-sm flex-shrink-0" style={{ fontSize: 'var(--text-body)' }}>
         {getInitials(firstName, lastName)}
       </div>
     );
@@ -239,7 +239,7 @@ export default function StaffPage() {
           <PermissionGate resource={PermissionResource.STAFF} type={PermissionType.WRITE}>
             <div className="flex items-center gap-3">
               <Link href="/dashboard/school/teachers/add">
-                <Button variant="accent" size="md" className="bg-[#f97316] hover:bg-[#ea580c] text-white">
+                <Button variant="primary" size="sm">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Staff
                 </Button>
@@ -333,7 +333,8 @@ export default function StaffPage() {
                   setRoleFilter(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full px-2 py-1.5 text-sm border border-light-border dark:border-[#1a1f2e] rounded-lg bg-light-card dark:bg-[#151a23] text-light-text-primary dark:text-white focus:outline-none focus:ring-2 focus:ring-[#2490FD] h-9"
+                className="w-full px-2 py-1.5 border border-light-border dark:border-[#1a1f2e] rounded-lg bg-light-card dark:bg-[#151a23] text-light-text-primary dark:text-white focus:outline-none focus:ring-2 focus:ring-[#2490FD] h-9"
+                style={{ fontSize: 'var(--text-body)' }}
               >
                 <option value="All">All Roles</option>
                 {availableRoles.map((role) => (
@@ -375,7 +376,7 @@ export default function StaffPage() {
             </div>
 
             {/* Total Count */}
-            <span className="text-sm text-light-text-secondary dark:text-[#9ca3af]">
+            <span className="text-light-text-secondary dark:text-[#9ca3af]" style={{ fontSize: 'var(--text-body)' }}>
               {meta?.total || 0}
             </span>
           </div>
@@ -383,9 +384,9 @@ export default function StaffPage() {
 
         {/* Staff Grid/List */}
         <div>
-          <h2 className="font-semibold text-light-text-primary dark:text-white mb-4" style={{ fontSize: 'var(--text-section-title)' }}>
+          <p className="font-medium text-light-text-secondary dark:text-dark-text-secondary mb-4" style={{ fontSize: 'var(--text-section-title)' }}>
             All Staff
-          </h2>
+          </p>
 
           {filteredStaff.length === 0 ? (
             <Card>
@@ -425,7 +426,7 @@ export default function StaffPage() {
                                 <h3 className="font-semibold text-light-text-primary dark:text-white" style={{ fontSize: 'var(--text-card-title)' }}>
                                   {staffMember.firstName} {staffMember.lastName}
                                 </h3>
-                                <span className={cn('px-2.5 py-0.5 rounded-full text-xs font-medium', statusConfig.className)}>
+                                <span className={cn('px-2.5 py-0.5 rounded-full font-medium', statusConfig.className)} style={{ fontSize: 'var(--text-small)' }}>
                                   <StatusIcon className="h-3 w-3 inline mr-1" />
                                   {statusConfig.label}
                                 </span>
@@ -448,13 +449,13 @@ export default function StaffPage() {
                         <div className="flex items-center gap-4 text-light-text-secondary dark:text-[#9ca3af] mt-auto" style={{ fontSize: 'var(--text-body)' }}>
                           <div className="flex items-center gap-1">
                             <span className={cn(
-                              'px-2 py-0.5 rounded text-xs font-medium',
+                              'px-2 py-0.5 rounded font-medium',
                               staffMember.role === 'Principal'
                                 ? 'bg-purple-500/20 text-purple-400'
                                 : staffMember.role === 'Teacher'
                                 ? 'bg-green-500/20 text-green-400'
                                 : 'bg-blue-500/20 text-blue-400'
-                            )}>
+                            )} style={{ fontSize: 'var(--text-small)' }}>
                               {staffMember.role || 'N/A'}
                             </span>
                           </div>
@@ -500,7 +501,7 @@ export default function StaffPage() {
                                 <h3 className="font-medium text-light-text-primary dark:text-white">
                                   {staffMember.firstName} {staffMember.lastName}
                                 </h3>
-                                <span className={cn('px-2.5 py-0.5 rounded-full text-xs font-medium', statusConfig.className)}>
+                                <span className={cn('px-2.5 py-0.5 rounded-full font-medium', statusConfig.className)} style={{ fontSize: 'var(--text-small)' }}>
                                   <StatusIcon className="h-3 w-3 inline mr-1" />
                                   {statusConfig.label}
                                 </span>
@@ -515,18 +516,18 @@ export default function StaffPage() {
                                   {staffMember.role || 'N/A'}
                                 </span>
                               </div>
-                              <p className="text-sm text-light-text-secondary dark:text-[#9ca3af]">
+                              <p className="text-light-text-secondary dark:text-[#9ca3af]" style={{ fontSize: 'var(--text-body)' }}>
                                 {staffMember.email || 'No email'} • {staffMember.subject || 'No subject'}
                               </p>
                             </div>
                           </div>
                           <div className="flex items-center gap-6">
                             <div className="text-right">
-                              <p className="text-sm font-medium text-light-text-primary dark:text-white">
+                              <p className="font-medium text-light-text-primary dark:text-white" style={{ fontSize: 'var(--text-body)' }}>
                                 {staffMember.phone || 'N/A'}
                               </p>
                             </div>
-                            <span className="text-sm text-blue-600 dark:text-blue-400 font-medium">
+                            <span className="text-blue-600 dark:text-blue-400 font-medium" style={{ fontSize: 'var(--text-body)' }}>
                               View →
                             </span>
                           </div>

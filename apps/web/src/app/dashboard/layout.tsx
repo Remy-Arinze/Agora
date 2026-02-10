@@ -3,13 +3,12 @@
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { SidebarNew } from '@/components/layout/SidebarNew';
 import { Navbar } from '@/components/layout/Navbar';
-import { SidebarProvider, useSidebar } from '@/components/ui/sidebar';
-import { useState, useEffect } from 'react';
+import { SidebarProvider } from '@/components/ui/sidebar';
+import { useEffect } from 'react';
 import { useSelector } from 'react-redux';
 import type { RootState } from '@/lib/store/store';
 
 function MainContent({ children }: { children: React.ReactNode }) {
-  const { open } = useSidebar();
   const userRole = useSelector((state: RootState) => state.auth.user?.role);
   
   // Hide navbar for SUPER_ADMIN and SCHOOL_ADMIN
@@ -17,9 +16,7 @@ function MainContent({ children }: { children: React.ReactNode }) {
   
   return (
     <main 
-      className={`flex-1 overflow-y-auto p-8 transition-all duration-300 bg-[var(--dark-bg)] scrollbar-hide ${
-        open ? 'md:ml-[250px]' : 'md:ml-[80px]'
-      }`}
+      className="flex-1 overflow-y-auto p-8 transition-all duration-300 bg-[var(--dark-bg)] scrollbar-hide md:ml-[250px]"
     >
       {children}
     </main>
@@ -48,8 +45,6 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-
   // Hide scrollbar on dashboard
   useEffect(() => {
     document.documentElement.classList.add('scrollbar-hide');
@@ -63,7 +58,7 @@ export default function DashboardLayout({
 
   return (
     <ProtectedRoute>
-      <SidebarProvider open={sidebarOpen} setOpen={setSidebarOpen} animate={true}>
+      <SidebarProvider open={true} setOpen={() => {}} animate={false}>
         <DashboardContent>{children}</DashboardContent>
       </SidebarProvider>
     </ProtectedRoute>

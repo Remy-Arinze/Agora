@@ -134,7 +134,7 @@ function ResetPasswordContent() {
         <div className="flex items-center justify-center mb-8">
           <Link href="/" className="flex items-center">
             <Image
-              src="/assets/logos/agora_word_blue.png"
+              src="/assets/logos/agora_worded_white.png"
               alt="Agora"
               width={180}
               height={48}

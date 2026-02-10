@@ -42,6 +42,7 @@ import { useSchoolType } from '@/hooks/useSchoolType';
 import { useTeacherSubjects } from '@/hooks/useTeacherSubjects';
 import { BackButton } from '@/components/ui/BackButton';
 import toast from 'react-hot-toast';
+import { isPrincipalRole } from '@/lib/constants/roles';
 
 const RESOURCE_LABELS: Record<PermissionResource, string> = {
   OVERVIEW: 'Dashboard Overview',
@@ -156,7 +157,7 @@ export default function StaffDetailPage() {
   );
   const timetableClasses = timetableClassesResponse?.data;
   const permissions = permissionsResponse?.data?.permissions || [];
-  const isPrincipal = isAdmin && staff?.role?.toLowerCase() === 'principal';
+  const isPrincipal = isAdmin && isPrincipalRole(staff?.role);
 
   // Get teacher subjects (for teachers with subject competencies - mainly SECONDARY, but can include PRIMARY/TERTIARY)
   const {

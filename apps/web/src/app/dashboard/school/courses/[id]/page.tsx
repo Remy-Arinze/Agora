@@ -23,6 +23,9 @@ import {
   Download,
   File,
   ListOrdered,
+  ArrowLeft,
+  Edit,
+  UserX,
 } from 'lucide-react';
 import {
   useGetMySchoolQuery,
@@ -292,46 +295,55 @@ export default function ClassDetailPage() {
 
   return (
     <ProtectedRoute roles={['SCHOOL_ADMIN']}>
-      <div className="p-6 space-y-6">
+      <div className="space-y-6">
         {/* Header */}
-        <div className="space-y-4">
-          <BackButton fallbackUrl="/dashboard/school/courses" />
+        <div className="space-y-6">
+          {/* Back Button */}
+          <Link 
+            href="/dashboard/school/courses"
+            className="inline-flex items-center gap-2 text-light-text-secondary dark:text-dark-text-secondary hover:text-light-text-primary dark:hover:text-dark-text-primary transition-colors"
+            style={{ fontSize: 'var(--text-body)' }}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Classes
+          </Link>
           
+          {/* Class Header */}
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
-                <BookOpen className="h-7 w-7 text-white" />
+              {/* Class Icon */}
+              <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 flex items-center justify-center shadow-lg flex-shrink-0">
+                <BookOpen className="h-6 w-6 text-white" />
               </div>
-            <div>
-                <h1 className="text-2xl font-bold text-light-text-primary dark:text-dark-text-primary">
-                {classData.name}
-              </h1>
-                <div className="flex items-center gap-3 mt-1 flex-wrap">
-                  {classData.code && (
-                    <span className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 text-sm font-medium">
-                      {classData.code}
-                    </span>
-                  )}
-                  <span className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
-                    {classData.classLevel && `${classData.classLevel} • `}
-                    {classData.academicYear} • {classData.type}
-                  </span>
-                  <span className={`px-2 py-0.5 rounded text-xs ${
+              
+              {/* Class Info */}
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <h1 className="font-bold text-light-text-primary dark:text-dark-text-primary" style={{ fontSize: 'var(--text-card-title)' }}>
+                    {classData.name}
+                  </h1>
+                  <span className={`px-2.5 py-1 rounded-full font-medium ${
                     classData.isActive
                       ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                       : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
-                  }`}>
+                  }`} style={{ fontSize: 'var(--text-small)' }}>
                     {classData.isActive ? 'Active' : 'Inactive'}
                   </span>
                 </div>
                 
-                {/* Teacher Info */}
-                <div className="mt-2 flex items-center gap-2 text-sm">
-                  {classData.type === 'PRIMARY' ? (
-                    // PRIMARY: Show the assigned teacher (form teacher or any teacher) or no teacher message
-                    <span className="flex items-center gap-1 text-light-text-secondary dark:text-dark-text-secondary">
-                      <GraduationCap className="h-4 w-4" />
-                      {teachersByRole.formTeachers.length > 0 ? (
+                {/* Class Details */}
+                <div className="flex flex-wrap items-center gap-6 text-light-text-secondary dark:text-dark-text-secondary" style={{ fontSize: 'var(--text-body)' }}>
+                  <div className="flex items-center gap-2">
+                    <GraduationCap className="h-4 w-4 flex-shrink-0" />
+                    <span>
+                      {classData.classLevel || 'N/A'} • {classData.academicYear || 'N/A'}
+                    </span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <UserX className="h-4 w-4 flex-shrink-0" />
+                    {classData.type === 'PRIMARY' ? (
+                      teachersByRole.formTeachers.length > 0 ? (
                         <>
                           <Link 
                             href={`/dashboard/school/teachers/${teachersByRole.formTeachers[0].teacherId}`}
@@ -339,16 +351,8 @@ export default function ClassDetailPage() {
                           >
                             {teachersByRole.formTeachers[0].firstName} {teachersByRole.formTeachers[0].lastName}
                           </Link>
-                          <span className="text-light-text-muted dark:text-dark-text-muted">(Class Teacher)</span>
-                          <button
-                            onClick={() => setRemoveModal({ isOpen: true, teacher: teachersByRole.formTeachers[0] })}
-                            className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 font-medium ml-1"
-                          >
-                            Remove
-                          </button>
                         </>
                       ) : classData.teachers.length > 0 ? (
-                        // Fallback: show any assigned teacher (legacy assignments without isPrimary)
                         <>
                           <Link 
                             href={`/dashboard/school/teachers/${classData.teachers[0].teacherId}`}
@@ -356,186 +360,171 @@ export default function ClassDetailPage() {
                           >
                             {classData.teachers[0].firstName} {classData.teachers[0].lastName}
                           </Link>
-                          <span className="text-light-text-muted dark:text-dark-text-muted">(Class Teacher)</span>
-                          <button
-                            onClick={() => setRemoveModal({ isOpen: true, teacher: classData.teachers[0] })}
-                            className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 font-medium ml-1"
-                          >
-                            Remove
-                          </button>
                         </>
                       ) : (
                         <>
-                          <span className="text-light-text-muted dark:text-dark-text-muted italic">No teacher assigned</span>
+                          <span className="italic">No teacher assigned</span>
                           <PermissionGate resource={PermissionResource.CLASSES} type={PermissionType.WRITE}>
-                            <button
+                            <Button
+                              variant="primary"
+                              size="sm"
                               onClick={() => setShowAssignModal(true)}
-                              className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium ml-1"
+                              className="ml-1"
                             >
                               Assign Teacher
-                            </button>
+                            </Button>
                           </PermissionGate>
                         </>
-                      )}
-                    </span>
-                  ) : classData.type === 'SECONDARY' ? (
-                    // SECONDARY: Show form teacher
-                    teachersByRole.formTeachers.length > 0 ? (
-                      <span className="flex items-center gap-1 text-light-text-secondary dark:text-dark-text-secondary">
-                        <GraduationCap className="h-4 w-4" />
-                        <Link 
-                          href={`/dashboard/school/teachers/${teachersByRole.formTeachers[0].teacherId}`}
-                          className="font-medium hover:text-blue-600 dark:hover:text-blue-400 hover:underline"
-                        >
-                          {teachersByRole.formTeachers[0].firstName} {teachersByRole.formTeachers[0].lastName}
-                        </Link>
-                        <span className="text-light-text-muted dark:text-dark-text-muted">(Form Teacher)</span>
-                        <button
-                          onClick={() => setRemoveModal({ isOpen: true, teacher: teachersByRole.formTeachers[0] })}
-                          className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 font-medium ml-1"
-                        >
-                          Remove
-                        </button>
-                        {classData.teachers.length > 1 && (
-                          <span className="text-light-text-muted dark:text-dark-text-muted">
-                            • +{classData.teachers.length - 1} more teacher{classData.teachers.length > 2 ? 's' : ''}
-                          </span>
-                        )}
-                      </span>
+                      )
+                    ) : classData.type === 'SECONDARY' ? (
+                      teachersByRole.formTeachers.length > 0 ? (
+                        <>
+                          <Link 
+                            href={`/dashboard/school/teachers/${teachersByRole.formTeachers[0].teacherId}`}
+                            className="font-medium hover:text-blue-600 dark:hover:text-blue-400 hover:underline"
+                          >
+                            {teachersByRole.formTeachers[0].firstName} {teachersByRole.formTeachers[0].lastName}
+                          </Link>
+                        </>
+                      ) : (
+                        <>
+                          <span className="italic">No form teacher assigned</span>
+                          <PermissionGate resource={PermissionResource.CLASSES} type={PermissionType.WRITE}>
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => setShowAssignModal(true)}
+                              className="ml-1"
+                            >
+                              Assign Teacher
+                            </Button>
+                          </PermissionGate>
+                        </>
+                      )
                     ) : (
-                      <span className="flex items-center gap-1 text-light-text-muted dark:text-dark-text-muted">
-                        <Users className="h-4 w-4" />
+                      <>
                         {classData.teachers.length > 0 ? (
-                          <>
-                            {classData.teachers.length} teacher{classData.teachers.length !== 1 ? 's' : ''} assigned
-                          </>
+                          <span>{classData.teachers.length} lecturer{classData.teachers.length !== 1 ? 's' : ''} assigned</span>
                         ) : (
                           <>
-                            <span className="italic">No form teacher assigned</span>
+                            <span className="italic">No lecturer assigned</span>
                             <PermissionGate resource={PermissionResource.CLASSES} type={PermissionType.WRITE}>
-                              <button
+                              <Button
+                                variant="primary"
+                                size="sm"
                                 onClick={() => setShowAssignModal(true)}
-                                className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium ml-1"
+                                className="ml-1"
                               >
-                                Assign Teacher
-                              </button>
+                                Assign Lecturer
+                              </Button>
                             </PermissionGate>
                           </>
                         )}
-                      </span>
-                    )
-                  ) : (
-                    // TERTIARY
-                    <span className="flex items-center gap-1 text-light-text-muted dark:text-dark-text-muted">
-                      <Users className="h-4 w-4" />
-                      {classData.teachers.length > 0 ? (
-                        <>{classData.teachers.length} lecturer{classData.teachers.length !== 1 ? 's' : ''} assigned</>
-                      ) : (
-                        <>
-                          <span className="italic">No lecturer assigned</span>
-                          <PermissionGate resource={PermissionResource.CLASSES} type={PermissionType.WRITE}>
-                            <button
-                              onClick={() => setShowAssignModal(true)}
-                              className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 font-medium ml-1"
-                            >
-                              Assign Lecturer
-                            </button>
-                          </PermissionGate>
-                        </>
-                      )}
-                    </span>
-              )}
+                      </>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 flex-shrink-0" />
+                    <span>{classData.studentsCount || 0} student{(classData.studentsCount || 0) !== 1 ? 's' : ''} enrolled</span>
+                  </div>
+                </div>
+              </div>
             </div>
-                
-                <p className="mt-1 text-sm text-light-text-muted dark:text-dark-text-muted">
-                  {classData.studentsCount} student{classData.studentsCount !== 1 ? 's' : ''} enrolled
-                </p>
-          </div>
-            </div>
+            
+            {/* Edit Class Button */}
+            <PermissionGate resource={PermissionResource.CLASSES} type={PermissionType.WRITE}>
+              <Button variant="ghost" size="sm" className="flex items-center gap-2 h-8 text-xs">
+                <Edit className="h-3 w-3" />
+                Edit Class
+              </Button>
+            </PermissionGate>
           </div>
         </div>
 
         {/* Tabs */}
         <div className="border-b border-light-border dark:border-dark-border">
           <div className="flex space-x-1 overflow-x-auto scrollbar-hide">
-              {tabs.map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap ${
-                    activeTab === tab.id
-                    ? 'border-b-2 border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400'
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-2 px-4 py-3 font-medium transition-colors whitespace-nowrap text-xs ${
+                  activeTab === tab.id
+                    ? 'border-b-2 border-[#2490FD] dark:border-[#2490FD] text-[#2490FD] dark:text-[#2490FD]'
                     : 'text-light-text-secondary dark:text-dark-text-secondary hover:text-light-text-primary dark:hover:text-dark-text-primary'
-                  }`}
-                >
-                  {tab.icon}
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+                }`}
+                style={{ fontSize: 'var(--text-small)' }}
+              >
+                {tab.icon}
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Tab Content */}
         <div className="min-h-[400px]">
           {/* Students Tab */}
           {activeTab === 'students' && (
-              <Card>
-                <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Users className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                    <CardTitle>Students in Class</CardTitle>
-                  </div>
-                  <PermissionGate resource={PermissionResource.STUDENTS} type={PermissionType.WRITE}>
-                    <Link href={`/dashboard/school/students?class=${classId}`}>
-                      <Button variant="primary" size="sm">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Student
-                      </Button>
-                    </Link>
-                  </PermissionGate>
+            <div className="space-y-4">
+              {/* Section Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users className="h-5 w-5 text-light-text-secondary dark:text-dark-text-secondary" />
+                  <p className="font-medium text-light-text-secondary dark:text-dark-text-secondary" style={{ fontSize: 'var(--text-section-title)' }}>
+                    Students in Class
+                  </p>
                 </div>
-                </CardHeader>
-                <CardContent>
-                {isLoadingStudents ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                <PermissionGate resource={PermissionResource.STUDENTS} type={PermissionType.WRITE}>
+                  <Link href={`/dashboard/school/admissions?new=true`}>
+                    <Button variant="primary" size="sm" className="h-8 text-xs">
+                      <Plus className="h-3 w-3 mr-2" />
+                      Add Student
+                    </Button>
+                  </Link>
+                </PermissionGate>
+              </div>
+              
+              {/* Content */}
+              {isLoadingStudents ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
+                </div>
+              ) : students.length === 0 ? (
+                <Card>
+                  <CardContent className="py-16 text-center">
+                    <div className="w-20 h-20 rounded-full bg-light-surface dark:bg-dark-surface flex items-center justify-center mx-auto mb-4">
+                      <Users className="h-10 w-10 text-light-text-muted dark:text-dark-text-muted" />
                     </div>
-                ) : students.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Users className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
-                    <p className="text-light-text-secondary dark:text-dark-text-secondary mb-4">
-                      No students enrolled in this class yet.
+                    <p className="font-medium text-light-text-primary dark:text-dark-text-primary mb-2" style={{ fontSize: 'var(--text-card-title)' }}>
+                      No students enrolled yet
                     </p>
-                    <PermissionGate resource={PermissionResource.STUDENTS} type={PermissionType.WRITE}>
-                      <Link href={`/dashboard/school/admissions`}>
-                        <Button variant="primary">
-                          <Plus className="h-4 w-4 mr-2" />
-                          Admit Students
-                        </Button>
-                      </Link>
-                    </PermissionGate>
-                      </div>
-                ) : (
-                        <div className="space-y-2">
-                    {/* Students Table */}
+                    <p className="text-light-text-secondary dark:text-dark-text-secondary mb-6 max-w-md mx-auto" style={{ fontSize: 'var(--text-body)' }}>
+                      This class is currently empty. Start by adding new students directly to this class.
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardContent>
                     <div className="overflow-x-auto">
                       <table className="w-full">
                         <thead>
                           <tr className="border-b border-light-border dark:border-dark-border">
-                            <th className="text-left py-3 px-4 text-xs font-semibold text-light-text-muted dark:text-dark-text-muted uppercase tracking-wider">
+                            <th className="text-left py-3 px-4 font-semibold text-light-text-muted dark:text-dark-text-muted uppercase tracking-wider" style={{ fontSize: 'var(--text-small)' }}>
                               Student
                             </th>
-                            <th className="text-left py-3 px-4 text-xs font-semibold text-light-text-muted dark:text-dark-text-muted uppercase tracking-wider">
+                            <th className="text-left py-3 px-4 font-semibold text-light-text-muted dark:text-dark-text-muted uppercase tracking-wider" style={{ fontSize: 'var(--text-small)' }}>
                               Student ID
                             </th>
-                            <th className="text-left py-3 px-4 text-xs font-semibold text-light-text-muted dark:text-dark-text-muted uppercase tracking-wider">
+                            <th className="text-left py-3 px-4 font-semibold text-light-text-muted dark:text-dark-text-muted uppercase tracking-wider" style={{ fontSize: 'var(--text-small)' }}>
                               Class Level
                             </th>
-                            <th className="text-left py-3 px-4 text-xs font-semibold text-light-text-muted dark:text-dark-text-muted uppercase tracking-wider">
+                            <th className="text-left py-3 px-4 font-semibold text-light-text-muted dark:text-dark-text-muted uppercase tracking-wider" style={{ fontSize: 'var(--text-small)' }}>
                               Status
                             </th>
-                            <th className="text-right py-3 px-4 text-xs font-semibold text-light-text-muted dark:text-dark-text-muted uppercase tracking-wider">
+                            <th className="text-right py-3 px-4 font-semibold text-light-text-muted dark:text-dark-text-muted uppercase tracking-wider" style={{ fontSize: 'var(--text-small)' }}>
                               Actions
                             </th>
                           </tr>
@@ -569,7 +558,7 @@ export default function ClassDetailPage() {
                                       {student.firstName} {student.lastName}
                                     </Link>
                                     {student.user?.email && (
-                                      <p className="text-xs text-light-text-muted dark:text-dark-text-muted">
+                                      <p className="text-light-text-muted dark:text-dark-text-muted" style={{ fontSize: 'var(--text-small)' }}>
                                         {student.user.email}
                                       </p>
                                     )}
@@ -577,29 +566,30 @@ export default function ClassDetailPage() {
                   </div>
                               </td>
                               <td className="py-3 px-4">
-                                <span className="text-sm text-light-text-primary dark:text-dark-text-primary">
+                                <span className="text-light-text-primary dark:text-dark-text-primary" style={{ fontSize: 'var(--text-body)' }}>
                                   {student.uid || '-'}
                       </span>
                               </td>
                               <td className="py-3 px-4">
-                                <span className="text-sm text-light-text-primary dark:text-dark-text-primary">
+                                <span className="text-light-text-primary dark:text-dark-text-primary" style={{ fontSize: 'var(--text-body)' }}>
                                   {student.enrollment?.classLevel || '-'}
                       </span>
                               </td>
                               <td className="py-3 px-4">
                                 <span
-                                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                                  className={`inline-flex items-center px-2 py-0.5 rounded-full font-medium ${
                                     student.user?.accountStatus === 'ACTIVE' || !student.user?.accountStatus
                                       ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                                       : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
                                   }`}
+                                  style={{ fontSize: 'var(--text-small)' }}
                                 >
                                   {student.user?.accountStatus || 'Active'}
-                      </span>
+                                </span>
                               </td>
                               <td className="py-3 px-4 text-right">
                                 <Link href={`/dashboard/school/students/${student.id}`}>
-                                  <Button variant="ghost" size="sm">
+                                  <Button variant="ghost" size="sm" className="text-xs h-8">
                                     View
                                   </Button>
                                 </Link>
@@ -609,13 +599,13 @@ export default function ClassDetailPage() {
                         </tbody>
                       </table>
                     </div>
-                    <div className="pt-4 text-sm text-light-text-muted dark:text-dark-text-muted">
+                    <div className="pt-4 text-light-text-muted dark:text-dark-text-muted" style={{ fontSize: 'var(--text-body)' }}>
                       Total: {students.length} student{students.length !== 1 ? 's' : ''}
-                  </div>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           )}
 
           {/* Teachers Tab (SECONDARY schools only) */}
@@ -629,7 +619,7 @@ export default function ClassDetailPage() {
                   </div>
                   <PermissionGate resource={PermissionResource.CLASSES} type={PermissionType.WRITE}>
                     <Button variant="primary" size="sm" onClick={() => setShowAssignModal(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
+                      <Plus className="h-3 w-3 mr-2" />
                       Assign Form Teacher
                     </Button>
                   </PermissionGate>
@@ -649,8 +639,8 @@ export default function ClassDetailPage() {
                     <p className="text-sm text-light-text-muted dark:text-dark-text-muted mb-4">
                       Teachers are assigned through the timetable. Create a timetable and assign teachers to subject periods.
                     </p>
-                    <Button variant="ghost" onClick={() => setActiveTab('timetable')}>
-                      <Calendar className="h-4 w-4 mr-2" />
+                    <Button variant="ghost" onClick={() => setActiveTab('timetable')} size="sm" className="text-xs">
+                      <Calendar className="h-3 w-3 mr-2" />
                       Go to Timetable
                     </Button>
                   </div>
@@ -678,7 +668,7 @@ export default function ClassDetailPage() {
                     {/* Subject Teachers from Timetable */}
                     {timetableTeachers.length > 0 && (
                       <div>
-                        <h4 className="text-xs font-semibold text-light-text-muted dark:text-dark-text-muted uppercase tracking-wider mb-3">
+                        <h4 className="font-semibold text-light-text-muted dark:text-dark-text-muted uppercase tracking-wider mb-3" style={{ fontSize: 'var(--text-small)' }}>
                           Subject Teachers (from Timetable)
                         </h4>
                         <div className="space-y-3">
@@ -727,7 +717,7 @@ export default function ClassDetailPage() {
                     {/* Legacy Subject Teachers (if any still exist) */}
                     {teachersByRole.subjectTeachers.length > 0 && (
                       <div>
-                        <h4 className="text-xs font-semibold text-light-text-muted dark:text-dark-text-muted uppercase tracking-wider mb-3">
+                        <h4 className="font-semibold text-light-text-muted dark:text-dark-text-muted uppercase tracking-wider mb-3" style={{ fontSize: 'var(--text-small)' }}>
                           Other Subject Teachers
                         </h4>
                         <div className="space-y-2">
@@ -745,7 +735,7 @@ export default function ClassDetailPage() {
                     {/* Other Teachers */}
                     {teachersByRole.otherTeachers.length > 0 && (
                       <div>
-                        <h4 className="text-xs font-semibold text-light-text-muted dark:text-dark-text-muted uppercase tracking-wider mb-3">
+                        <h4 className="font-semibold text-light-text-muted dark:text-dark-text-muted uppercase tracking-wider mb-3" style={{ fontSize: 'var(--text-small)' }}>
                           Other Teachers
                         </h4>
                         <div className="space-y-2">
@@ -776,7 +766,7 @@ export default function ClassDetailPage() {
                       </div>
                   <PermissionGate resource={PermissionResource.TIMETABLES} type={PermissionType.WRITE}>
                     <Link href={`/dashboard/school/timetable?class=${classId}`}>
-                      <Button variant="primary" size="sm">
+                      <Button variant="primary" size="sm" className="h-8 text-xs">
                         Edit Timetable
                       </Button>
                     </Link>
@@ -803,8 +793,8 @@ export default function ClassDetailPage() {
                     </p>
                     <PermissionGate resource={PermissionResource.TIMETABLES} type={PermissionType.WRITE}>
                       <Link href={`/dashboard/school/timetable?class=${classId}`}>
-                        <Button variant="primary">
-                          <Plus className="h-4 w-4 mr-2" />
+                        <Button variant="primary" size="sm" className="text-xs">
+                          <Plus className="h-3 w-3 mr-2" />
                           Create Timetable
                         </Button>
                       </Link>
@@ -897,8 +887,9 @@ export default function ClassDetailPage() {
                       variant="primary"
                       size="sm"
                       onClick={() => setShowUploadModal(true)}
+                      className="h-8 text-xs"
                     >
-                      <Upload className="h-4 w-4 mr-2" />
+                      <Upload className="h-3 w-3 mr-2" />
                       Upload Resource
                     </Button>
                   </PermissionGate>
@@ -916,8 +907,8 @@ export default function ClassDetailPage() {
                           No resources uploaded yet.
                         </p>
                     <PermissionGate resource={PermissionResource.RESOURCES} type={PermissionType.WRITE}>
-                      <Button variant="primary" onClick={() => setShowUploadModal(true)}>
-                        <Upload className="h-4 w-4 mr-2" />
+                      <Button variant="primary" onClick={() => setShowUploadModal(true)} size="sm" className="text-xs">
+                        <Upload className="h-3 w-3 mr-2" />
                         Upload First Resource
                       </Button>
                     </PermissionGate>
@@ -945,8 +936,8 @@ export default function ClassDetailPage() {
                         <div className="flex items-center gap-2">
                           {resource.downloadUrl && (
                             <a href={resource.downloadUrl} target="_blank" rel="noopener noreferrer">
-                              <Button variant="ghost" size="sm">
-                                <Download className="h-4 w-4" />
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <Download className="h-3 w-3" />
                               </Button>
                             </a>
                           )}
@@ -954,9 +945,9 @@ export default function ClassDetailPage() {
                                 variant="ghost"
                                 size="sm"
                             onClick={() => setDeleteResourceModal({ isOpen: true, resource })}
-                            className="text-red-600 hover:text-red-700 dark:text-red-400"
+                            className="text-red-600 hover:text-red-700 dark:text-red-400 h-8 w-8 p-0"
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Trash2 className="h-3 w-3" />
                               </Button>
                             </div>
                           </div>
@@ -1057,7 +1048,6 @@ export default function ClassDetailPage() {
           title="Upload Class Resource"
           isUploading={isUploading}
         />
-
       </div>
     </ProtectedRoute>
   );
@@ -1109,9 +1099,9 @@ function TeacherCard({
         variant="ghost"
         size="sm"
         onClick={onRemove}
-        className="text-red-600 hover:text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+        className="text-red-600 hover:text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 h-8 w-8 p-0"
       >
-        <Trash2 className="h-4 w-4" />
+        <Trash2 className="h-3 w-3" />
       </Button>
     </motion.div>
   );

@@ -20,6 +20,7 @@ import toast from 'react-hot-toast';
 import { useSchoolType } from '@/hooks/useSchoolType';
 import { getTerminology } from '@/lib/utils/terminology';
 import { useAuth } from '@/hooks/useAuth';
+import { isPrincipalRole } from '@/lib/constants/roles';
 
 // Helper function to format numbers with commas
 const formatNumber = (num: number): string => {
@@ -63,7 +64,7 @@ export default function AdminOverviewPage() {
   // Otherwise, use the logged-in user's first name
   const userName = useMemo(() => {
     // Check if current admin is a principal
-    const isPrincipal = school?.currentAdmin?.role?.toLowerCase() === 'principal';
+    const isPrincipal = isPrincipalRole(school?.currentAdmin?.role);
     
     if (isPrincipal && school?.admins && school?.currentAdmin?.id) {
       // Find the principal from the admins array (match by ID to ensure we get the correct one)
@@ -247,7 +248,7 @@ export default function AdminOverviewPage() {
                         className="object-cover border-2 border-blue-500 dark:border-blue-400 rounded shadow-sm"
                         style={{ width: '60px', height: '60px' }}
                       />
-                      <div className="absolute -top-1 -right-1 bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-xs">
+                      <div className="absolute -top-1 -right-1 bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center" style={{ fontSize: 'var(--text-small)' }}>
                         !
                       </div>
                     </div>
@@ -266,7 +267,8 @@ export default function AdminOverviewPage() {
                           onClick={() => {
                             fileInputRef.current?.click();
                           }}
-                          className="text-white text-xs"
+                          className="text-white"
+                          style={{ fontSize: 'var(--text-small)' }}
                         >
                           Change
                         </Button>
@@ -283,7 +285,7 @@ export default function AdminOverviewPage() {
                     >
                       <Upload className="h-4 w-4 text-light-text-muted dark:text-dark-text-muted group-hover:text-blue-500 dark:group-hover:text-blue-400 transition-colors" />
                       {/* Tooltip */}
-                      <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-gray-900 dark:bg-gray-800 text-white text-xs px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                      <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-gray-900 dark:bg-gray-800 text-white px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10" style={{ fontSize: 'var(--text-small)' }}>
                         Click to upload logo
                         <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 dark:bg-gray-800 rotate-45"></div>
                       </div>
@@ -291,7 +293,7 @@ export default function AdminOverviewPage() {
                   )}
                 </div>
                 {!school?.logo && !logoPreview && (
-                  <p className="text-xs text-light-text-muted dark:text-dark-text-muted text-center whitespace-nowrap">
+                  <p className="text-light-text-muted dark:text-dark-text-muted text-center whitespace-nowrap" style={{ fontSize: 'var(--text-small)' }}>
                     Upload logo
                   </p>
                 )}
@@ -383,8 +385,8 @@ export default function AdminOverviewPage() {
               <motion.div
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex items-center gap-x-2 text-sm"
-                style={{ marginTop: '50px' }}
+                className="flex items-center gap-x-2"
+                style={{ marginTop: '50px', fontSize: 'var(--text-body)' }}
               >
                 <Calendar className="h-4 w-4 text-light-text-secondary dark:text-dark-text-secondary flex-shrink-0" />
                 <span className="text-light-text-secondary dark:text-dark-text-secondary">
@@ -423,7 +425,7 @@ export default function AdminOverviewPage() {
               <AlertCircle className="h-5 w-5" />
               <div>
                 <p className="font-semibold">Failed to load dashboard data</p>
-                <p className="text-sm mt-1">
+                <p className="mt-1" style={{ fontSize: 'var(--text-body)' }}>
                   {error && 'data' in error
                     ? (error.data as any)?.message || 'An error occurred while loading dashboard data'
                     : 'An error occurred while loading dashboard data'}
@@ -498,13 +500,15 @@ export default function AdminOverviewPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
               <AnalyticsChart
                 title="Growth Trends"
+                description="Overall enhancement in student, teacher, and course growth over time."
                 data={growthTrends}
-                type="line"
+                type="area"
                 dataKeys={['students', 'teachers', 'courses']}
                 colors={['#3b82f6', '#10b981', '#a855f7']}
               />
               <AnalyticsChart
                 title="Student Distribution"
+                description="Distribution of students across different categories or levels."
                 data={growthTrends}
                 type="donut"
                 dataKeys={['students']}
@@ -512,29 +516,23 @@ export default function AdminOverviewPage() {
               />
             </div>
 
-            {/* Recent Activity */}
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
-                  Recent Activity
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <AnalyticsChart
-                  title="Weekly Activity"
-                  data={weeklyActivity}
-                  type="horizontal"
-                  dataKeys={['admissions', 'transfers']}
-                  colors={['#3b82f6', '#10b981']}
-                />
-              </CardContent>
-            </Card>
+            {/* Weekly Activity Trends */}
+            <div className="mb-6">
+              <AnalyticsChart
+                title="Weekly Activity Trends"
+                description="Tracking admissions and transfers to monitor school engagement and activity patterns."
+                data={weeklyActivity}
+                type="area"
+                dataKeys={['admissions', 'transfers']}
+                colors={['#3b82f6', '#10b981']}
+              />
+            </div>
 
             {/* Recent Students */}
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
+                  <CardTitle className="font-bold text-light-text-primary dark:text-dark-text-primary">
                     Recently Added Students
                   </CardTitle>
                   <Link href="/dashboard/school/students">
@@ -567,16 +565,17 @@ export default function AdminOverviewPage() {
                               <h4 className="font-semibold text-light-text-primary dark:text-dark-text-primary">
                                 {student.name}
                               </h4>
-                              <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-1">
+                              <p className="text-light-text-secondary dark:text-dark-text-secondary mt-1" style={{ fontSize: 'var(--text-body)' }}>
                                 {student.classLevel} • {student.admissionNumber}
                               </p>
                             </div>
                             <span
-                              className={`px-3 py-1 rounded-full text-xs font-medium ${
+                              className={`px-3 py-1 rounded-full font-medium ${
                                 student.status === 'active'
                                   ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                                   : 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400'
                               }`}
+                              style={{ fontSize: 'var(--text-small)' }}
                             >
                               {student.status}
                             </span>

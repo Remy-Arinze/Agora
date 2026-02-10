@@ -50,7 +50,7 @@ export function SchoolTypeSelector() {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-1.5 text-sm font-bold text-blue-600 dark:text-dark-text-primary bg-[var(--light-bg)] dark:bg-dark-surface rounded-lg border border-light-border dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+        className="flex items-center gap-2 px-3 py-1.5 text-sm font-bold text-blue-600 dark:text-dark-text-primary rounded-lg border border-light-border dark:border-dark-border hover:bg-gray-50 dark:hover:bg-dark-hover transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
       >
         <span>{currentType ? getSchoolTypeDisplayName(currentType) : 'Select Type'}</span>
         <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />

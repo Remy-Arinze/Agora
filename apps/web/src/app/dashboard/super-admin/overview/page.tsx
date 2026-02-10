@@ -127,17 +127,17 @@ export default function OverviewPage() {
         <div className="mb-6">
           <Card>
           <CardHeader>
-            <CardTitle className="text-xl font-bold text-light-text-primary dark:text-white">
+            <CardTitle className="font-bold text-light-text-primary dark:text-white" style={{ fontSize: 'var(--text-section-title)' }}>
               Recent Schools
             </CardTitle>
-            <p className="text-sm text-light-text-secondary dark:text-[#9ca3af] mt-1">
+            <p className="text-light-text-secondary dark:text-[#9ca3af] mt-1" style={{ fontSize: 'var(--text-body)' }}>
               Latest schools added to the platform
             </p>
           </CardHeader>
           <CardContent>
             {schools.length === 0 ? (
               <div className="text-center py-12">
-                <p className="text-light-text-secondary dark:text-[#9ca3af]">
+                <p className="text-light-text-secondary dark:text-[#9ca3af]" style={{ fontSize: 'var(--text-body)' }}>
                   No schools found. Click &quot;Add School&quot; to create one.
                 </p>
               </div>
@@ -171,10 +171,10 @@ export default function OverviewPage() {
                         
                         {/* School Info */}
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-light-text-primary dark:text-white truncate mb-1">
+                          <p className="font-medium text-light-text-primary dark:text-white truncate mb-1" style={{ fontSize: 'var(--text-card-title)' }}>
                             {school.name}
                           </p>
-                          <p className="text-sm text-light-text-secondary dark:text-[#9ca3af] mb-2">
+                          <p className="text-light-text-secondary dark:text-[#9ca3af] mb-2" style={{ fontSize: 'var(--text-body)' }}>
                             {school.city || 'N/A'}, {school.state || 'N/A'}
                           </p>
                           {/* School Levels */}
@@ -183,7 +183,8 @@ export default function OverviewPage() {
                               {levels.map((level) => (
                                 <span
                                   key={level}
-                                  className="px-2 py-0.5 rounded text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                  className="px-2 py-0.5 rounded font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                  style={{ fontSize: 'var(--text-small)' }}
                                 >
                                   {level}
                                 </span>
@@ -194,10 +195,10 @@ export default function OverviewPage() {
                         
                         {/* School Stats */}
                         <div className="text-right flex-shrink-0">
-                          <p className="text-sm font-medium text-light-text-primary dark:text-white">
+                          <p className="font-medium text-light-text-primary dark:text-white" style={{ fontSize: 'var(--text-body)' }}>
                             {school.teachersCount || 0} teachers
                           </p>
-                          <p className="text-xs text-light-text-muted dark:text-[#6b7280]">
+                          <p className="text-light-text-muted dark:text-[#6b7280]" style={{ fontSize: 'var(--text-small)' }}>
                             {school.subdomain}.agora.com
                           </p>
                         </div>
@@ -213,7 +214,7 @@ export default function OverviewPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           {/* School Distribution by Level - 50% width */}
-          <div>
+          <div className="min-w-0">
             <AnalyticsChart
               title="School Distribution by Level"
               description="Categorization of schools by educational level, showing the diversity of institutions on the platform."
@@ -224,7 +225,7 @@ export default function OverviewPage() {
             />
           </div>
           {/* State Distribution - 50% width */}
-          <div>
+          <div className="min-w-0">
             <AnalyticsChart
               title="School Distribution by State"
               description="Geographic distribution of schools across different states, providing insights into regional coverage."

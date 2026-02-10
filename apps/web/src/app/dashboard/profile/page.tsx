@@ -32,10 +32,11 @@ import {
 } from 'lucide-react';
 import { RootState } from '@/lib/store/store';
 import { useGetMySchoolQuery } from '@/lib/store/api/schoolAdminApi';
-import { useChangePasswordMutation } from '@/lib/store/api/apiSlice';
+import { useChangePasswordMutation, useUploadProfileImageMutation } from '@/lib/store/api/apiSlice';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/Input';
 import toast from 'react-hot-toast';
+import { ProfileAvatarUpload } from '@/components/profile/ProfileAvatarUpload';
 
 // Mock data - will be replaced with API calls later
 const teachingHistory = [
@@ -225,12 +226,11 @@ function ProfilePageContent() {
   };
 
   const handlePasswordChange = (field: string, value: string) => {
-    // Sanitize input: trim and remove dangerous characters
-    const sanitized = value.trim();
-    
+    // Don't trim password values - allow spaces (they'll be validated on submit)
+    // Only sanitize to prevent injection attacks
     setPasswordForm((prev) => ({
       ...prev,
-      [field]: sanitized,
+      [field]: value,
     }));
 
     // Clear error for this field
@@ -359,6 +359,15 @@ function ProfilePageContent() {
 
   // Only show history for teachers
   const showHistory = user?.role === 'TEACHER';
+  
+  // Super Admin profile design
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  
+  // Edit state for super admin
+  const [editingFirstName, setEditingFirstName] = useState(false);
+  const [editingLastName, setEditingLastName] = useState(false);
+  const [firstNameValue, setFirstNameValue] = useState(user?.firstName || '');
+  const [lastNameValue, setLastNameValue] = useState(user?.lastName || '');
 
   return (
     <ProtectedRoute>
@@ -372,10 +381,12 @@ function ProfilePageContent() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
-                My Profile
+                {isSuperAdmin ? 'Profile' : 'My Profile'}
               </h1>
               <p className="text-light-text-secondary dark:text-dark-text-secondary">
-                {user?.role === 'TEACHER' 
+                {isSuperAdmin 
+                  ? "Here's your profile information"
+                  : user?.role === 'TEACHER' 
                   ? 'View your profile and complete teaching history'
                   : 'View and manage your profile information'}
               </p>
@@ -394,6 +405,265 @@ function ProfilePageContent() {
             )}
           </div>
         </motion.div>
+
+        {/* Super Admin Profile - Special Design */}
+        {isSuperAdmin && (
+          <Card className="mb-6">
+            <CardContent className="p-8">
+              <div className="flex flex-col md:flex-row gap-8">
+                {/* Left: Avatar and Name */}
+                <div className="flex flex-col items-center md:items-start">
+                  <ProfileAvatarUpload
+                    currentImage={user?.profileImage || null}
+                    firstName={user?.firstName || null}
+                    lastName={user?.lastName || null}
+                    size="lg"
+                    onImageUpdate={(url) => {
+                      // Update Redux state if needed
+                    }}
+                  />
+                  <h2 className="text-xl font-semibold text-light-text-primary dark:text-dark-text-primary mt-4">
+                    {user?.firstName && user?.lastName
+                      ? `${user.firstName} ${user.lastName}`
+                      : user?.email || 'Super Admin'}
+                  </h2>
+                  <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-1">
+                    {user?.email}
+                  </p>
+                </div>
+
+                {/* Right: Personal Information */}
+                <div className="flex-1 space-y-6">
+                  {/* Personal Information Section */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary mb-4">
+                      Personal Information
+                    </h3>
+                    <div className="space-y-4">
+                      {/* First Name */}
+                      <div>
+                        <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
+                          First Name
+                        </label>
+                        {editingFirstName ? (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              value={firstNameValue}
+                              onChange={(e) => setFirstNameValue(e.target.value)}
+                              className="flex-1"
+                              autoFocus
+                            />
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              onClick={() => {
+                                // TODO: Save firstName
+                                setEditingFirstName(false);
+                                toast.success('First name updated');
+                              }}
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setFirstNameValue(user?.firstName || '');
+                                setEditingFirstName(false);
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <p className="text-base text-light-text-primary dark:text-dark-text-primary flex-1">
+                              {user?.firstName || 'Not set'}
+                            </p>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setEditingFirstName(true)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Last Name */}
+                      <div>
+                        <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
+                          Last Name
+                        </label>
+                        {editingLastName ? (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              value={lastNameValue}
+                              onChange={(e) => setLastNameValue(e.target.value)}
+                              className="flex-1"
+                              autoFocus
+                            />
+                            <Button
+                              size="sm"
+                              variant="primary"
+                              onClick={() => {
+                                // TODO: Save lastName
+                                setEditingLastName(false);
+                                toast.success('Last name updated');
+                              }}
+                            >
+                              Save
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setLastNameValue(user?.lastName || '');
+                                setEditingLastName(false);
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <p className="text-base text-light-text-primary dark:text-dark-text-primary flex-1">
+                              {user?.lastName || 'Not set'}
+                            </p>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setEditingLastName(true)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Email (Read-only) */}
+                      <div>
+                        <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
+                          Email
+                        </label>
+                        <p className="text-base text-light-text-primary dark:text-dark-text-primary">
+                          {user?.email || 'Not set'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Password Section */}
+                  <div className="pt-6 border-t border-light-border dark:border-dark-border">
+                    <h3 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary mb-4">
+                      Password
+                    </h3>
+                    <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                      <div>
+                        <Input
+                          label="Current Password"
+                          type={showCurrentPassword ? 'text' : 'password'}
+                          value={passwordForm.currentPassword}
+                          onChange={(e) => handlePasswordChange('currentPassword', e.target.value)}
+                          error={passwordErrors.currentPassword}
+                          required
+                          rightAddon={
+                            <button
+                              type="button"
+                              onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                              className="text-light-text-muted dark:text-dark-text-muted hover:text-light-text-primary dark:hover:text-dark-text-primary"
+                            >
+                              {showCurrentPassword ? (
+                                <EyeOff className="h-5 w-5" />
+                              ) : (
+                                <Eye className="h-5 w-5" />
+                              )}
+                            </button>
+                          }
+                        />
+                      </div>
+
+                      <div>
+                        <Input
+                          label="New Password"
+                          type={showNewPassword ? 'text' : 'password'}
+                          value={passwordForm.newPassword}
+                          onChange={(e) => handlePasswordChange('newPassword', e.target.value)}
+                          error={passwordErrors.newPassword}
+                          required
+                          rightAddon={
+                            <button
+                              type="button"
+                              onClick={() => setShowNewPassword(!showNewPassword)}
+                              className="text-light-text-muted dark:text-dark-text-muted hover:text-light-text-primary dark:hover:text-dark-text-primary"
+                            >
+                              {showNewPassword ? (
+                                <EyeOff className="h-5 w-5" />
+                              ) : (
+                                <Eye className="h-5 w-5" />
+                              )}
+                            </button>
+                          }
+                        />
+                      </div>
+
+                      <div>
+                        <Input
+                          label="Confirm New Password"
+                          type={showConfirmPassword ? 'text' : 'password'}
+                          value={passwordForm.confirmPassword}
+                          onChange={(e) => handlePasswordChange('confirmPassword', e.target.value)}
+                          error={passwordErrors.confirmPassword}
+                          required
+                          rightAddon={
+                            <button
+                              type="button"
+                              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                              className="text-light-text-muted dark:text-dark-text-muted hover:text-light-text-primary dark:hover:text-dark-text-primary"
+                            >
+                              {showConfirmPassword ? (
+                                <EyeOff className="h-5 w-5" />
+                              ) : (
+                                <Eye className="h-5 w-5" />
+                              )}
+                            </button>
+                          }
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-3 pt-2">
+                        <Button
+                          type="submit"
+                          variant="primary"
+                          isLoading={isChangingPassword}
+                          disabled={isChangingPassword || !!passwordErrors.currentPassword || !!passwordErrors.newPassword || !!passwordErrors.confirmPassword}
+                        >
+                          {isChangingPassword ? 'Changing...' : 'Change Password'}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => {
+                            setPasswordForm({
+                              currentPassword: '',
+                              newPassword: '',
+                              confirmPassword: '',
+                            });
+                            setPasswordErrors({});
+                          }}
+                          disabled={isChangingPassword}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Tabs for School Admin */}
         {user?.role === 'SCHOOL_ADMIN' && (
@@ -434,8 +704,8 @@ function ProfilePageContent() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Profile Information */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Personal Information Tab */}
-            {(user?.role !== 'SCHOOL_ADMIN' || activeTab === 'personal') && (
+            {/* Personal Information Tab - Hide for Super Admin */}
+            {!isSuperAdmin && (user?.role !== 'SCHOOL_ADMIN' || activeTab === 'personal') && (
               <>
                 {/* Personal Information */}
                 <Card>

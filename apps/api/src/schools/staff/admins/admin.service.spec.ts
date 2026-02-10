@@ -8,11 +8,13 @@ import { IdGeneratorService } from '../../shared/id-generator.service';
 import { StaffValidatorService } from '../../shared/staff-validator.service';
 import { PrismaService } from '../../../database/prisma.service';
 import { AuthService } from '../../../auth/auth.service';
+import { TestUtils } from '../../../common/test/test-utils';
 
 describe('AdminService', () => {
   let service: AdminService;
   let schoolRepository: jest.Mocked<SchoolRepository>;
   let staffRepository: jest.Mocked<StaffRepository>;
+  let staffMapper: jest.Mocked<StaffMapper>;
   let idGenerator: jest.Mocked<IdGeneratorService>;
   let staffValidator: jest.Mocked<StaffValidatorService>;
   let prisma: jest.Mocked<PrismaService>;
@@ -64,10 +66,11 @@ describe('AdminService', () => {
         {
           provide: PrismaService,
           useValue: {
-            schoolAdmin: {
-              findFirst: jest.fn(),
-            },
-            $transaction: jest.fn((callback) => callback(prisma)),
+            ...TestUtils.createMockPrismaService(),
+            $transaction: jest.fn(async (callback) => {
+              const mockTx = TestUtils.createMockPrismaService();
+              return callback(mockTx as any);
+            }),
           },
         },
         {
@@ -82,6 +85,7 @@ describe('AdminService', () => {
     service = module.get<AdminService>(AdminService);
     schoolRepository = module.get(SchoolRepository);
     staffRepository = module.get(StaffRepository);
+    staffMapper = module.get(StaffMapper);
     idGenerator = module.get(IdGeneratorService);
     staffValidator = module.get(StaffValidatorService);
     prisma = module.get(PrismaService);
@@ -194,7 +198,7 @@ describe('AdminService', () => {
     it('should successfully delete an admin', async () => {
       schoolRepository.findByIdOrSubdomain.mockResolvedValue(mockSchool as any);
       staffRepository.findAdminById.mockResolvedValue(mockAdmin as any);
-      staffRepository.deleteAdmin.mockResolvedValue(undefined);
+      staffRepository.deleteAdmin.mockResolvedValue(mockAdmin as any);
 
       await service.deleteAdmin('school-1', 'admin-1');
 
@@ -205,7 +209,7 @@ describe('AdminService', () => {
       const principalAdmin = { ...mockAdmin, role: 'Principal', user: { accountStatus: 'ACTIVE' } };
       schoolRepository.findByIdOrSubdomain.mockResolvedValue(mockSchool as any);
       staffRepository.findAdminById.mockResolvedValue(principalAdmin as any);
-      prisma.schoolAdmin.findFirst.mockResolvedValue(principalAdmin as any);
+      (prisma.schoolAdmin.findFirst as jest.Mock).mockResolvedValue(principalAdmin as any);
 
       await expect(service.deleteAdmin('school-1', 'admin-1')).rejects.toThrow(BadRequestException);
     });

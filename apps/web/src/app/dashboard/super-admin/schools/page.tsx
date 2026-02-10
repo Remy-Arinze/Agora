@@ -107,8 +107,8 @@ export default function SchoolsPage() {
         >
           <div>
             <h1 className="font-bold text-light-text-primary dark:text-white mb-2" style={{ fontSize: 'var(--text-page-title)' }}>
-              Schools
-            </h1>
+            Schools
+          </h1>
             <p className="text-light-text-secondary dark:text-[#9ca3af]" style={{ fontSize: 'var(--text-page-subtitle)' }}>
               Create and manage schools on the platform
             </p>
@@ -222,7 +222,7 @@ export default function SchoolsPage() {
             </div>
 
             {/* Total Count */}
-            <span className="text-sm text-light-text-secondary dark:text-[#9ca3af]">
+            <span className="text-light-text-secondary dark:text-[#9ca3af]" style={{ fontSize: 'var(--text-body)' }}>
               {pagination?.total || 0}
             </span>
           </div>
@@ -230,14 +230,14 @@ export default function SchoolsPage() {
 
         {/* Schools Grid/List */}
         <div>
-          <h2 className="font-medium text-light-text-secondary dark:text-[#9ca3af] mb-4 text-sm opacity-70">
+          <p className="font-medium text-light-text-secondary dark:text-[#9ca3af] mb-4 opacity-70" style={{ fontSize: 'var(--text-section-title)' }}>
             All Schools
-          </h2>
+          </p>
 
           {schools.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
-                <p className="text-light-text-secondary dark:text-[#9ca3af]">
+                <p className="text-light-text-secondary dark:text-[#9ca3af]" style={{ fontSize: 'var(--text-body)' }}>
                   No schools found. Click &quot;Create School&quot; to add one.
                 </p>
               </CardContent>
@@ -281,11 +281,12 @@ export default function SchoolsPage() {
                             </h3>
                             <span
                               className={cn(
-                                'px-2.5 py-0.5 rounded-full text-xs font-medium flex-shrink-0',
+                                'px-2.5 py-0.5 rounded-full font-medium flex-shrink-0',
                                 school.isActive
                                   ? 'bg-green-500/20 text-green-400'
                                   : 'bg-gray-500/20 text-gray-400'
                               )}
+                              style={{ fontSize: 'var(--text-small)' }}
                             >
                               {school.isActive ? 'Active' : 'Inactive'}
                             </span>
@@ -311,7 +312,8 @@ export default function SchoolsPage() {
                               {levels.map((level) => (
                                 <span
                                   key={level}
-                                  className="px-2 py-0.5 rounded text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                  className="px-2 py-0.5 rounded font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                  style={{ fontSize: 'var(--text-small)' }}
                                 >
                                   {level}
                                 </span>
@@ -372,16 +374,17 @@ export default function SchoolsPage() {
                           <div className="flex-1 min-w-0">
                             {/* Header Row: Name, Status */}
                             <div className="flex items-center gap-2 mb-1">
-                              <h3 className="font-medium text-light-text-primary dark:text-white truncate">
+                              <h3 className="font-medium text-light-text-primary dark:text-white truncate" style={{ fontSize: 'var(--text-card-title)' }}>
                                 {school.name}
                               </h3>
                               <span
                                 className={cn(
-                                  'px-2.5 py-0.5 rounded-full text-xs font-medium flex-shrink-0',
+                                  'px-2.5 py-0.5 rounded-full font-medium flex-shrink-0',
                                   school.isActive
                                     ? 'bg-green-500/20 text-green-400'
                                     : 'bg-gray-500/20 text-gray-400'
                                 )}
+                                style={{ fontSize: 'var(--text-small)' }}
                               >
                                 {school.isActive ? 'Active' : 'Inactive'}
                               </span>
@@ -389,7 +392,7 @@ export default function SchoolsPage() {
                             
                             {/* Location and Levels Row */}
                             <div className="flex items-center gap-3 mb-2 flex-wrap">
-                              <p className="text-sm text-light-text-secondary dark:text-[#9ca3af]">
+                              <p className="text-light-text-secondary dark:text-[#9ca3af]" style={{ fontSize: 'var(--text-body)' }}>
                                 {school.city || 'N/A'}, {school.state || 'N/A'}
                               </p>
                               {/* School Levels */}
@@ -398,7 +401,8 @@ export default function SchoolsPage() {
                                   {levels.map((level) => (
                                     <span
                                       key={level}
-                                      className="px-2 py-0.5 rounded text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                      className="px-2 py-0.5 rounded font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                                      style={{ fontSize: 'var(--text-small)' }}
                                     >
                                       {level}
                                     </span>
@@ -408,7 +412,7 @@ export default function SchoolsPage() {
                             </div>
 
                             {/* Teachers, Students, and Subdomain - Inline */}
-                            <div className="flex items-center gap-4 text-sm text-light-text-secondary dark:text-[#9ca3af] flex-wrap">
+                            <div className="flex items-center gap-4 text-light-text-secondary dark:text-[#9ca3af] flex-wrap" style={{ fontSize: 'var(--text-body)' }}>
                               <div className="flex items-center gap-1">
                                 <Target className="h-4 w-4" />
                                 <span>{school.teachersCount || 0} teachers</span>
@@ -417,12 +421,12 @@ export default function SchoolsPage() {
                                 <Users className="h-4 w-4" />
                                 <span>{school.studentsCount || 0} students</span>
                               </div>
-                              <span className="text-xs text-light-text-muted dark:text-[#6b7280]">
+                              <span className="text-light-text-muted dark:text-[#6b7280]" style={{ fontSize: 'var(--text-small)' }}>
                                 {school.subdomain}.agora.com
                               </span>
                             </div>
                           </div>
-                          <span className="text-sm text-blue-600 dark:text-blue-400 font-medium flex-shrink-0">
+                          <span className="text-blue-600 dark:text-blue-400 font-medium flex-shrink-0" style={{ fontSize: 'var(--text-body)' }}>
                             View →
                           </span>
                         </div>

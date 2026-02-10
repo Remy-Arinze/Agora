@@ -517,10 +517,10 @@ export default function StudentDetailPage() {
                 size="lg"
               />
               <div>
-                <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
+                <h1 className="font-bold text-light-text-primary dark:text-dark-text-primary mb-2" style={{ fontSize: 'var(--text-page-title)' }}>
                   {student.firstName} {student.middleName ? `${student.middleName} ` : ''}{student.lastName}
                 </h1>
-                <p className="text-light-text-secondary dark:text-dark-text-secondary">
+                <p className="text-light-text-secondary dark:text-dark-text-secondary" style={{ fontSize: 'var(--text-page-subtitle)' }}>
                   {student.uid} • {student.enrollment?.classLevel || 'N/A'}
                 </p>
               </div>
@@ -583,7 +583,7 @@ export default function StudentDetailPage() {
                   <CardHeader>
                     <div className="flex items-center gap-3">
                       <User className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                      <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
+                      <CardTitle className="font-bold text-light-text-primary dark:text-dark-text-primary" style={{ fontSize: 'var(--text-card-title)' }}>
                         Student Information
                       </CardTitle>
                     </div>
@@ -592,7 +592,7 @@ export default function StudentDetailPage() {
                     <div className="space-y-6">
                       {/* Personal Information Section */}
                       <div>
-                        <h3 className="text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary mb-4 uppercase tracking-wide">
+                        <h3 className="font-semibold text-light-text-secondary dark:text-dark-text-secondary mb-4 uppercase tracking-wide" style={{ fontSize: 'var(--text-small)' }}>
                           Personal Information
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -672,7 +672,7 @@ export default function StudentDetailPage() {
                       {/* Contact Information Section */}
                       {student.enrollment && (
                         <div>
-                          <h3 className="text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary mb-4 uppercase tracking-wide">
+                          <h3 className="font-semibold text-light-text-secondary dark:text-dark-text-secondary mb-4 uppercase tracking-wide" style={{ fontSize: 'var(--text-small)' }}>
                             Enrollment Information
                           </h3>
                           <div className="space-y-4">
@@ -702,7 +702,7 @@ export default function StudentDetailPage() {
                       {/* Academic Records Section */}
                       {student.enrollment && (
                         <div>
-                          <h3 className="text-sm font-semibold text-light-text-secondary dark:text-dark-text-secondary mb-4 uppercase tracking-wide">
+                          <h3 className="font-semibold text-light-text-secondary dark:text-dark-text-secondary mb-4 uppercase tracking-wide" style={{ fontSize: 'var(--text-small)' }}>
                             Academic Records
                           </h3>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -735,7 +735,7 @@ export default function StudentDetailPage() {
                 {/* Passport Photo */}
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
+                    <CardTitle className="font-bold text-light-text-primary dark:text-dark-text-primary" style={{ fontSize: 'var(--text-card-title)' }}>
                       Photo
                     </CardTitle>
                   </CardHeader>
@@ -753,7 +753,7 @@ export default function StudentDetailPage() {
                   <CardHeader>
                     <div className="flex items-center gap-3">
                       <Calendar className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                      <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
+                      <CardTitle className="font-bold text-light-text-primary dark:text-dark-text-primary" style={{ fontSize: 'var(--text-card-title)' }}>
                         Additional Information
                       </CardTitle>
                     </div>
@@ -786,7 +786,7 @@ export default function StudentDetailPage() {
           {activeTab === 'health' && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary flex items-center gap-2">
+                <CardTitle className="font-bold text-light-text-primary dark:text-dark-text-primary flex items-center gap-2" style={{ fontSize: 'var(--text-card-title)' }}>
                   <Heart className="h-5 w-5" />
                   Health Information
                 </CardTitle>
@@ -862,7 +862,7 @@ export default function StudentDetailPage() {
                     {/* Medical Notes */}
                     {student.healthInfo.medicalNotes && (
                       <div className="border-t border-light-border dark:border-dark-border pt-6">
-                        <h3 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary mb-4">
+                        <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary mb-4" style={{ fontSize: 'var(--text-card-title)' }}>
                           Medical Notes
                         </h3>
                         <div className="bg-light-surface dark:bg-dark-surface rounded-lg p-4">

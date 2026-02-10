@@ -186,10 +186,10 @@ export default function FacultiesPage() {
         >
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
+              <h1 className="font-bold text-light-text-primary dark:text-dark-text-primary mb-2" style={{ fontSize: 'var(--text-page-title)' }}>
                 Faculties
               </h1>
-              <p className="text-light-text-secondary dark:text-dark-text-secondary">
+              <p className="text-light-text-secondary dark:text-dark-text-secondary" style={{ fontSize: 'var(--text-page-subtitle)' }}>
                 Manage faculties and their departments
               </p>
             </div>
@@ -288,10 +288,10 @@ export default function FacultiesPage() {
                           variant="square"
                         />
                         <div>
-                          <h3 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary">
+                          <h3 className="font-semibold text-light-text-primary dark:text-dark-text-primary" style={{ fontSize: 'var(--text-card-title)' }}>
                             {faculty.name}
                           </h3>
-                          <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                          <p className="text-light-text-secondary dark:text-dark-text-secondary" style={{ fontSize: 'var(--text-body)' }}>
                             {faculty.code}
                           </p>
                         </div>

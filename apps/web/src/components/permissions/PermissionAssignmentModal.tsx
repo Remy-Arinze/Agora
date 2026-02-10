@@ -15,6 +15,7 @@ import {
 } from '@/lib/store/api/schoolAdminApi';
 import { useGetMySchoolQuery } from '@/lib/store/api/schoolAdminApi';
 import toast from 'react-hot-toast';
+import { isPrincipalRole } from '@/lib/constants/roles';
 
 interface PermissionAssignmentModalProps {
   isOpen: boolean;
@@ -159,7 +160,7 @@ export function PermissionAssignmentModal({
   const [selectedPermissions, setSelectedPermissions] = useState<Set<string>>(new Set());
 
   // Check if this admin is a Principal (permanent full access, cannot edit)
-  const isPrincipal = adminRole.toLowerCase().includes('principal');
+  const isPrincipal = isPrincipalRole(adminRole);
 
   // Get all available permissions
   const { data: allPermissionsResponse, isLoading: isLoadingAll } = useGetAllPermissionsQuery(

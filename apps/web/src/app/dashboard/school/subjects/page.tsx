@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
 import {
   BookOpen,
   Plus,
@@ -20,6 +21,8 @@ import {
   Sparkles,
   GraduationCap,
   Save,
+  Grid3x3,
+  List,
 } from 'lucide-react';
 import { AutoGenerateButton } from '@/components/ui/AutoGenerateButton';
 import { PermissionGate } from '@/components/permissions/PermissionGate';
@@ -48,6 +51,7 @@ import toast from 'react-hot-toast';
 
 export default function SubjectsPage() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
   const [showTeacherModal, setShowTeacherModal] = useState<Subject | null>(null);
@@ -80,7 +84,7 @@ export default function SubjectsPage() {
   );
 
   const { data: classLevelsResponse } = useGetClassLevelsQuery(
-    { schoolId: schoolId!, schoolType: currentType || undefined },
+    { schoolId: schoolId! },
     { skip: !schoolId || currentType !== 'SECONDARY' }
   );
 
@@ -282,10 +286,10 @@ export default function SubjectsPage() {
         >
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
+              <h1 className="font-bold text-light-text-primary dark:text-dark-text-primary mb-2" style={{ fontSize: 'var(--text-page-title)' }}>
                 {currentType === 'TERTIARY' ? 'Courses' : 'Subjects'}
               </h1>
-              <p className="text-light-text-secondary dark:text-dark-text-secondary">
+              <p className="text-light-text-secondary dark:text-dark-text-secondary" style={{ fontSize: 'var(--text-page-subtitle)' }}>
                 Manage {currentType === 'TERTIARY' ? 'courses' : 'subjects'} for {currentType || 'your school'}
               </p>
             </div>
@@ -307,15 +311,59 @@ export default function SubjectsPage() {
           </div>
         </motion.div>
 
+        {/* Search and View Toggle */}
+        <div className="flex items-center justify-between mb-6 gap-4">
+          <div className="w-full max-w-md">
+            <SearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder={currentType === 'TERTIARY' ? 'Search courses...' : 'Search subjects...'}
+              containerClassName="w-full"
+              size="lg"
+            />
+          </div>
+          <div className="flex items-center gap-1 bg-light-surface dark:bg-[#151a23] rounded-lg p-1 border border-light-border dark:border-[#1a1f2e]">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setViewMode('grid')}
+              className={cn(
+                'h-8 w-8 p-0',
+                viewMode === 'grid'
+                  ? 'bg-[#2490FD] dark:bg-[#2490FD] text-white'
+                  : 'text-light-text-secondary dark:text-[#9ca3af] hover:text-light-text-primary dark:hover:text-white'
+              )}
+            >
+              <Grid3x3 className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setViewMode('list')}
+              className={cn(
+                'h-8 w-8 p-0',
+                viewMode === 'list'
+                  ? 'bg-[#2490FD] dark:bg-[#2490FD] text-white'
+                  : 'text-light-text-secondary dark:text-[#9ca3af] hover:text-light-text-primary dark:hover:text-white'
+              )}
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
         {/* Subjects List */}
         {currentType === 'SECONDARY' ? (
           <div className="space-y-6">
             {groupedSubjects.jss.length > 0 && (
               <div>
-                <h2 className="text-xl font-semibold mb-4 text-light-text-primary dark:text-dark-text-primary">
+                <p className="font-medium mb-4 text-light-text-secondary dark:text-dark-text-secondary" style={{ fontSize: 'var(--text-section-title)' }}>
                   JSS Subjects
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                </p>
+                <div className={cn(
+                  'gap-4',
+                  viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'flex flex-col'
+                )}>
                   {groupedSubjects.jss.map((subject) => (
                     <SubjectCard
                       key={subject.id}
@@ -334,10 +382,13 @@ export default function SubjectsPage() {
             )}
             {groupedSubjects.sss.length > 0 && (
               <div>
-                <h2 className="text-xl font-semibold mb-4 text-light-text-primary dark:text-dark-text-primary">
+                <p className="font-medium mb-4 text-light-text-secondary dark:text-dark-text-secondary" style={{ fontSize: 'var(--text-section-title)' }}>
                   SSS Subjects
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                </p>
+                <div className={cn(
+                  'gap-4',
+                  viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'flex flex-col'
+                )}>
                   {groupedSubjects.sss.map((subject) => (
                     <SubjectCard
                       key={subject.id}
@@ -356,19 +407,13 @@ export default function SubjectsPage() {
             )}
             {groupedSubjects.all.length > 0 && (
               <div>
-                <div className="flex items-center justify-between mb-4 gap-4">
-                  <h2 className="text-xl font-semibold text-light-text-primary dark:text-dark-text-primary">
-                    General Subjects
-                  </h2>
-                  <SearchInput
-                    value={searchQuery}
-                    onChange={setSearchQuery}
-                    placeholder={currentType === 'TERTIARY' ? 'Search courses...' : 'Search subjects...'}
-                    containerClassName="w-[40%]"
-                    size="lg"
-                  />
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <p className="font-medium text-light-text-secondary dark:text-dark-text-secondary mb-4" style={{ fontSize: 'var(--text-section-title)' }}>
+                  General Subjects
+                </p>
+                <div className={cn(
+                  'gap-4',
+                  viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'flex flex-col'
+                )}>
                   {groupedSubjects.all.map((subject) => (
                     <SubjectCard
                       key={subject.id}
@@ -388,19 +433,15 @@ export default function SubjectsPage() {
           </div>
         ) : (
           <div>
-            <div className="flex items-center justify-between mb-4 gap-4">
-              <h2 className="text-xl font-semibold text-light-text-primary dark:text-dark-text-primary">
+            <div className="mb-4">
+              <p className="font-medium text-light-text-secondary dark:text-dark-text-secondary" style={{ fontSize: 'var(--text-section-title)' }}>
                 {currentType === 'TERTIARY' ? 'Courses' : 'Subjects'}
-              </h2>
-              <SearchInput
-                value={searchQuery}
-                onChange={setSearchQuery}
-                placeholder={currentType === 'TERTIARY' ? 'Search courses...' : 'Search subjects...'}
-                containerClassName="w-[40%]"
-                size="lg"
-              />
+              </p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className={cn(
+              'gap-4',
+              viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'flex flex-col'
+            )}>
             {filteredSubjects.map((subject) => (
               <SubjectCard
                 key={subject.id}
@@ -426,12 +467,6 @@ export default function SubjectsPage() {
                   ? `No ${currentType === 'TERTIARY' ? 'courses' : 'subjects'} found matching your search.`
                   : `No ${currentType === 'TERTIARY' ? 'courses' : 'subjects'} added yet.`}
               </p>
-              <PermissionGate resource={PermissionResource.SUBJECTS} type={PermissionType.WRITE}>
-                <Button variant="primary" onClick={() => setShowCreateModal(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Your First {currentType === 'TERTIARY' ? 'Course' : 'Subject'}
-                </Button>
-              </PermissionGate>
             </CardContent>
           </Card>
         )}
@@ -448,7 +483,7 @@ export default function SubjectsPage() {
             }}
             onSave={editingSubject
               ? (data) => handleUpdateSubject(editingSubject.id, data)
-              : handleCreateSubject}
+              : (data) => handleCreateSubject(data as CreateSubjectDto)}
             isLoading={isCreating || isUpdating}
           />
         )}
@@ -525,14 +560,14 @@ function SubjectCard({
       <CardHeader>
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <CardTitle className="text-lg">{subject.name}</CardTitle>
+            <CardTitle style={{ fontSize: 'var(--text-card-title)' }}>{subject.name}</CardTitle>
             {subject.code && (
-              <p className="text-sm text-light-text-muted dark:text-dark-text-muted mt-1">
+              <p className="text-light-text-muted dark:text-dark-text-muted mt-1" style={{ fontSize: 'var(--text-small)' }}>
                 Code: {subject.code}
               </p>
             )}
             {subject.classLevelName && (
-              <p className="text-sm text-light-text-muted dark:text-dark-text-muted">
+              <p className="text-light-text-muted dark:text-dark-text-muted" style={{ fontSize: 'var(--text-small)' }}>
                 Level: {subject.classLevelName}
               </p>
             )}
@@ -555,7 +590,7 @@ function SubjectCard({
       </CardHeader>
       <CardContent>
         {subject.description && (
-          <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mb-4">
+          <p className="text-light-text-secondary dark:text-dark-text-secondary mb-4" style={{ fontSize: 'var(--text-small)' }}>
             {subject.description}
           </p>
         )}
@@ -563,10 +598,10 @@ function SubjectCard({
           {/* Competent Teachers Section - All school types */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-light-text-primary dark:text-dark-text-primary">
+            <span className="font-medium text-light-text-primary dark:text-dark-text-primary" style={{ fontSize: 'var(--text-small)' }}>
                 {currentType === 'SECONDARY' ? 'Competent Teachers:' : 'Teachers:'}
               {currentType === 'PRIMARY' && (
-                <span className="text-xs text-light-text-muted dark:text-dark-text-muted block mt-0.5">
+                <span className="text-light-text-muted dark:text-dark-text-muted block mt-0.5" style={{ fontSize: '0.65rem' }}>
                   (One teacher only)
                 </span>
               )}
@@ -587,7 +622,8 @@ function SubjectCard({
               {subject.teachers.map((teacher) => (
                 <div
                   key={teacher.id}
-                  className="flex items-center justify-between text-sm bg-gray-50 dark:bg-gray-800 p-2 rounded"
+                  className="flex items-center justify-between bg-gray-50 dark:bg-gray-800 p-2 rounded"
+                  style={{ fontSize: 'var(--text-small)' }}
                 >
                   <span>
                     {teacher.firstName} {teacher.lastName}
@@ -604,7 +640,7 @@ function SubjectCard({
               ))}
             </div>
           ) : (
-            <p className="text-sm text-light-text-muted dark:text-dark-text-muted">
+            <p className="text-light-text-muted dark:text-dark-text-muted" style={{ fontSize: 'var(--text-small)' }}>
               No teachers assigned
             </p>
             )}
@@ -685,9 +721,9 @@ function SubjectModal({
         className="bg-white dark:bg-dark-surface rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary">
+          <p className="font-medium text-light-text-secondary dark:text-dark-text-secondary" style={{ fontSize: 'var(--text-section-title)' }}>
             {subject ? `Edit ${currentType === 'TERTIARY' ? 'Course' : 'Subject'}` : `Create ${currentType === 'TERTIARY' ? 'Course' : 'Subject'}`}
-          </h3>
+          </p>
           <button
             onClick={onClose}
             className="text-light-text-muted dark:text-dark-text-muted hover:text-light-text-primary dark:hover:text-dark-text-primary"
@@ -861,7 +897,7 @@ function AssignTeacherModal({
         className="bg-white dark:bg-dark-surface rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto"
       >
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary">
+          <p className="font-medium text-light-text-secondary dark:text-dark-text-secondary" style={{ fontSize: 'var(--text-section-title)' }}>
             {currentType === 'SECONDARY' ? 'Add Competent Teachers' : 'Assign Teachers'} - {subject.name}
             {currentType === 'PRIMARY' && (
               <span className="text-sm font-normal text-light-text-muted dark:text-dark-text-muted block mt-1">
@@ -873,7 +909,7 @@ function AssignTeacherModal({
                 Select multiple teachers who can teach this subject
               </span>
             )}
-          </h3>
+          </p>
           <button
             onClick={onClose}
             className="text-light-text-muted dark:text-dark-text-muted hover:text-light-text-primary dark:hover:text-dark-text-primary"
@@ -1063,9 +1099,9 @@ function AutoGenerateModal({
             <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-full">
               <Sparkles className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
-            <h3 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary">
+            <p className="font-medium text-light-text-secondary dark:text-dark-text-secondary" style={{ fontSize: 'var(--text-section-title)' }}>
               Auto-Generate Subjects
-            </h3>
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -1238,9 +1274,9 @@ function ClassAssignmentModal({
       >
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h3 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary">
+            <p className="font-medium text-light-text-secondary dark:text-dark-text-secondary" style={{ fontSize: 'var(--text-section-title)' }}>
               Assign {subject.name} to Classes
-            </h3>
+            </p>
             <p className="text-sm text-light-text-muted dark:text-dark-text-muted mt-1">
               Select which teacher will teach this subject in each class
             </p>

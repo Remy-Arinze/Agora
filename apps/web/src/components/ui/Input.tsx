@@ -79,8 +79,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             {...props}
           />
           {rightAddon && (
-            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-[var(--light-text-muted)] dark:text-[var(--dark-text-muted)]">
-              {rightAddon}
+            <div className="absolute inset-y-0 right-0 pr-3 flex items-center text-[var(--light-text-muted)] dark:text-[var(--dark-text-muted)]">
+              <div className="pointer-events-auto">
+                {rightAddon}
+              </div>
             </div>
           )}
         </div>

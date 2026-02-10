@@ -3,7 +3,9 @@ import {
   BadRequestException,
   NotFoundException,
   UnauthorizedException,
+  Logger,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../database/prisma.service';
 import { SchoolRepository } from '../domain/repositories/school.repository';
 import { SchoolMapper } from '../domain/mappers/school.mapper';
@@ -34,12 +36,17 @@ import { isPrincipalRole } from '../dto/permission.dto';
  */
 @Injectable()
 export class SchoolAdminSchoolsService {
+  private readonly logger = new Logger(SchoolAdminSchoolsService.name);
+  private readonly MAX_TOKEN_REQUESTS_PER_24H = 10;
+  private readonly SUSPICIOUS_FAILURE_THRESHOLD = 5; // Alert after 5 failed attempts from same IP
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly schoolRepository: SchoolRepository,
     private readonly schoolMapper: SchoolMapper,
     private readonly cloudinaryService: CloudinaryService,
-    private readonly emailService: EmailService
+    private readonly emailService: EmailService,
+    private readonly configService: ConfigService
   ) {}
 
   /**
@@ -921,24 +928,78 @@ export class SchoolAdminSchoolsService {
       });
 
       if (!tokenRecord) {
+        await this.logTokenEvent(
+          'FAILED',
+          verificationToken,
+          school.id,
+          user.id,
+          undefined,
+          undefined,
+          { reason: 'Token not found during update' }
+        );
         throw new UnauthorizedException('Invalid verification token');
       }
 
       if (tokenRecord.schoolId !== school.id) {
+        await this.logTokenEvent(
+          'FAILED',
+          verificationToken,
+          tokenRecord.schoolId,
+          user.id,
+          undefined,
+          undefined,
+          { reason: 'Token does not belong to school during update', attemptedSchoolId: school.id }
+        );
         throw new UnauthorizedException('Token does not belong to this school');
       }
 
       if (tokenRecord.usedAt) {
+        await this.logTokenEvent(
+          'FAILED',
+          verificationToken,
+          school.id,
+          user.id,
+          undefined,
+          undefined,
+          { reason: 'Token already used during update', usedAt: tokenRecord.usedAt }
+        );
         throw new UnauthorizedException('Verification token has already been used');
       }
 
       if (tokenRecord.expiresAt < new Date()) {
+        await this.logTokenEvent(
+          'FAILED',
+          verificationToken,
+          school.id,
+          user.id,
+          undefined,
+          undefined,
+          { reason: 'Token expired during update', expiresAt: tokenRecord.expiresAt }
+        );
         throw new UnauthorizedException('Verification token has expired');
       }
 
       // Verify the changes match what was requested
       const requestedChanges = tokenRecord.changes as any;
-      if (JSON.stringify(levels) !== JSON.stringify(requestedChanges.levels)) {
+      const requestedLevels = requestedChanges.levels || {};
+      
+      // Normalize both objects to ensure consistent comparison
+      // Convert undefined to false for comparison purposes
+      const normalizeLevels = (lev: any) => ({
+        primary: lev?.primary ?? false,
+        secondary: lev?.secondary ?? false,
+        tertiary: lev?.tertiary ?? false,
+      });
+      
+      const normalizedRequested = normalizeLevels(requestedLevels);
+      const normalizedIncoming = normalizeLevels(levels);
+      
+      // Compare normalized values
+      if (
+        normalizedIncoming.primary !== normalizedRequested.primary ||
+        normalizedIncoming.secondary !== normalizedRequested.secondary ||
+        normalizedIncoming.tertiary !== normalizedRequested.tertiary
+      ) {
         throw new BadRequestException('Changes do not match the verification token');
       }
 
@@ -947,6 +1008,21 @@ export class SchoolAdminSchoolsService {
         where: { id: tokenRecord.id },
         data: { usedAt: new Date() },
       });
+
+      // Log token usage
+      await this.logTokenEvent(
+        'USED',
+        verificationToken,
+        school.id,
+        user.id,
+        undefined,
+        undefined,
+        { changesApplied: true }
+      );
+
+      this.logger.log(
+        `Token used for school ${school.id} by user ${user.id} - changes applied`
+      );
     }
 
     // Prepare update data
@@ -979,12 +1055,110 @@ export class SchoolAdminSchoolsService {
   }
 
   /**
+   * Log token events for audit trail
+   */
+  private async logTokenEvent(
+    event: 'REQUESTED' | 'VERIFIED' | 'USED' | 'FAILED',
+    token: string,
+    schoolId: string,
+    userId: string | null,
+    ipAddress?: string,
+    userAgent?: string,
+    details?: any
+  ): Promise<void> {
+    try {
+      await this.prisma.schoolProfileEditTokenAudit.create({
+        data: {
+          token,
+          schoolId,
+          userId: userId || null,
+          event,
+          ipAddress: ipAddress || null,
+          userAgent: userAgent || null,
+          details: details ? (details as any) : null,
+        },
+      });
+
+      // Log suspicious activity
+      if (event === 'FAILED') {
+        await this.checkSuspiciousActivity(token, schoolId, ipAddress);
+      }
+    } catch (error) {
+      // Don't fail the main operation if audit logging fails
+      this.logger.error(`Failed to log token event: ${event}`, error);
+    }
+  }
+
+  /**
+   * Check for suspicious activity and alert
+   */
+  private async checkSuspiciousActivity(
+    token: string,
+    schoolId: string,
+    ipAddress?: string
+  ): Promise<void> {
+    if (!ipAddress) return;
+
+    try {
+      // Count recent failures from same IP
+      const recentFailures = await this.prisma.schoolProfileEditTokenAudit.count({
+        where: {
+          event: 'FAILED',
+          ipAddress,
+          createdAt: {
+            gte: new Date(Date.now() - 60 * 60 * 1000), // Last hour
+          },
+        },
+      });
+
+      if (recentFailures >= this.SUSPICIOUS_FAILURE_THRESHOLD) {
+        this.logger.warn(
+          `Suspicious activity detected: ${recentFailures} failed token attempts from IP ${ipAddress} for school ${schoolId}`
+        );
+        // In production, you might want to send an alert to security team
+        // await this.sendSecurityAlert(ipAddress, schoolId, recentFailures);
+      }
+    } catch (error) {
+      this.logger.error('Failed to check suspicious activity', error);
+    }
+  }
+
+  /**
+   * Cleanup expired tokens (should be called by a scheduled job)
+   */
+  async cleanupExpiredTokens(): Promise<number> {
+    try {
+      const result = await this.prisma.schoolProfileEditToken.deleteMany({
+        where: {
+          OR: [
+            { expiresAt: { lt: new Date() } },
+            {
+              AND: [
+                { usedAt: { not: null } },
+                { createdAt: { lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } }, // 7 days old
+              ],
+            },
+          ],
+        },
+      });
+
+      this.logger.log(`Cleaned up ${result.count} expired/used tokens`);
+      return result.count;
+    } catch (error) {
+      this.logger.error('Failed to cleanup expired tokens', error);
+      return 0;
+    }
+  }
+
+  /**
    * Request verification token for sensitive school profile changes
    * Sends an email with verification token
    */
   async requestEditToken(
     user: UserWithContext,
-    changes: UpdateSchoolDto
+    changes: UpdateSchoolDto,
+    ipAddress?: string,
+    userAgent?: string
   ): Promise<{ message: string; token?: string }> {
     const schoolId = user.currentSchoolId;
 
@@ -1009,6 +1183,31 @@ export class SchoolAdminSchoolsService {
     if (!hasSchoolTypeChange) {
       throw new BadRequestException(
         'No sensitive changes detected. You can update these fields directly without verification.'
+      );
+    }
+
+    // Check token request limits (max 10 per 24 hours per school)
+    const recentTokenCount = await this.prisma.schoolProfileEditToken.count({
+      where: {
+        schoolId: school.id,
+        createdAt: {
+          gte: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
+        },
+      },
+    });
+
+    if (recentTokenCount >= this.MAX_TOKEN_REQUESTS_PER_24H) {
+      await this.logTokenEvent(
+        'FAILED',
+        'N/A',
+        school.id,
+        user.id,
+        ipAddress,
+        userAgent,
+        { reason: 'Token request limit exceeded' }
+      );
+      throw new BadRequestException(
+        `Too many token requests. Maximum ${this.MAX_TOKEN_REQUESTS_PER_24H} requests per 24 hours. Please try again later.`
       );
     }
 
@@ -1045,8 +1244,14 @@ export class SchoolAdminSchoolsService {
     });
 
     // Send verification email
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    const verificationUrl = `${frontendUrl}/dashboard/school/settings/profile?token=${token}`;
+    // Auto-detect frontend URL based on NODE_ENV
+    const explicitFrontendUrl = this.configService.get<string>('FRONTEND_URL');
+    const nodeEnv = this.configService.get<string>('NODE_ENV') || 'development';
+    const frontendUrl = explicitFrontendUrl || 
+      (nodeEnv === 'production' ? 'https://agora-schools.com' : 'http://localhost:3000');
+    // Normalize URL - remove trailing slash if present to prevent double slashes
+    const normalizedUrl = frontendUrl.replace(/\/+$/, '');
+    const verificationUrl = `${normalizedUrl}/dashboard/school/settings/profile?token=${token}`;
 
     await this.emailService.sendSchoolProfileEditVerificationEmail(
       principal.user.email,
@@ -1055,6 +1260,21 @@ export class SchoolAdminSchoolsService {
       token,
       verificationUrl,
       changes
+    );
+
+    // Log token request
+    await this.logTokenEvent(
+      'REQUESTED',
+      token,
+      school.id,
+      user.id,
+      ipAddress,
+      userAgent,
+      { principalEmail: principal.user.email }
+    );
+
+    this.logger.log(
+      `Token requested for school ${school.id} by user ${user.id} from IP ${ipAddress || 'unknown'}`
     );
 
     return {
@@ -1067,7 +1287,9 @@ export class SchoolAdminSchoolsService {
    */
   async verifyEditToken(
     token: string,
-    user: UserWithContext
+    user: UserWithContext,
+    ipAddress?: string,
+    userAgent?: string
   ): Promise<{ changes: UpdateSchoolDto; school: SchoolDto }> {
     const schoolId = user.currentSchoolId;
 
@@ -1094,20 +1316,70 @@ export class SchoolAdminSchoolsService {
     });
 
     if (!tokenRecord) {
+      await this.logTokenEvent(
+        'FAILED',
+        token,
+        schoolId,
+        user.id,
+        ipAddress,
+        userAgent,
+        { reason: 'Token not found' }
+      );
       throw new NotFoundException('Invalid verification token');
     }
 
     if (tokenRecord.schoolId !== schoolId) {
+      await this.logTokenEvent(
+        'FAILED',
+        token,
+        tokenRecord.schoolId,
+        user.id,
+        ipAddress,
+        userAgent,
+        { reason: 'Token does not belong to user school', attemptedSchoolId: schoolId }
+      );
       throw new UnauthorizedException('Token does not belong to your school');
     }
 
     if (tokenRecord.usedAt) {
+      await this.logTokenEvent(
+        'FAILED',
+        token,
+        schoolId,
+        user.id,
+        ipAddress,
+        userAgent,
+        { reason: 'Token already used', usedAt: tokenRecord.usedAt }
+      );
       throw new BadRequestException('This verification token has already been used');
     }
 
     if (tokenRecord.expiresAt < new Date()) {
+      await this.logTokenEvent(
+        'FAILED',
+        token,
+        schoolId,
+        user.id,
+        ipAddress,
+        userAgent,
+        { reason: 'Token expired', expiresAt: tokenRecord.expiresAt }
+      );
       throw new BadRequestException('Verification token has expired. Please request a new token.');
     }
+
+    // Log successful verification
+    await this.logTokenEvent(
+      'VERIFIED',
+      token,
+      schoolId,
+      user.id,
+      ipAddress,
+      userAgent
+    );
+
+    this.logger.log(
+      `Token verified for school ${schoolId} by user ${user.id} from IP ${ipAddress || 'unknown'}`
+    );
 
     return {
       changes: tokenRecord.changes as UpdateSchoolDto,

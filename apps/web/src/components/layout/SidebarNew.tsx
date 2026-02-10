@@ -12,15 +12,16 @@ import Image from 'next/image';
 import { motion } from 'framer-motion';
 import { getActivePluginsForTeacher } from '@/lib/plugins';
 import { usePermissionFilteredSidebar, type NavItem } from '@/hooks/useSidebarConfig';
+import { SchoolTypeSwitcher } from '@/components/dashboard/SchoolTypeSwitcher';
 
 function LogoSection() {
   const { open } = useSidebar();
   
   return (
-    <div className="mb-8">
+    <div className="mb-4">
       <Link
         href="/"
-        className="font-normal flex items-center justify-center md:justify-start py-1 relative z-20"
+        className="font-normal flex items-center justify-center md:justify-start py-1 px-3 relative z-20"
       >
         <Image
           src="/assets/logos/agora_main.png"
@@ -52,7 +53,7 @@ function LogoutButton() {
           display: open ? "inline-block" : "none",
           opacity: open ? 1 : 0,
         }}
-        className="text-sm"
+        className="text-[13px]"
       >
         Logout
       </motion.span>
@@ -111,7 +112,7 @@ export function SidebarNew() {
         <LogoSection />
 
         {/* Navigation Links */}
-        <div className="flex flex-col gap-2 flex-1 mt-10">
+        <div className="flex flex-col gap-1 flex-1 mt-8">
           {showLoadingSkeleton ? (
             // Loading skeleton while permissions are being fetched
             <>
@@ -150,8 +151,16 @@ export function SidebarNew() {
       </div>
 
       {/* Logout Button at Bottom */}
-      <div className="pt-4 border-t border-[var(--dark-border)]">
-        <LogoutButton />
+      <div className="pt-4">
+        {/* School Type Switcher - Only for SCHOOL_ADMIN with mixed schools */}
+        {user.role === 'SCHOOL_ADMIN' && (
+          <div className="px-2 mb-3">
+            <SchoolTypeSwitcher />
+          </div>
+        )}
+        <div className="border-t border-[var(--dark-border)] pt-4">
+          <LogoutButton />
+        </div>
       </div>
     </SidebarBody>
   );

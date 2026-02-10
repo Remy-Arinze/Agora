@@ -17,6 +17,9 @@ import {
   MousePointerClick,
   GripVertical,
   AlertTriangle,
+  ChevronDown,
+  GraduationCap,
+  Info,
 } from 'lucide-react';
 import { PermissionGate } from '@/components/permissions/PermissionGate';
 import { PermissionResource, PermissionType } from '@/hooks/usePermissions';
@@ -49,6 +52,7 @@ import { TeacherSelectionPopup } from '@/components/timetable/TeacherSelectionPo
 import { TimetablePreviewModal } from '@/components/timetable/TimetablePreviewModal';
 import { getScheduleForSchoolType } from '@/lib/utils/nigerianSchoolSchedule';
 import { ConfirmModal } from '@/components/ui/Modal';
+import { Select } from '@/components/ui/Select';
 import { useAutoGenerateWithTeachers, type GeneratedPeriodWithTeacher } from '@/hooks/useAutoGenerateWithTeachers';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
@@ -291,7 +295,7 @@ export default function TimetablesPage() {
               : undefined,
             // For SECONDARY, use the provided teacherId; otherwise keep existing
             teacherId: currentType === 'SECONDARY' 
-              ? (teacherId || null) 
+              ? (teacherId || undefined) 
               : (slot.periodData.teacherId || undefined),
             roomId: slot.periodData.roomId || undefined,
             startTime: slot.periodData.startTime,
@@ -774,10 +778,10 @@ export default function TimetablesPage() {
         >
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
+              <h1 className="font-bold text-light-text-primary dark:text-dark-text-primary mb-2" style={{ fontSize: 'var(--text-page-title)' }}>
                 Timetables
               </h1>
-              <p className="text-light-text-secondary dark:text-dark-text-secondary">
+              <p className="text-light-text-secondary dark:text-dark-text-secondary" style={{ fontSize: 'var(--text-page-subtitle)' }}>
                 Manage class schedules and timetables for {currentType || 'all school types'}
               </p>
             </div>
@@ -785,6 +789,7 @@ export default function TimetablesPage() {
               <Button
                 variant="primary"
                 onClick={() => setShowCreateModal(true)}
+                size="sm"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Create Timetable
@@ -795,7 +800,24 @@ export default function TimetablesPage() {
 
         {/* Timetables List */}
         {selectedTermId ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+          <>
+            <div className="flex justify-end mb-4">
+              <Select
+                value={selectedTermId}
+                onChange={(e) => setSelectedTermId(e.target.value)}
+                inline
+                wrapperClassName="w-auto min-w-[300px]"
+                leftIcon={<Calendar className="h-4 w-4 text-light-text-muted dark:text-dark-text-muted" />}
+              >
+                <option value="">Select Term...</option>
+                {allTerms.map((term) => (
+                  <option key={term.id} value={term.id}>
+                    {term.sessionName} - {term.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
             {classesWithTimetables.map((cls) => {
               const classTimetable = timetablesByClass[cls.id] || [];
               return (
@@ -816,17 +838,17 @@ export default function TimetablesPage() {
                 >
                   <CardHeader>
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg">{cls.name}</CardTitle>
+                      <CardTitle>{cls.name}</CardTitle>
                       <BookOpen className="h-5 w-5 text-light-text-muted dark:text-dark-text-muted" />
                     </div>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      <div className="flex items-center text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                      <div className="flex items-center text-light-text-secondary dark:text-dark-text-secondary" style={{ fontSize: 'var(--text-small)' }}>
                         <Clock className="h-4 w-4 mr-2" />
                         {classTimetable.length} periods
                       </div>
-                      <div className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400">
+                      <div className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400" style={{ fontSize: 'var(--text-small)' }}>
                         <MousePointerClick className="h-3.5 w-3.5" />
                         <span>Click to expand timetable</span>
                       </div>
@@ -866,25 +888,30 @@ export default function TimetablesPage() {
               );
             })}
           </div>
+          </>
         ) : (
           <Card>
-            <CardContent className="py-12 text-center">
-              <Calendar className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
-              <p className="text-light-text-secondary dark:text-dark-text-secondary mb-4">
-                Select a term to view timetables
-              </p>
-              <select
+            <div className="flex justify-end p-4 pb-0">
+              <Select
                 value={selectedTermId}
                 onChange={(e) => setSelectedTermId(e.target.value)}
-                className="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-dark-surface"
+                inline
+                wrapperClassName="w-auto min-w-[300px]"
+                leftIcon={<Calendar className="h-4 w-4 text-light-text-muted dark:text-dark-text-muted" />}
               >
-                <option value="">Select a term...</option>
+                <option value="">Select Term...</option>
                 {allTerms.map((term) => (
                   <option key={term.id} value={term.id}>
                     {term.sessionName} - {term.name}
                   </option>
                 ))}
-              </select>
+              </Select>
+            </div>
+            <CardContent className="py-12 text-center pt-4">
+              <Calendar className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
+              <p className="text-light-text-secondary dark:text-dark-text-secondary mb-4" style={{ fontSize: 'var(--text-body)' }}>
+                Please select a term from the top right to view timetables
+              </p>
             </CardContent>
           </Card>
         )}
@@ -894,7 +921,7 @@ export default function TimetablesPage() {
           <Card className="mt-6">
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-xl">
+                <CardTitle>
                   Timetable for {selectedClass?.name}
                 </CardTitle>
                 <div className="flex gap-2">
@@ -935,14 +962,14 @@ export default function TimetablesPage() {
               {isLoadingTimetable ? (
                 <div className="py-12 text-center">
                   <Loader2 className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4 animate-spin" />
-                  <p className="text-light-text-secondary dark:text-dark-text-secondary">
+                  <p className="text-light-text-secondary dark:text-dark-text-secondary" style={{ fontSize: 'var(--text-body)' }}>
                     Loading timetable...
                   </p>
                 </div>
               ) : timetable.length === 0 ? (
                 <div className="py-12 text-center">
                   <Clock className="h-12 w-12 text-light-text-muted dark:text-dark-text-muted mx-auto mb-4" />
-                  <p className="text-light-text-secondary dark:text-dark-text-secondary mb-4">
+                  <p className="text-light-text-secondary dark:text-dark-text-secondary mb-4" style={{ fontSize: 'var(--text-body)' }}>
                     No timetable periods found for {selectedClass?.name}.
                   </p>
                   <PermissionGate resource={PermissionResource.TIMETABLES} type={PermissionType.WRITE}>
@@ -957,7 +984,7 @@ export default function TimetablesPage() {
                   {/* Drag and drop hint */}
                   <div className="inline-flex items-center gap-2 mb-4 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                     <GripVertical className="h-4 w-4 text-blue-600 dark:text-blue-400 flex-shrink-0" />
-                    <p className="text-sm text-blue-700 dark:text-blue-300">
+                    <p className="text-blue-700 dark:text-blue-300" style={{ fontSize: 'var(--text-small)' }}>
                       <span className="font-medium">Tip:</span> Drag subjects from the left panel and drop them onto the timetable slots to assign them.
                     </p>
                   </div>
@@ -967,15 +994,16 @@ export default function TimetablesPage() {
                       <div className="flex items-start gap-2">
                         <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
                         <div>
-                          <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                          <p className="font-medium text-amber-800 dark:text-amber-300" style={{ fontSize: 'var(--text-body)' }}>
                             Some subjects have no teachers assigned
                           </p>
-                          <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">
+                          <p className="text-amber-700 dark:text-amber-400 mt-1" style={{ fontSize: 'var(--text-small)' }}>
                             {subjectsWithoutTeachers.map(s => s.name).join(', ')}
                           </p>
                           <Link 
                             href="/dashboard/school/subjects" 
-                            className="text-xs text-amber-700 dark:text-amber-400 underline hover:no-underline mt-1 inline-block"
+                            className="text-amber-700 dark:text-amber-400 underline hover:no-underline mt-1 inline-block"
+                            style={{ fontSize: 'var(--text-small)' }}
                           >
                             Go to Subjects page to add teachers →
                           </Link>
@@ -1031,49 +1059,101 @@ export default function TimetablesPage() {
               animate={{ opacity: 1, scale: 1 }}
               className="bg-white dark:bg-dark-surface rounded-lg p-6 max-w-md w-full mx-4"
             >
-              <h3 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary mb-4">
+              <p className="font-medium text-light-text-secondary dark:text-dark-text-secondary mb-4" style={{ fontSize: 'var(--text-section-title)' }}>
                 Create New Timetable
-              </h3>
+              </p>
               <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-light-text-primary dark:text-dark-text-primary">
-                    Select Class
-                  </label>
-                  <select
-                    value={newTimetableClassId}
-                    onChange={(e) => setNewTimetableClassId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-dark-surface"
-                  >
-                    <option value="">Select a class...</option>
-                    {classes.map((cls) => (
-                      <option key={cls.id} value={cls.id}>
-                        {cls.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-light-text-primary dark:text-dark-text-primary">
-                    Select Term
-                  </label>
-                  <select
-                    value={newTimetableTermId}
-                    onChange={(e) => setNewTimetableTermId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg bg-white dark:bg-dark-surface"
-                  >
-                    <option value="">Select a term...</option>
-                    {allTerms.map((term) => (
-                      <option key={term.id} value={term.id}>
-                        {term.sessionName} - {term.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {/* Classes Selection */}
+                {classes.length === 0 ? (
+                  <div className="p-4 border border-yellow-500/30 dark:border-yellow-500/30 rounded-lg bg-yellow-50/50 dark:bg-yellow-900/10">
+                    <div className="flex items-start gap-3">
+                      <Info className="h-5 w-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="font-medium text-yellow-800 dark:text-yellow-300 mb-1" style={{ fontSize: 'var(--text-body)' }}>
+                          No Classes Available
+                        </p>
+                        <p className="text-yellow-700 dark:text-yellow-400 mb-3" style={{ fontSize: 'var(--text-small)' }}>
+                          You need to create or generate classes before creating a timetable.
+                        </p>
+                        <Link href="/dashboard/school/courses">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-yellow-700 dark:text-yellow-300 hover:bg-yellow-100 dark:hover:bg-yellow-900/20"
+                          >
+                            <GraduationCap className="h-4 w-4 mr-2" />
+                            Go to Classes
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <Select
+                      label="Select Class"
+                      value={newTimetableClassId}
+                      onChange={(e) => setNewTimetableClassId(e.target.value)}
+                      required
+                    >
+                      <option value="">Select a class...</option>
+                      {classes.map((cls) => (
+                        <option key={cls.id} value={cls.id}>
+                          {cls.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                )}
+
+                {/* Terms Selection */}
+                {allTerms.length === 0 ? (
+                  <div className="p-4 border border-blue-500/30 dark:border-blue-500/30 rounded-lg bg-blue-50/50 dark:bg-blue-900/10">
+                    <div className="flex items-start gap-3">
+                      <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="font-medium text-blue-800 dark:text-blue-300 mb-1" style={{ fontSize: 'var(--text-body)' }}>
+                          No Terms Available
+                        </p>
+                        <p className="text-blue-700 dark:text-blue-400 mb-3" style={{ fontSize: 'var(--text-small)' }}>
+                          You need to start a session and term before creating a timetable. Please go to your school overview to manage sessions.
+                        </p>
+                        <Link href="/dashboard/school/overview">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/20"
+                          >
+                            <Calendar className="h-4 w-4 mr-2" />
+                            Go to Overview
+                          </Button>
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <Select
+                      label="Select Term"
+                      value={newTimetableTermId}
+                      onChange={(e) => setNewTimetableTermId(e.target.value)}
+                      required
+                    >
+                      <option value="">Select a term...</option>
+                      {allTerms.map((term) => (
+                        <option key={term.id} value={term.id}>
+                          {term.sessionName} - {term.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                )}
+
                 <div className="flex gap-3 pt-4">
                   <Button
                     variant="primary"
                     onClick={handleCreateTimetable}
-                    disabled={isCreatingMaster || !newTimetableClassId || !newTimetableTermId}
+                    disabled={isCreatingMaster || !newTimetableClassId || !newTimetableTermId || classes.length === 0 || allTerms.length === 0}
                     className="flex-1"
                   >
                     {isCreatingMaster ? (

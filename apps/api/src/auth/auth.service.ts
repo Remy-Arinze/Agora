@@ -4,11 +4,13 @@ import {
   BadRequestException,
   NotFoundException,
   Logger,
+  ForbiddenException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../database/prisma.service';
 import { EmailService } from '../email/email.service';
 import { OtpService } from './otp.service';
+import { CloudinaryService } from '../storage/cloudinary/cloudinary.service';
 import { LoginDto, VerifyOtpDto, VerifyLoginOtpDto, AuthTokensDto, LoginResponseDto } from './dto/login.dto';
 import { RequestPasswordResetDto, ResetPasswordDto } from './dto/password-reset.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
@@ -26,6 +28,7 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly emailService: EmailService,
     private readonly otpService: OtpService,
+    private readonly cloudinaryService: CloudinaryService,
   ) {}
 
   /**
@@ -390,234 +393,7 @@ export class AuthService {
       throw new BadRequestException('OTP verification failed');
     }
   }
-
-  /**
-   * Legacy login method - DEPRECATED and DISABLED
-   * @deprecated Use login() + verifyLoginOtp() instead
-   * This method is disabled to enforce OTP 2FA
-   */
-  async loginLegacy(loginDto: LoginDto): Promise<AuthTokensDto> {
-    this.logger.warn('loginLegacy called - this method is disabled. Use login() + verifyLoginOtp() instead.');
-    throw new BadRequestException(
-      'Legacy login is disabled. Please use the OTP login flow.',
-    );
-    try {
-      const { emailOrPublicId, password } = loginDto;
-
-      // Determine if it's an email or public ID
-      const isEmail = emailOrPublicId.includes('@');
-
-      let user;
-      let schoolAdmin: any = null;
-      let teacherProfile: any = null;
-
-      if (isEmail) {
-        // Super admin or user logging in with email
-        user = await this.prisma.user.findFirst({
-          where: {
-            email: emailOrPublicId,
-          },
-          include: {
-            studentProfile: {
-              include: {
-                enrollments: {
-                  where: { isActive: true },
-                  orderBy: { enrollmentDate: 'desc' },
-                  take: 1,
-                  include: { school: true },
-                },
-              },
-            },
-            parentProfile: true,
-            teacherProfiles: true,
-            schoolAdmins: true,
-          },
-        });
-      } else {
-        // Admin, principal, teacher, or student logging in with public ID
-        // Principals are SchoolAdmin records with role PRINCIPAL, so they're included here
-        // Run all three queries in parallel for better performance
-        const [adminResult, teacherResult, studentResult] = await Promise.all([
-          this.prisma.schoolAdmin.findUnique({
-            where: { publicId: emailOrPublicId },
-            include: { user: true },
-          }),
-          this.prisma.teacher.findUnique({
-            where: { publicId: emailOrPublicId },
-            include: { user: true },
-          }),
-          this.prisma.student.findUnique({
-            where: { publicId: emailOrPublicId },
-            include: { user: true },
-          }),
-        ]);
-
-        schoolAdmin = adminResult;
-        teacherProfile = teacherResult;
-
-        if (studentResult) {
-          user = studentResult.user;
-        }
-
-        if (!schoolAdmin && !teacherProfile && !user) {
-          throw new UnauthorizedException('Invalid credentials');
-        }
-
-        if (!user) {
-          user = schoolAdmin?.user || teacherProfile?.user;
-        }
-
-        if (user) {
-          // Reload user with all relations
-          user = await this.prisma.user.findUnique({
-            where: { id: user.id },
-            include: {
-              studentProfile: {
-                include: {
-                  enrollments: {
-                    where: { isActive: true },
-                    orderBy: { enrollmentDate: 'desc' },
-                    take: 1,
-                    include: { school: true },
-                  },
-                },
-              },
-              parentProfile: true,
-              teacherProfiles: true,
-              schoolAdmins: true,
-            },
-          });
-        }
-      }
-
-      if (!user || !user.passwordHash) {
-        throw new UnauthorizedException('Invalid credentials');
-      }
-
-      // Check if user is shadow (cannot login)
-      if (user.accountStatus === 'SHADOW') {
-        throw new UnauthorizedException(
-          'Account not activated. Please verify your OTP to claim your account.'
-        );
-      }
-
-      const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-      if (!isPasswordValid) {
-        throw new UnauthorizedException('Invalid credentials');
-      }
-
-      // Update last login
-      await this.prisma.user.update({
-        where: { id: user.id },
-        data: { lastLoginAt: new Date() },
-      });
-
-      // Determine school context based on login method and role
-      let currentSchoolId: string | null = null;
-      let currentPublicId: string | null = null;
-      let currentProfileId: string | null = null;
-
-      if (isEmail) {
-        // Email login - determine school context based on role
-        if (user.role === 'STUDENT') {
-          // ✅ STUDENT: Find active enrollment and set school context
-          if (user.studentProfile && user.studentProfile.enrollments.length > 0) {
-            const activeEnrollment = user.studentProfile.enrollments[0];
-            currentSchoolId = activeEnrollment.schoolId;
-            currentPublicId = user.studentProfile.publicId || null;
-          }
-          // If no active enrollment, schoolId remains null (student not enrolled anywhere)
-        } else if (
-          user.role === 'SCHOOL_ADMIN' &&
-          user.schoolAdmins &&
-          user.schoolAdmins.length > 0
-        ) {
-          // ✅ SCHOOL_ADMIN via email: Use first school admin profile
-          const adminProfile = user.schoolAdmins[0];
-          currentSchoolId = adminProfile.schoolId;
-          currentPublicId = adminProfile.publicId;
-          currentProfileId = adminProfile.id; // This is the SchoolAdmin record ID used for permissions
-        } else if (
-          user.role === 'TEACHER' &&
-          user.teacherProfiles &&
-          user.teacherProfiles.length > 0
-        ) {
-          // ✅ TEACHER via email: Use first teacher profile
-          const teacherProf = user.teacherProfiles[0];
-          currentSchoolId = teacherProf.schoolId;
-          currentPublicId = teacherProf.publicId;
-          currentProfileId = teacherProf.id;
-        }
-        // ✅ SUPER_ADMIN: No school context (can access all schools)
-        // schoolId, publicId, profileId remain null for super admin
-      } else {
-        // Public ID login - capture school context
-        if (schoolAdmin) {
-          // ✅ SCHOOL_ADMIN or PRINCIPAL
-          currentSchoolId = schoolAdmin.schoolId;
-          currentPublicId = schoolAdmin.publicId;
-          currentProfileId = schoolAdmin.id; // Use record ID for permission lookups
-        } else if (teacherProfile) {
-          // ✅ TEACHER
-          currentSchoolId = teacherProfile.schoolId;
-          currentPublicId = teacherProfile.publicId;
-          currentProfileId = teacherProfile.id; // Use record ID for permission lookups
-        } else if (user.role === 'STUDENT') {
-          // ✅ STUDENT logging in with publicId
-          if (user.studentProfile && user.studentProfile.enrollments.length > 0) {
-            const activeEnrollment = user.studentProfile.enrollments[0];
-            currentSchoolId = activeEnrollment.schoolId;
-            currentPublicId = user.studentProfile.publicId || null;
-          }
-        }
-      }
-
-      // Generate tokens with school context
-      const tokens = await this.generateTokens(
-        user.id,
-        user.role,
-        currentSchoolId,
-        currentPublicId,
-        currentProfileId
-      );
-
-      return {
-        ...tokens,
-        user: {
-          id: user.id,
-          email: user.email,
-          phone: user.phone,
-          role: user.role,
-          accountStatus: user.accountStatus,
-          profileId: currentProfileId,
-          publicId: currentPublicId,
-          schoolId: currentSchoolId, // ✅ Include in response
-        },
-      };
-    } catch (error) {
-      // Log the full error for debugging
-      this.logger.error('AuthService.login error:', error instanceof Error ? error.stack : error);
-      // If it's already a NestJS exception, re-throw it
-      if (error instanceof UnauthorizedException || error instanceof BadRequestException) {
-        throw error;
-      }
-      // Handle Prisma errors with better messages
-      if (error instanceof Error) {
-        // Check for Prisma-specific errors
-        if (error.message.includes('Unknown field')) {
-          throw new BadRequestException(
-            'A system error occurred. Please contact support if this persists.'
-          );
-        }
-        // Generic error message for other cases
-        throw new BadRequestException(
-          'Unable to complete login. Please check your credentials and try again.'
-        );
-      }
-      // Fallback for unknown errors
-      throw new BadRequestException('Login failed. Please try again later.');
-    }
-  }
+ 
 
   async verifyOtp(verifyOtpDto: VerifyOtpDto): Promise<AuthTokensDto> {
     const { phone, code } = verifyOtpDto;
@@ -928,15 +704,34 @@ export class AuthService {
     });
 
     if (!resetToken) {
+      this.logger.warn(`[RESET_PASSWORD] Token not found: ${token.substring(0, 8)}...`);
       throw new BadRequestException('Invalid or expired reset token');
     }
 
     if (resetToken.usedAt) {
+      this.logger.warn(
+        `[RESET_PASSWORD] Token already used at ${resetToken.usedAt.toISOString()} for user ${resetToken.userId}`
+      );
       throw new BadRequestException('Reset token has already been used');
     }
 
-    if (resetToken.expiresAt < new Date()) {
-      throw new BadRequestException('Reset token has expired');
+    // Check expiration with proper timezone handling and small buffer for clock skew
+    const now = new Date();
+    const expiresAt = new Date(resetToken.expiresAt);
+    // Subtract 2 minute buffer from "now" to account for clock skew between servers
+    // This gives a grace period if the server clock is slightly ahead
+    const bufferMs = 2 * 60 * 1000; // 2 minutes
+    const nowWithBuffer = new Date(now.getTime() - bufferMs);
+    
+    this.logger.log(
+      `[RESET_PASSWORD] Checking token expiration. Now: ${now.toISOString()}, Now with buffer: ${nowWithBuffer.toISOString()}, Expires: ${expiresAt.toISOString()}`
+    );
+    
+    if (expiresAt < nowWithBuffer) {
+      this.logger.warn(
+        `[RESET_PASSWORD] Token expired. Expires: ${expiresAt.toISOString()}, Now: ${now.toISOString()} for user ${resetToken.userId}`
+      );
+      throw new BadRequestException('Reset token has expired. Please request a new password reset link.');
     }
 
     // Hash new password
@@ -1194,10 +989,14 @@ export class AuthService {
       }
     }
 
-    // Generate new reset token
+    // Generate new reset token with proper expiration
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date();
     expiresAt.setTime(expiresAt.getTime() + 24 * 60 * 60 * 1000); // 24 hours for resent activation
+    
+    this.logger.log(
+      `[RESEND_PASSWORD_RESET] Creating new token for user ${userId}, expires at: ${expiresAt.toISOString()}`
+    );
 
     // Create new reset token
     await this.prisma.passwordResetToken.create({
@@ -1207,6 +1006,10 @@ export class AuthService {
         expiresAt,
       },
     });
+    
+    this.logger.log(
+      `[RESEND_PASSWORD_RESET] New token created successfully for user ${userId}`
+    );
 
     // Send email with all schools information
     try {
@@ -1302,5 +1105,189 @@ export class AuthService {
     // } catch (error) {
     //   this.logger.error('Failed to send password change confirmation email:', error);
     // }
+  }
+
+  /**
+   * Upload super admin profile image
+   * Security: Validates file type, size, and sanitizes filename
+   */
+  async uploadProfileImage(
+    userId: string,
+    file: Express.Multer.File
+  ): Promise<{ profileImage: string }> {
+    // Get user and verify role
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.role !== 'SUPER_ADMIN') {
+      throw new ForbiddenException('Access denied. SUPER_ADMIN role required.');
+    }
+
+    // Validate file exists
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    // Validate file type - only allow image formats
+    const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedMimeTypes.includes(file.mimetype)) {
+      throw new BadRequestException(
+        'Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed'
+      );
+    }
+
+    // Validate file size (5MB max)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      throw new BadRequestException('File size exceeds maximum limit of 5MB');
+    }
+
+    // Additional security: Validate file buffer is actually an image
+    // Check magic bytes (file signature) to prevent malicious file uploads
+    const buffer = file.buffer;
+    const isValidImage = this.validateImageFile(buffer, file.mimetype);
+    if (!isValidImage) {
+      throw new BadRequestException('File is not a valid image. Malicious files are not allowed.');
+    }
+
+    // Delete old image if exists
+    if ((user as any).profileImage && (user as any).publicId) {
+      try {
+        await this.cloudinaryService.deleteImage((user as any).publicId);
+      } catch (error) {
+        this.logger.error(
+          'Error deleting old profile image:',
+          error instanceof Error ? error.stack : error
+        );
+        // Continue even if deletion fails
+      }
+    }
+
+    // Generate safe public ID (sanitize to prevent injection)
+    const safePublicId = `super-admin-${user.id}`;
+
+    // Upload to Cloudinary with error handling and timeout
+    let url: string;
+    let publicId: string;
+    
+    try {
+      // Add timeout wrapper (30 seconds)
+      const uploadPromise = this.cloudinaryService.uploadImage(
+        file,
+        'users/super-admin',
+        safePublicId
+      );
+      
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => {
+          reject(new Error('Upload timeout: Cloudinary did not respond within 30 seconds'));
+        }, 30000); // 30 second timeout
+      });
+      
+      const uploadResult = await Promise.race([uploadPromise, timeoutPromise]) as { url: string; publicId: string };
+      url = uploadResult.url;
+      publicId = uploadResult.publicId;
+    } catch (error: any) {
+      this.logger.error(
+        `[PROFILE_IMAGE] Cloudinary upload failed for user ${user.id}:`,
+        error instanceof Error ? error.stack : error
+      );
+      
+      // Re-throw with more context
+      if (error?.http_code === 499 || error?.name === 'TimeoutError' || error?.message?.includes('timeout')) {
+        throw new BadRequestException(
+          'Image upload timed out. Please try again with a smaller image or check your internet connection.'
+        );
+      }
+      
+      if (error?.message?.includes('Cloudinary is not configured') || error?.message?.includes('CLOUDINARY')) {
+        throw new BadRequestException(
+          'Image upload service is not configured. Please contact support.'
+        );
+      }
+      
+      throw new BadRequestException(
+        `Failed to upload image: ${error?.message || 'Unknown error'}. Please try again.`
+      );
+    }
+
+    // Update user with new image URL and public ID
+    try {
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          profileImage: url,
+          publicId: publicId,
+        } as any, // Type assertion needed until Prisma client is regenerated
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `[PROFILE_IMAGE] Failed to update user ${user.id} with new image URL:`,
+        error instanceof Error ? error.stack : error
+      );
+      // Image was uploaded but we couldn't save the URL - this is bad but we'll still return success
+      // The image exists in Cloudinary but won't be linked to the user
+      throw new BadRequestException(
+        'Image uploaded but failed to save. Please try uploading again.'
+      );
+    }
+
+    this.logger.log(`[PROFILE_IMAGE] Super admin ${user.id} uploaded profile image successfully`);
+
+    return { profileImage: url };
+  }
+
+  /**
+   * Validate image file by checking magic bytes (file signature)
+   * This prevents malicious files from being uploaded even if they have image extensions
+   */
+  private validateImageFile(buffer: Buffer, mimeType: string): boolean {
+    if (!buffer || buffer.length < 4) {
+      return false;
+    }
+
+    // Check magic bytes for different image formats
+    const signatures: { [key: string]: number[][] } = {
+      'image/jpeg': [[0xff, 0xd8, 0xff]],
+      'image/jpg': [[0xff, 0xd8, 0xff]],
+      'image/png': [[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]],
+      'image/gif': [[0x47, 0x49, 0x46, 0x38, 0x37, 0x61], [0x47, 0x49, 0x46, 0x38, 0x39, 0x61]], // GIF87a or GIF89a
+      'image/webp': [[0x52, 0x49, 0x46, 0x46]], // RIFF header (WebP starts with RIFF)
+    };
+
+    const expectedSignatures = signatures[mimeType];
+    if (!expectedSignatures) {
+      return false;
+    }
+
+    // Check if buffer matches any of the expected signatures
+    for (const signature of expectedSignatures) {
+      let matches = true;
+      for (let i = 0; i < signature.length; i++) {
+        if (buffer[i] !== signature[i]) {
+          matches = false;
+          break;
+        }
+      }
+      if (matches) {
+        return true;
+      }
+    }
+
+    // For WebP, also check for WEBP string after RIFF header
+    if (mimeType === 'image/webp') {
+      if (buffer.length < 12) {
+        return false;
+      }
+      const webpString = buffer.toString('ascii', 8, 12);
+      return webpString === 'WEBP';
+    }
+
+    return false;
   }
 }

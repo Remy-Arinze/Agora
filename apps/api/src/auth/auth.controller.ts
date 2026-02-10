@@ -8,9 +8,16 @@ import {
   Res,
   Req,
   UnauthorizedException,
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBody } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
+import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiConsumes, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
@@ -19,8 +26,9 @@ import { LoginDto, VerifyOtpDto, VerifyLoginOtpDto, AuthTokensDto, LoginResponse
 import { RequestPasswordResetDto, ResetPasswordDto } from './dto/password-reset.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { UseGuards } from '@nestjs/common';
 import { ResponseDto } from '../common/dto/response.dto';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
 
 // Cookie configuration constants
 const REFRESH_TOKEN_COOKIE_NAME = 'refresh_token';
@@ -309,5 +317,119 @@ export class AuthController {
     // Clear the refresh token cookie
     this.clearRefreshTokenCookie(res);
     return ResponseDto.ok(undefined, 'Logged out successfully');
+  }
+
+  @Post('profile/upload-image')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('SUPER_ADMIN')
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: memoryStorage(),
+    })
+  )
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Upload super admin profile image' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        image: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Profile image uploaded successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - SUPER_ADMIN role required' })
+  @ApiResponse({ status: 400, description: 'Invalid file or file too large' })
+  @ApiResponse({ status: 500, description: 'Failed to upload image. Please try again later.' })
+  async uploadProfileImage(
+    @Req() req: Request,
+    @UploadedFile() file: Express.Multer.File
+  ): Promise<ResponseDto<{ profileImage: string }>> {
+    try {
+      const userId = (req.user as any)?.sub || (req.user as any)?.id;
+      
+      if (!userId) {
+        throw new UnauthorizedException('User not authenticated');
+      }
+
+      if (!file) {
+        throw new BadRequestException('No file provided. Please select an image to upload.');
+      }
+
+      // Validate file size early (before service call) for better UX
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (file.size > maxSize) {
+        const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        throw new BadRequestException(
+          `File size (${fileSizeMB}MB) exceeds the maximum limit of 5MB. Please choose a smaller image.`
+        );
+      }
+
+      // Validate file type early
+      const allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+      if (!allowedMimeTypes.includes(file.mimetype)) {
+        throw new BadRequestException(
+          `Invalid file type (${file.mimetype}). Only JPEG, PNG, GIF, and WebP images are allowed.`
+        );
+      }
+
+      const data = await this.authService.uploadProfileImage(userId, file);
+      return ResponseDto.ok(data, 'Profile image uploaded successfully');
+    } catch (error: any) {
+      // Re-throw known HTTP exceptions as-is (they already have proper messages)
+      if (
+        error instanceof UnauthorizedException ||
+        error instanceof BadRequestException ||
+        error instanceof ForbiddenException ||
+        error instanceof NotFoundException
+      ) {
+        // Log warnings for client errors (not full stack traces)
+        this.logger.warn(
+          `[PROFILE_IMAGE_UPLOAD] ${error.constructor.name}: ${error.message}`
+        );
+        throw error;
+      }
+
+      // Log unexpected errors for debugging
+      this.logger.error(
+        '[PROFILE_IMAGE_UPLOAD] Unexpected error:',
+        error instanceof Error ? error.stack : error
+      );
+
+      // Handle Cloudinary/timeout errors with user-friendly messages
+      if (error?.http_code === 499 || error?.name === 'TimeoutError' || error?.message?.includes('timeout')) {
+        throw new BadRequestException(
+          'Image upload timed out. Please try again with a smaller image or check your internet connection.'
+        );
+      }
+
+      // Handle Cloudinary configuration errors
+      if (error?.message?.includes('Cloudinary is not configured') || error?.message?.includes('CLOUDINARY')) {
+        throw new BadRequestException(
+          'Image upload service is temporarily unavailable. Please contact support if this issue persists.'
+        );
+      }
+
+      // Handle file buffer errors
+      if (error?.message?.includes('File buffer is not available')) {
+        throw new BadRequestException(
+          'Failed to process image. Please try uploading again.'
+        );
+      }
+
+      // Generic error with user-friendly message
+      throw new BadRequestException(
+        'Failed to upload image. Please ensure the file is a valid image and try again.'
+      );
+    }
   }
 }

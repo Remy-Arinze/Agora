@@ -28,22 +28,22 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const baseStyles =
-      'inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-0 disabled:opacity-50 disabled:pointer-events-none relative overflow-hidden';
+      'inline-flex items-center justify-center rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-0 disabled:opacity-60 disabled:pointer-events-none disabled:cursor-not-allowed relative overflow-hidden';
 
     const variants = {
       primary:
-        '!bg-gradient-to-b from-[#2490FD] to-[#1a7ae6] !opacity-100 text-white hover:from-[#2a9fff] hover:to-[#2490FD] focus:ring-agora-blue shadow-[0_4px_0_#0f4a8a] hover:shadow-[0_6px_0_#0f4a8a] active:shadow-[0_2px_0_#0f4a8a] active:translate-y-[2px] border-t border-[#3ba0ff]/50',
+        '!bg-gradient-to-b from-[#2490FD] to-[#1a7ae6] !opacity-100 text-white hover:from-[#2a9fff] hover:to-[#2490FD] focus:ring-agora-blue shadow-[0_4px_0_#0f4a8a] hover:shadow-[0_6px_0_#0f4a8a] active:shadow-[0_2px_0_#0f4a8a] active:translate-y-[2px] border-t border-[#3ba0ff]/50 disabled:from-gray-400 disabled:to-gray-500 disabled:shadow-none disabled:border-t-gray-400/30 disabled:grayscale disabled:opacity-70',
       accent:
-        '!bg-gradient-to-b from-[#FF532A] to-[#e6451f] !opacity-100 text-white hover:from-[#ff6340] hover:to-[#FF532A] focus:ring-agora-accent shadow-[0_4px_0_#cc4219] hover:shadow-[0_6px_0_#cc4219] active:shadow-[0_2px_0_#cc4219] active:translate-y-[2px] border-t border-[#ff6b4d]/50',
+        '!bg-gradient-to-b from-[#FF532A] to-[#e6451f] !opacity-100 text-white hover:from-[#ff6340] hover:to-[#FF532A] focus:ring-agora-accent shadow-[0_4px_0_#cc4219] hover:shadow-[0_6px_0_#cc4219] active:shadow-[0_2px_0_#cc4219] active:translate-y-[2px] border-t border-[#ff6b4d]/50 disabled:from-gray-400 disabled:to-gray-500 disabled:shadow-none disabled:border-t-gray-400/30 disabled:grayscale disabled:opacity-70',
       white:
-        '!bg-gradient-to-b from-white to-gray-100 !opacity-100 text-agora-text hover:from-gray-50 hover:to-white focus:ring-white shadow-[0_4px_0_#d1d5db] hover:shadow-[0_6px_0_#d1d5db] active:shadow-[0_2px_0_#d1d5db] active:translate-y-[2px] border-t border-white/80',
+        '!bg-gradient-to-b from-white to-gray-100 !opacity-100 text-agora-text hover:from-gray-50 hover:to-white focus:ring-white shadow-[0_4px_0_#d1d5db] hover:shadow-[0_6px_0_#d1d5db] active:shadow-[0_2px_0_#d1d5db] active:translate-y-[2px] border-t border-white/80 disabled:from-gray-200 disabled:to-gray-300 disabled:shadow-none disabled:border-t-gray-300/50 disabled:grayscale disabled:opacity-70 disabled:text-gray-500',
       secondary:
-        'bg-gradient-to-b from-gray-200 to-gray-300 dark:from-dark-surface dark:to-dark-border text-gray-900 dark:text-dark-text-primary hover:from-gray-300 hover:to-gray-400 dark:hover:from-dark-border dark:hover:to-dark-hover focus:ring-gray-500 shadow-[0_2px_0_#9ca3af] hover:shadow-[0_3px_0_#9ca3af] active:shadow-[0_1px_0_#9ca3af] active:translate-y-[1px]',
+        'bg-gradient-to-b from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-800 text-gray-900 dark:text-white hover:from-gray-300 hover:to-gray-400 dark:hover:from-gray-600 dark:hover:to-gray-700 focus:ring-gray-500 shadow-[0_2px_0_#9ca3af] dark:shadow-[0_2px_0_#374151] hover:shadow-[0_3px_0_#9ca3af] dark:hover:shadow-[0_3px_0_#374151] active:shadow-[0_1px_0_#9ca3af] dark:active:shadow-[0_1px_0_#374151] active:translate-y-[1px] disabled:from-gray-300 disabled:to-gray-400 disabled:dark:from-gray-800 disabled:dark:to-gray-900 disabled:shadow-none disabled:opacity-70 disabled:text-gray-500 dark:disabled:text-gray-400',
       outline:
-        'border-2 border-gray-300 dark:border-dark-border bg-transparent text-gray-700 dark:text-dark-text-primary hover:bg-gray-50 dark:hover:bg-dark-surface focus:ring-gray-500 shadow-[0_2px_0_#9ca3af] hover:shadow-[0_3px_0_#9ca3af] active:shadow-[0_1px_0_#9ca3af] active:translate-y-[1px]',
-      ghost: 'bg-transparent text-gray-700 dark:text-dark-text-primary hover:bg-gray-100 dark:hover:bg-dark-surface focus:ring-gray-500',
+        'border-2 border-gray-300 dark:border-dark-border bg-transparent text-gray-700 dark:text-dark-text-primary hover:bg-gray-50 dark:hover:bg-dark-surface focus:ring-gray-500 shadow-[0_2px_0_#9ca3af] hover:shadow-[0_3px_0_#9ca3af] active:shadow-[0_1px_0_#9ca3af] active:translate-y-[1px] disabled:border-gray-400 dark:disabled:border-gray-600 disabled:shadow-none disabled:opacity-70 disabled:text-gray-500 dark:disabled:text-gray-500 disabled:cursor-not-allowed',
+      ghost: 'bg-transparent text-gray-700 dark:text-dark-text-primary hover:bg-gray-100 dark:hover:bg-dark-surface focus:ring-gray-500 disabled:opacity-50 disabled:text-gray-400 dark:disabled:text-gray-600 disabled:cursor-not-allowed',
       danger:
-        'bg-gradient-to-b from-red-600 to-red-700 dark:from-red-500 dark:to-red-600 text-white hover:from-red-700 hover:to-red-800 dark:hover:from-red-600 dark:hover:to-red-700 focus:ring-red-500 shadow-[0_4px_0_#b91c1c] hover:shadow-[0_6px_0_#b91c1c] active:shadow-[0_2px_0_#b91c1c] active:translate-y-[2px] border-t border-red-400/50',
+        'bg-gradient-to-b from-red-600 to-red-700 dark:from-red-500 dark:to-red-600 text-white hover:from-red-700 hover:to-red-800 dark:hover:from-red-600 dark:hover:to-red-700 focus:ring-red-500 shadow-[0_4px_0_#b91c1c] hover:shadow-[0_6px_0_#b91c1c] active:shadow-[0_2px_0_#b91c1c] active:translate-y-[2px] border-t border-red-400/50 disabled:from-gray-400 disabled:to-gray-500 disabled:shadow-none disabled:border-t-gray-400/30 disabled:grayscale disabled:opacity-70',
     };
 
     const sizes = {
@@ -72,9 +72,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
           sizes[size],
           tailwindBg,
           tailwindText,
-          // Add inner highlight for 3D effect on primary, accent, white, and danger variants
+          // Add inner highlight for 3D effect on primary, accent, white, and danger variants (only when not disabled)
           (variant === 'primary' || variant === 'accent' || variant === 'white' || variant === 'danger') && !bgColor && 
-          'before:absolute before:inset-0 before:bg-gradient-to-b before:from-white/20 before:to-transparent before:rounded-lg before:pointer-events-none',
+          'before:absolute before:inset-0 before:bg-gradient-to-b before:from-white/20 before:to-transparent before:rounded-lg before:pointer-events-none disabled:before:hidden',
           className
         )}
         style={customStyles}

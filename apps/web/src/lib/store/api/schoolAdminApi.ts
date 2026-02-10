@@ -1226,9 +1226,13 @@ export const schoolAdminApi = apiSlice.injectEndpoints({
         body: changes,
       }),
     }),
-    // Verify edit token
-    verifyEditToken: builder.query<ResponseDto<{ changes: Partial<School>; school: School }>, string>({
-      query: (token) => `/school-admin/school/verify-edit-token/${token}`,
+    // Verify edit token (POST to avoid token exposure in URL)
+    verifyEditToken: builder.mutation<ResponseDto<{ changes: Partial<School>; school: School }>, string>({
+      query: (token) => ({
+        url: `/school-admin/school/verify-edit-token`,
+        method: 'POST',
+        body: { token },
+      }),
     }),
     // Get school admin dashboard
     getSchoolAdminDashboard: builder.query<ResponseDto<SchoolDashboard>, string | undefined>({
@@ -2980,7 +2984,7 @@ export const {
   useUploadSchoolLogoMutation,
   useUpdateMySchoolMutation,
   useRequestEditTokenMutation,
-  useVerifyEditTokenQuery,
+  useVerifyEditTokenMutation,
   useGetSchoolAdminDashboardQuery, 
   useGetStaffListQuery,
   useGetStaffMemberQuery,

@@ -14,30 +14,30 @@
     --agora-accent: #FF532A; /* High-impact orange accent */
     
     /* Typography Sizes - Consistent across app */
-    --text-page-title: 1.5rem; /* 32px - Page titles (h1) */
-    --text-page-subtitle: 1rem; /* 16px - Page subtitles */
-    --text-section-title: 1.25rem; /* 20px - Section titles (h2) */
-    --text-card-title: 1.125rem; /* 18px - Card titles */
+    --text-page-title: 1.5rem; /* 24px - Page titles (h1) */
+    --text-page-subtitle: .9rem; /* 16px - Page subtitles */
+    --text-section-title: .9rem; /* 16px - Section titles (p tags) - smaller than page title, bigger than body */
+    --text-card-title: 1rem; /* 18px - Card titles */
     --text-body: 0.875rem; /* 14px - Body text */
     --text-small: 0.75rem; /* 12px - Small text */
-    --text-stat-value: 1.75rem; /* 28px - Stat card values */
+    --text-stat-value: 1.5rem; /* 28px - Stat card values */
     --text-stat-label: 0.875rem; /* 14px - Stat card labels */
     
     /* Component Sizes */
-    --stat-card-padding: .375rem; /* 6px - Stat card padding */
-    --stat-icon-size: 1.25rem; /* 20px - Stat card icon size */
-    --card-padding: 1.25rem; /* 20px - Standard card padding */
+    --stat-card-padding: .1rem; /* 16px - Reduced Stat card padding */
+    --stat-icon-size: 1rem; /* 20px - Stat card icon size */
+    --card-padding: .1rem; /* 20px - Standard card padding */
     --card-padding-large: 1.5rem; /* 24px - Large card padding */
     
     /* Dark Mode Colors - PRAX IQ inspired dark theme */
-    --dark-bg: #10151b; /* Dark grey background (same for sidebar and main) */
-    --dark-surface: #151a23; /* Slightly lighter for cards */
-    --dark-border: #1a1f2e; /* Border color for demarcation */
-    --dark-input: #1e2433; /* Dark bluish grey for inputs */
+    --dark-bg: #0B0E11; /* Darker bg */
+    --dark-surface: #11141d; /* Darker card surface */
+    --dark-border: #161b26; /* Darker border */
+    --dark-input: #1a202e; /* Dark bluish grey for inputs */
     --dark-text-primary: #ffffff; /* White text for better contrast */
     --dark-text-secondary: #9ca3af; /* Secondary text - grey */
     --dark-text-muted: #6b7280; /* Muted text */
-    --dark-hover: #1f2937; /* Hover background - subtle grey */
+    --dark-hover: #1a202e; /* Hover background - subtle grey */
   }
 
   /* Border colors are applied via Tailwind classes, not globally */

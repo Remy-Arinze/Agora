@@ -72,10 +72,10 @@ export function ActivityLog({ activities, onViewAll }: ActivityLogProps) {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-3">
         <div>
-          <CardTitle className="text-lg font-semibold text-light-text-primary dark:text-white">
+          <CardTitle className="font-semibold text-light-text-primary dark:text-white" style={{ fontSize: 'var(--text-section-title)' }}>
             Activity Log
           </CardTitle>
-          <p className="text-sm text-light-text-secondary dark:text-[#9ca3af] mt-1">
+          <p className="text-light-text-secondary dark:text-[#9ca3af] mt-1" style={{ fontSize: 'var(--text-body)' }}>
             Recent platform activities and events
           </p>
         </div>
@@ -86,7 +86,7 @@ export function ActivityLog({ activities, onViewAll }: ActivityLogProps) {
       <CardContent>
         {displayActivities.length === 0 ? (
           <div className="text-center py-8">
-            <p className="text-sm text-light-text-secondary dark:text-[#9ca3af]">
+            <p className="text-light-text-secondary dark:text-[#9ca3af]" style={{ fontSize: 'var(--text-body)' }}>
               No recent activity
             </p>
           </div>
@@ -111,14 +111,14 @@ export function ActivityLog({ activities, onViewAll }: ActivityLogProps) {
                 {/* Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2 mb-1">
-                    <h4 className="font-medium text-sm text-light-text-primary dark:text-white">
+                    <h4 className="font-medium text-light-text-primary dark:text-white" style={{ fontSize: 'var(--text-body)' }}>
                       {activity.type}
                     </h4>
-                    <span className="text-xs text-light-text-muted dark:text-[#6b7280] flex-shrink-0">
+                    <span className="text-light-text-muted dark:text-[#6b7280] flex-shrink-0" style={{ fontSize: 'var(--text-small)' }}>
                       {formatTimestamp(activity.timestamp)}
                     </span>
                   </div>
-                  <p className="text-sm text-light-text-secondary dark:text-[#9ca3af] leading-relaxed">
+                  <p className="text-light-text-secondary dark:text-[#9ca3af] leading-relaxed" style={{ fontSize: 'var(--text-body)' }}>
                     {activity.description}
                   </p>
                 </div>
@@ -132,7 +132,8 @@ export function ActivityLog({ activities, onViewAll }: ActivityLogProps) {
             variant="ghost"
             size="sm"
             onClick={onViewAll}
-            className="w-full mt-4 text-sm text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+            className="w-full mt-4 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+            style={{ fontSize: 'var(--text-body)' }}
           >
             View Detailed Analysis
             <ArrowRight className="h-4 w-4 ml-2" />

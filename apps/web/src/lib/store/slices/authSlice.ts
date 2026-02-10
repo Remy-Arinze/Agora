@@ -13,6 +13,7 @@ interface AuthState {
     accountStatus: string;
     firstName?: string | null;
     lastName?: string | null;
+    profileImage?: string | null; // Profile image URL for SUPER_ADMIN
     // Profile context from login
     profileId?: string | null;  // For SCHOOL_ADMIN: adminId, for TEACHER: teacherId
     publicId?: string | null;   // Public ID used for login

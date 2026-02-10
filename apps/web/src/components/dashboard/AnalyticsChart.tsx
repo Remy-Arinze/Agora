@@ -107,15 +107,15 @@ export function AnalyticsChart({
         };
         
         return (
-          <PieChart margin={{ top: 10, right: 120, bottom: 10, left: 10 }}>
+          <PieChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
             <Pie
               data={pieData}
-              cx="40%"
+              cx="35%"
               cy="50%"
               labelLine={false}
               label={renderCustomLabel}
-              outerRadius={type === 'donut' ? 80 : 100}
-              innerRadius={type === 'donut' ? 40 : 0}
+              outerRadius={type === 'donut' ? 70 : 85}
+              innerRadius={type === 'donut' ? 35 : 0}
               fill="#8884d8"
               dataKey="value"
             >
@@ -141,15 +141,17 @@ export function AnalyticsChart({
               verticalAlign="middle"
               align="right"
               wrapperStyle={{ 
-                paddingLeft: '20px',
-                fontSize: '12px',
-                lineHeight: '1.8'
+                paddingLeft: '10px',
+                fontSize: '11px',
+                lineHeight: '1.6',
+                width: 'auto',
+                maxWidth: '50%'
               }}
-              iconSize={12}
+              iconSize={10}
               formatter={(value, entry: any) => {
                 const percent = pieTotal > 0 ? ((entry.payload.value / pieTotal) * 100).toFixed(1) : '0';
                 return (
-                  <span style={{ fontSize: '12px', color: '#e5e7eb' }}>
+                  <span style={{ fontSize: '11px', color: '#e5e7eb' }}>
                     {value} <span style={{ color: '#9ca3af', marginLeft: '4px' }}>({percent}%)</span>
                   </span>
                 );
@@ -272,19 +274,21 @@ export function AnalyticsChart({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg font-semibold text-white dark:text-white mb-1">
+        <CardTitle className="font-semibold text-white dark:text-white mb-1" style={{ fontSize: 'var(--text-section-title)' }}>
           {title}
         </CardTitle>
         {description && (
-          <p className="text-sm text-[#9ca3af] dark:text-[#9ca3af] mt-1">
+          <p className="text-[#9ca3af] dark:text-[#9ca3af] mt-1" style={{ fontSize: 'var(--text-body)' }}>
             {description}
           </p>
         )}
       </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={220}>
-          {renderChart()}
-        </ResponsiveContainer>
+      <CardContent className="overflow-hidden">
+        <div className="w-full" style={{ minHeight: '220px', maxHeight: '220px' }}>
+          <ResponsiveContainer width="100%" height={220}>
+            {renderChart()}
+          </ResponsiveContainer>
+        </div>
       </CardContent>
     </Card>
   );

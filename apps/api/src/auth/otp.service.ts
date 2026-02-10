@@ -2,8 +2,8 @@ import {
   Injectable,
   BadRequestException,
   Logger,
-  TooManyRequestsException,
 } from '@nestjs/common';
+import { ThrottlerException } from '@nestjs/throttler';
 import { PrismaService } from '../database/prisma.service';
 import { EmailService } from '../email/email.service';
 import { randomBytes } from 'crypto';
@@ -49,7 +49,7 @@ export class OtpService {
     });
 
     if (recentRequests >= this.MAX_OTP_REQUESTS_PER_HOUR) {
-      throw new TooManyRequestsException(
+      throw new ThrottlerException(
         'Too many OTP requests. Please try again later.',
       );
     }

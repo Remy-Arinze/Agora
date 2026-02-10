@@ -1,7 +1,10 @@
 import { Module, NestModule, MiddlewareConsumer, RequestMethod } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { APP_GUARD } from '@nestjs/core';
+import { ThrottlerModule, ThrottlerStorage } from '@nestjs/throttler';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { Reflector } from '@nestjs/core';
+import { ThrottlerWithHeadersGuard } from './common/guards/throttler-with-headers.guard';
+import { ThrottlerHeadersInterceptor } from './common/interceptors/throttler-headers.interceptor';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DatabaseModule } from './database/database.module';
@@ -25,6 +28,9 @@ import { PublicModule } from './public/public.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { AiModule } from './ai/ai.module';
 import { PaymentsModule } from './payments/payments.module';
+import { ErrorsModule } from './operations/errors/errors.module';
+import { APP_FILTER } from '@nestjs/core';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 
 @Module({
   imports: [
@@ -60,14 +66,25 @@ import { PaymentsModule } from './payments/payments.module';
     SubscriptionsModule,
     AiModule,
     PaymentsModule,
+    ErrorsModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
-    // Apply rate limiting globally
+    // Apply enhanced rate limiting globally with user-based tracking and headers
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: ThrottlerWithHeadersGuard,
+    },
+    // Add rate limit headers to all responses
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: ThrottlerHeadersInterceptor,
+    },
+    // Register exception filter as provider to enable dependency injection
+    {
+      provide: APP_FILTER,
+      useClass: HttpExceptionFilter,
     },
   ],
 })

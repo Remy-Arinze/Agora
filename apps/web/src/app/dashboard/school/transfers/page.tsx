@@ -112,7 +112,7 @@ function HistoricalGradesModal({
             {/* Student Information Card */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2">
                   <GraduationCap className="h-5 w-5" />
                   Student Information
                 </CardTitle>
@@ -146,7 +146,7 @@ function HistoricalGradesModal({
             {/* Academic Records Section */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2">
                   <Award className="h-5 w-5" />
                   Academic Records
                   <span className="text-sm font-normal text-light-text-secondary dark:text-dark-text-secondary">
@@ -672,10 +672,10 @@ export default function TransfersPage() {
         >
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
+              <h1 className="font-bold text-light-text-primary dark:text-dark-text-primary mb-2" style={{ fontSize: 'var(--text-page-title)' }}>
                 Student Transfers
               </h1>
-              <p className="text-light-text-secondary dark:text-dark-text-secondary">
+              <p className="text-light-text-secondary dark:text-dark-text-secondary" style={{ fontSize: 'var(--text-page-subtitle)' }}>
                 Manage incoming and outgoing student transfers
               </p>
             </div>
@@ -1281,7 +1281,7 @@ export default function TransfersPage() {
               {/* Student Information Card */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2">
                     <GraduationCap className="h-5 w-5" />
                     Student Information
                   </CardTitle>
@@ -1317,7 +1317,7 @@ export default function TransfersPage() {
               {/* Academic Records Section - Grouped by Class Level */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2">
                     <Award className="h-5 w-5" />
                     Academic Records
                     <span className="text-sm font-normal text-light-text-secondary dark:text-dark-text-secondary">

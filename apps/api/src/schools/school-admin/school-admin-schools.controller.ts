@@ -10,7 +10,9 @@ import {
   Query,
   Body,
   Param,
+  UnauthorizedException,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import {
@@ -181,6 +183,7 @@ export class SchoolAdminSchoolsController {
   }
 
   @Post('school/request-edit-token')
+  @Throttle({ default: { ttl: 3600000, limit: 5 } }) // 5 requests per hour
   @RequirePermission(PermissionResource.OVERVIEW, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Request verification token for sensitive school profile changes' })
   @ApiResponse({
@@ -191,11 +194,20 @@ export class SchoolAdminSchoolsController {
     @Request() req: any,
     @Body() changes: UpdateSchoolDto
   ): Promise<ResponseDto<{ message: string }>> {
-    const result = await this.schoolAdminSchoolsService.requestEditToken(req.user, changes);
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.connection?.remoteAddress || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    
+    const result = await this.schoolAdminSchoolsService.requestEditToken(
+      req.user,
+      changes,
+      ipAddress,
+      userAgent
+    );
     return ResponseDto.ok({ message: result.message }, result.message);
   }
 
-  @Get('school/verify-edit-token/:token')
+  @Post('school/verify-edit-token')
+  @Throttle({ default: { ttl: 60000, limit: 10 } }) // 10 verifications per minute
   @RequirePermission(PermissionResource.OVERVIEW, PermissionType.ADMIN)
   @ApiOperation({ summary: 'Verify edit token and get proposed changes' })
   @ApiResponse({
@@ -204,9 +216,33 @@ export class SchoolAdminSchoolsController {
   })
   async verifyEditToken(
     @Request() req: any,
-    @Param('token') token: string
+    @Body() body: { token: string }
   ): Promise<ResponseDto<{ changes: UpdateSchoolDto; school: SchoolDto }>> {
-    const data = await this.schoolAdminSchoolsService.verifyEditToken(token, req.user);
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.connection?.remoteAddress || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    
+    const data = await this.schoolAdminSchoolsService.verifyEditToken(
+      body.token,
+      req.user,
+      ipAddress,
+      userAgent
+    );
     return ResponseDto.ok(data, 'Token verified successfully');
+  }
+
+  @Post('school/cleanup-expired-tokens')
+  @RequirePermission(PermissionResource.OVERVIEW, PermissionType.ADMIN)
+  @ApiOperation({ summary: 'Cleanup expired and used tokens (admin only)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Tokens cleaned up successfully',
+  })
+  async cleanupExpiredTokens(@Request() req: any): Promise<ResponseDto<{ count: number }>> {
+    // Only allow super admins or system to call this
+    if (req.user.role !== 'SUPER_ADMIN') {
+      throw new UnauthorizedException('Only super admins can cleanup tokens');
+    }
+    const count = await this.schoolAdminSchoolsService.cleanupExpiredTokens();
+    return ResponseDto.ok({ count }, `Cleaned up ${count} expired tokens`);
   }
 }

@@ -21,7 +21,7 @@ export function AutoGenerateButton({
   label = 'Auto-Generate',
   loadingLabel = 'Generating...',
   variant = 'secondary',
-  size = 'md',
+  size = 'sm',
   className = '',
 }: AutoGenerateButtonProps) {
   return (

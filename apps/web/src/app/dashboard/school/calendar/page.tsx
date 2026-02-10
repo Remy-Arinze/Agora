@@ -420,10 +420,10 @@ export default function CalendarPage() {
       <div className="w-full">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
+          <h1 className="font-bold text-light-text-primary dark:text-dark-text-primary mb-2" style={{ fontSize: 'var(--text-page-title)' }}>
             Calendar
           </h1>
-          <p className="text-light-text-secondary dark:text-dark-text-secondary">
+          <p className="text-light-text-secondary dark:text-dark-text-secondary" style={{ fontSize: 'var(--text-page-subtitle)' }}>
             Unified schedule: Timetable slots and one-off events
           </p>
               </div>
@@ -512,45 +512,53 @@ export default function CalendarPage() {
           color: #1f2937;
         }
         .rbc-custom-calendar .rbc-header {
-          border-bottom: 1px solid #e5e7eb;
+          border-bottom: 1px solid var(--light-border);
           padding: 10px 3px;
           font-weight: 600;
           color: #1f2937;
         }
         .rbc-custom-calendar .rbc-month-view,
         .rbc-custom-calendar .rbc-time-view {
-          border-color: #d1d5db;
+          border-color: var(--light-border);
+          background-color: white;
         }
         .rbc-custom-calendar .rbc-day-bg {
-          border-color: #e5e7eb;
+          border-color: var(--light-border);
+          background-color: white;
         }
         .rbc-custom-calendar .rbc-month-row {
-          border-color: #e5e7eb;
+          border-color: var(--light-border);
         }
         .rbc-custom-calendar .rbc-time-slot {
-          border-top-color: #e5e7eb;
+          border-top-color: var(--light-border);
         }
         .rbc-custom-calendar .rbc-time-header-gutter {
-          border-right-color: #e5e7eb;
+          border-right-color: var(--light-border);
         }
         .rbc-custom-calendar .rbc-time-content {
-          border-top-color: #e5e7eb;
+          border-top-color: var(--light-border);
+          background-color: white;
         }
         .rbc-custom-calendar .rbc-time-gutter {
-          border-right-color: #e5e7eb;
+          border-right-color: var(--light-border);
           color: #6b7280;
+          background-color: #f9fafb;
         }
         .rbc-custom-calendar .rbc-day-slot .rbc-time-slot {
-          border-top-color: #f3f4f6;
+          border-top-color: var(--light-border);
         }
         .rbc-custom-calendar .rbc-timeslot-group {
-          border-bottom-color: #e5e7eb;
+          border-bottom-color: var(--light-border);
         }
         .rbc-custom-calendar .rbc-today {
-          background-color: #dbeafe !important;
+          background-color: #2490FD !important;
         }
         .rbc-custom-calendar .rbc-today .rbc-day-bg {
-          background-color: #dbeafe !important;
+          background-color: #2490FD !important;
+        }
+        .rbc-custom-calendar .rbc-today .rbc-date-cell,
+        .rbc-custom-calendar .rbc-today .rbc-date-cell a {
+          color: white !important;
         }
         .rbc-custom-calendar .rbc-current-time-indicator {
           background-color: #2563eb;
@@ -577,58 +585,62 @@ export default function CalendarPage() {
           color: #f3f4f6;
         }
         .dark .rbc-custom-calendar .rbc-header {
-          border-bottom: 1px solid #4b5563;
+          border-bottom: 1px solid var(--dark-border);
           color: #f3f4f6 !important;
-          background-color: #1f2937;
+          background-color: var(--dark-surface);
         }
         .dark .rbc-custom-calendar .rbc-header span {
           color: #f3f4f6 !important;
         }
         .dark .rbc-custom-calendar .rbc-month-view,
         .dark .rbc-custom-calendar .rbc-time-view {
-          border-color: #4b5563;
-          background-color: #111827;
+          border-color: var(--dark-border);
+          background-color: var(--dark-surface);
         }
         .dark .rbc-custom-calendar .rbc-day-bg {
-          border-color: #4b5563;
-          background-color: #111827;
+          border-color: var(--dark-border);
+          background-color: var(--dark-surface);
         }
         .dark .rbc-custom-calendar .rbc-month-row {
-          border-color: #4b5563;
+          border-color: var(--dark-border);
         }
         .dark .rbc-custom-calendar .rbc-time-slot {
-          border-top-color: #4b5563;
+          border-top-color: var(--dark-border);
         }
         .dark .rbc-custom-calendar .rbc-time-header-gutter {
-          border-right-color: #4b5563;
-          background-color: #1f2937;
+          border-right-color: var(--dark-border);
+          background-color: var(--dark-surface);
         }
         .dark .rbc-custom-calendar .rbc-time-header-content {
-          border-left-color: #4b5563;
+          border-left-color: var(--dark-border);
         }
         .dark .rbc-custom-calendar .rbc-time-content {
-          border-top-color: #4b5563;
-          background-color: #111827;
+          border-top-color: var(--dark-border);
+          background-color: var(--dark-surface);
         }
         .dark .rbc-custom-calendar .rbc-time-gutter {
-          border-right-color: #4b5563;
+          border-right-color: var(--dark-border);
           color: #9ca3af;
-          background-color: #1f2937;
+          background-color: var(--dark-surface);
         }
         .dark .rbc-custom-calendar .rbc-time-gutter .rbc-timeslot-group {
           color: #9ca3af;
         }
         .dark .rbc-custom-calendar .rbc-day-slot .rbc-time-slot {
-          border-top-color: #374151;
+          border-top-color: var(--dark-border);
         }
         .dark .rbc-custom-calendar .rbc-timeslot-group {
-          border-bottom-color: #374151;
+          border-bottom-color: var(--dark-border);
         }
         .dark .rbc-custom-calendar .rbc-today {
-          background-color: #1e3a5f !important;
+          background-color: #2490FD !important;
         }
         .dark .rbc-custom-calendar .rbc-today .rbc-day-bg {
-          background-color: #1e3a5f !important;
+          background-color: #2490FD !important;
+        }
+        .dark .rbc-custom-calendar .rbc-today .rbc-date-cell,
+        .dark .rbc-custom-calendar .rbc-today .rbc-date-cell a {
+          color: white !important;
         }
         .dark .rbc-custom-calendar .rbc-current-time-indicator {
           background-color: #ef4444;

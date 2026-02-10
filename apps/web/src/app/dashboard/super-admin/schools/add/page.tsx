@@ -224,7 +224,7 @@ export default function AddSchoolPage() {
             <p className="text-red-600 dark:text-red-400 mb-4">
               Failed to load school data. The school ID might be invalid.
             </p>
-            <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+            <p className="text-light-text-secondary dark:text-dark-text-secondary" style={{ fontSize: 'var(--text-body)' }}>
               URL param: {schoolId}
             </p>
           </div>
@@ -251,10 +251,10 @@ export default function AddSchoolPage() {
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back
           </Button>
-          <h1 className="text-4xl font-bold text-light-text-primary dark:text-dark-text-primary mb-2">
+          <h1 className="font-bold text-light-text-primary dark:text-dark-text-primary mb-2" style={{ fontSize: 'var(--text-page-title)' }}>
             {isEditMode ? 'Edit School' : 'Add New School'}
           </h1>
-          <p className="text-light-text-secondary dark:text-dark-text-secondary">
+          <p className="text-light-text-secondary dark:text-dark-text-secondary" style={{ fontSize: 'var(--text-page-subtitle)' }}>
             {isEditMode 
               ? 'Update school information and institution levels'
               : 'Create a new school and optionally assign a principal and administrators'
@@ -277,7 +277,7 @@ export default function AddSchoolPage() {
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                    <label className="block font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2" style={{ fontSize: 'var(--text-body)' }}>
                       School Name *
                     </label>
                     <Input
@@ -289,9 +289,9 @@ export default function AddSchoolPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                    <label className="block font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2" style={{ fontSize: 'var(--text-body)' }}>
                       Subdomain
-                      <span className="text-xs text-light-text-muted dark:text-dark-text-muted ml-1">(Optional - will be auto-generated if not provided)</span>
+                      <span className="text-light-text-muted dark:text-dark-text-muted ml-1" style={{ fontSize: 'var(--text-small)' }}>(Optional - will be auto-generated if not provided)</span>
                     </label>
                     <Input
                       name="subdomain"
@@ -299,12 +299,12 @@ export default function AddSchoolPage() {
                       onChange={handleChange}
                       placeholder="schoolname"
                     />
-                    <p className="text-xs text-light-text-muted dark:text-dark-text-muted mt-1">
+                    <p className="text-light-text-muted dark:text-dark-text-muted mt-1" style={{ fontSize: 'var(--text-small)' }}>
                       {formData.subdomain ? `${formData.subdomain}.agora.com` : 'Will be auto-generated from school name'}
                     </p>
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                    <label className="block font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2" style={{ fontSize: 'var(--text-body)' }}>
                       Address *
                     </label>
                     <Input
@@ -316,7 +316,7 @@ export default function AddSchoolPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                    <label className="block font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2" style={{ fontSize: 'var(--text-body)' }}>
                       City *
                     </label>
                     <Input
@@ -328,7 +328,7 @@ export default function AddSchoolPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                    <label className="block font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2" style={{ fontSize: 'var(--text-body)' }}>
                       State *
                     </label>
                     <Input
@@ -340,7 +340,7 @@ export default function AddSchoolPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                    <label className="block font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2" style={{ fontSize: 'var(--text-body)' }}>
                       Country
                     </label>
                     <Input
@@ -351,7 +351,7 @@ export default function AddSchoolPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                    <label className="block font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2" style={{ fontSize: 'var(--text-body)' }}>
                       Phone
                     </label>
                     <Input
@@ -363,7 +363,7 @@ export default function AddSchoolPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                    <label className="block font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2" style={{ fontSize: 'var(--text-body)' }}>
                       Email
                     </label>
                     <Input
@@ -403,7 +403,7 @@ export default function AddSchoolPage() {
                         <label htmlFor="primary" className="block text-sm font-medium text-light-text-primary dark:text-dark-text-primary cursor-pointer">
                           Primary
                         </label>
-                        <p className="text-xs text-light-text-muted dark:text-dark-text-muted mt-1">
+                        <p className="text-light-text-muted dark:text-dark-text-muted mt-1" style={{ fontSize: 'var(--text-small)' }}>
                           Nursery, Primary 1-6
                         </p>
                       </div>
@@ -420,7 +420,7 @@ export default function AddSchoolPage() {
                         <label htmlFor="secondary" className="block text-sm font-medium text-light-text-primary dark:text-dark-text-primary cursor-pointer">
                           Secondary
                         </label>
-                        <p className="text-xs text-light-text-muted dark:text-dark-text-muted mt-1">
+                        <p className="text-light-text-muted dark:text-dark-text-muted mt-1" style={{ fontSize: 'var(--text-small)' }}>
                           JSS 1-3, SSS 1-3
                         </p>
                       </div>
@@ -437,7 +437,7 @@ export default function AddSchoolPage() {
                         <label htmlFor="tertiary" className="block text-sm font-medium text-light-text-primary dark:text-dark-text-primary cursor-pointer">
                           Tertiary
                         </label>
-                        <p className="text-xs text-light-text-muted dark:text-dark-text-muted mt-1">
+                        <p className="text-light-text-muted dark:text-dark-text-muted mt-1" style={{ fontSize: 'var(--text-small)' }}>
                           University, College, Polytechnic
                         </p>
                       </div>
@@ -466,7 +466,7 @@ export default function AddSchoolPage() {
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                    <label className="block font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2" style={{ fontSize: 'var(--text-body)' }}>
                       First Name
                     </label>
                     <Input
@@ -477,7 +477,7 @@ export default function AddSchoolPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                    <label className="block font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2" style={{ fontSize: 'var(--text-body)' }}>
                       Last Name
                     </label>
                     <Input
@@ -488,7 +488,7 @@ export default function AddSchoolPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                    <label className="block font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2" style={{ fontSize: 'var(--text-body)' }}>
                       Email
                     </label>
                     <Input
@@ -500,7 +500,7 @@ export default function AddSchoolPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                    <label className="block font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2" style={{ fontSize: 'var(--text-body)' }}>
                       Phone
                     </label>
                     <Input
@@ -557,7 +557,7 @@ export default function AddSchoolPage() {
                             <p className="font-medium text-light-text-primary dark:text-dark-text-primary">
                               {admin.firstName} {admin.lastName}
                             </p>
-                            <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                            <p className="text-light-text-secondary dark:text-dark-text-secondary" style={{ fontSize: 'var(--text-body)' }}>
                               {admin.email} • {admin.role.replace('_', ' ')}
                             </p>
                           </div>
@@ -580,7 +580,7 @@ export default function AddSchoolPage() {
                   <div className="p-4 bg-light-bg dark:bg-dark-surface rounded-lg border border-light-border dark:border-dark-border space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                        <label className="block font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2" style={{ fontSize: 'var(--text-body)' }}>
                           First Name *
                         </label>
                         <Input
@@ -591,7 +591,7 @@ export default function AddSchoolPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                        <label className="block font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2" style={{ fontSize: 'var(--text-body)' }}>
                           Last Name *
                         </label>
                         <Input
@@ -602,7 +602,7 @@ export default function AddSchoolPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                        <label className="block font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2" style={{ fontSize: 'var(--text-body)' }}>
                           Email *
                         </label>
                         <Input
@@ -614,7 +614,7 @@ export default function AddSchoolPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                        <label className="block font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2" style={{ fontSize: 'var(--text-body)' }}>
                           Phone *
                         </label>
                         <Input
@@ -626,7 +626,7 @@ export default function AddSchoolPage() {
                         />
                       </div>
                       <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2">
+                        <label className="block font-medium text-light-text-secondary dark:text-dark-text-secondary mb-2" style={{ fontSize: 'var(--text-body)' }}>
                           Role *
                         </label>
                         <select

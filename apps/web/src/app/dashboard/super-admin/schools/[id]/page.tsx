@@ -38,7 +38,7 @@ import { PersonCard } from '@/components/schools/PersonCard';
 import { PersonDetailModal } from '@/components/schools/PersonDetailModal';
 import { PersonFormModal } from '@/components/schools/PersonFormModal';
 import { TeacherConvertModal } from '@/components/schools/TeacherConvertModal';
-import { PluginCard } from '@/components/schools/PluginCard';
+import { ErrorsSection } from '@/components/schools/ErrorsSection';
 import {
   UserCog,
   Users,
@@ -470,7 +470,7 @@ export default function SchoolDetailPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <UserCog className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
+                <CardTitle className="font-bold text-light-text-primary dark:text-dark-text-primary" style={{ fontSize: 'var(--text-section-title)' }}>
                   School Principal
                 </CardTitle>
               </div>
@@ -510,7 +510,7 @@ export default function SchoolDetailPage() {
                 schoolId={schoolId}
               />
             ) : (
-              <div className="text-center py-8 text-gray-500 dark:text-dark-text-secondary">
+              <div className="text-center py-8 text-gray-500 dark:text-dark-text-secondary" style={{ fontSize: 'var(--text-body)' }}>
                 No principal assigned. Click &quot;Add Principal&quot; to assign one.
               </div>
             )}
@@ -523,7 +523,7 @@ export default function SchoolDetailPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Users className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
+                <CardTitle className="font-bold text-light-text-primary dark:text-dark-text-primary" style={{ fontSize: 'var(--text-section-title)' }}>
                   School Administrators ({admins.length})
                 </CardTitle>
               </div>
@@ -571,7 +571,7 @@ export default function SchoolDetailPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <GraduationCap className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                <CardTitle className="text-xl font-bold text-light-text-primary dark:text-dark-text-primary">
+                <CardTitle className="font-bold text-light-text-primary dark:text-dark-text-primary" style={{ fontSize: 'var(--text-section-title)' }}>
                   Teachers ({teachers.length})
                 </CardTitle>
               </div>
@@ -617,19 +617,43 @@ export default function SchoolDetailPage() {
           <CardHeader>
             <div className="flex items-center gap-3">
               <Sparkles className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-              <CardTitle className="text-xl font-bold text-gray-900 dark:text-dark-text-primary">
+              <CardTitle className="font-bold text-gray-900 dark:text-dark-text-primary" style={{ fontSize: 'var(--text-section-title)' }}>
                 Plugins ({addons.filter((a) => a.status === 'active').length})
               </CardTitle>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-6">
-              {addons.map((addon, index) => (
-                <PluginCard key={addon.id} plugin={addon} index={index} />
-              ))}
-            </div>
+            {addons.length === 0 ? (
+              <p className="text-gray-500 dark:text-dark-text-secondary text-center py-4" style={{ fontSize: 'var(--text-body)' }}>
+                No plugins subscribed
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {addons.map((addon) => {
+                  const Icon = addon.icon;
+                  return (
+                    <div
+                      key={addon.id}
+                      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg ${
+                        addon.status === 'active'
+                          ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-400 border border-blue-200 dark:border-blue-800'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-700'
+                      }`}
+                    >
+                      <Icon className="h-4 w-4" />
+                      <span className="font-medium" style={{ fontSize: 'var(--text-body)' }}>{addon.name}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
+
+        {/* Errors & Logs Section */}
+        <div className="mt-8">
+          <ErrorsSection schoolId={schoolId} />
+        </div>
 
         {/* Modals */}
         <PersonDetailModal

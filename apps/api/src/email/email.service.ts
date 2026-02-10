@@ -54,6 +54,26 @@ export class EmailService {
     });
   }
 
+  /**
+   * Get frontend URL with auto-detection based on NODE_ENV
+   * In development, defaults to localhost unless FRONTEND_URL is explicitly set
+   * In production, defaults to production URL unless FRONTEND_URL is explicitly set
+   */
+  private getFrontendUrl(): string {
+    const explicitFrontendUrl = this.configService.get<string>('FRONTEND_URL');
+    const nodeEnv = this.configService.get<string>('NODE_ENV') || 'development';
+    
+    // If FRONTEND_URL is explicitly set, use it
+    if (explicitFrontendUrl) {
+      return explicitFrontendUrl;
+    }
+    
+    // Otherwise, auto-detect based on environment
+    return nodeEnv === 'production' 
+      ? 'https://agora-schools.com' 
+      : 'http://localhost:3000';
+  }
+
   async sendPasswordResetEmail(
     email: string,
     name: string,
@@ -63,8 +83,10 @@ export class EmailService {
     publicId?: string, // Legacy parameter for backward compatibility
     schoolName?: string // Legacy parameter for backward compatibility
   ): Promise<void> {
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
-    const resetUrl = `${frontendUrl}/auth/reset-password?token=${resetToken}`;
+    const frontendUrl = this.getFrontendUrl();
+    // Normalize URL - remove trailing slash if present to prevent double slashes
+    const normalizedUrl = frontendUrl.replace(/\/+$/, '');
+    const resetUrl = `${normalizedUrl}/auth/reset-password?token=${resetToken}`;
 
     const fromEmail =
       this.configService.get<string>('MAIL_FROM') ||
@@ -138,8 +160,8 @@ export class EmailService {
       replyTo: this.getReplyTo(),
       to: email,
       subject: isPasswordReset
-        ? 'Reset Your Password - Agora Education Platform'
-        : 'Set Your Password - Agora Education Platform',
+        ? 'Reset Your Password - Agora school space'
+        : 'Set Your Password - Agora school space',
       headers: this.getEmailHeaders(),
       html: `
         <!DOCTYPE html>
@@ -151,7 +173,7 @@ export class EmailService {
         </head>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background-color: #f9fafb; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; border-bottom: 2px solid #e5e7eb;">
-            <h1 style="color: #1f2937; margin: 0; font-size: 24px;">Agora Education Platform</h1>
+            <h1 style="color: #1f2937; margin: 0; font-size: 24px;">Agora school space</h1>
           </div>
           <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
             ${
@@ -159,12 +181,12 @@ export class EmailService {
                 ? `
             <h2 style="color: #1f2937; margin-top: 0;">Password Reset Request</h2>
             <p>Hello ${name},</p>
-            <p>We received a request to reset your password for your <strong>${role}</strong> account on the Agora Education Platform.</p>
+            <p>We received a request to reset your password for your <strong>${role}</strong> account on the Agora school space.</p>
             <p>If you didn't make this request, you can safely ignore this email. Your password will remain unchanged.</p>
             `
                 : `
             <h2 style="color: #1f2937; margin-top: 0;">Welcome, ${name}!</h2>
-            <p>Your account has been created${schoolName ? ` at <strong>${schoolName}</strong>` : ''} on the Agora Education Platform as a <strong>${role}</strong>.</p>
+            <p>Your account has been created${schoolName ? ` at <strong>${schoolName}</strong>` : ''} on the Agora school space as a <strong>${role}</strong>.</p>
             <p>To get started, please set your password using the link below.</p>
             `
             }
@@ -195,7 +217,7 @@ export class EmailService {
             }
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
             <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
-              © ${new Date().getFullYear()} Agora Education Platform. All rights reserved.
+              © ${new Date().getFullYear()} Agora school space. All rights reserved.
             </p>
           </div>
         </body>
@@ -241,14 +263,14 @@ export class EmailService {
       throw new Error('Email configuration error: No FROM address');
     }
 
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl = this.getFrontendUrl();
     const loginUrl = `${frontendUrl}/auth/login`;
 
     const mailOptions = {
       from: this.getFormattedFrom(),
       replyTo: this.getReplyTo(),
       to: email,
-      subject: 'Password Successfully Changed - Agora Education Platform',
+      subject: 'Password Successfully Changed - Agora school space',
       headers: this.getEmailHeaders(),
       html: `
         <!DOCTYPE html>
@@ -260,7 +282,7 @@ export class EmailService {
         </head>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background-color: #f9fafb; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; border-bottom: 2px solid #e5e7eb;">
-            <h1 style="color: #1f2937; margin: 0; font-size: 24px;">Agora Education Platform</h1>
+            <h1 style="color: #1f2937; margin: 0; font-size: 24px;">Agora school space</h1>
           </div>
           <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
             <h2 style="color: #1f2937; margin-top: 0;">Password Successfully Changed</h2>
@@ -285,7 +307,7 @@ export class EmailService {
             </p>
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
             <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
-              © ${new Date().getFullYear()} Agora Education Platform. All rights reserved.
+              © ${new Date().getFullYear()} Agora school space. All rights reserved.
             </p>
           </div>
         </body>
@@ -335,14 +357,14 @@ export class EmailService {
       throw new Error('Email configuration error: No FROM address');
     }
 
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl = this.getFrontendUrl();
     const loginUrl = `${frontendUrl}/auth/login`;
 
     const mailOptions = {
       from: this.getFormattedFrom(),
       replyTo: this.getReplyTo(),
       to: email,
-      subject: `Role Change Notification - ${newRole} - Agora Education Platform`,
+      subject: `Role Change Notification - ${newRole} - Agora school space`,
       headers: this.getEmailHeaders(),
       html: `
         <!DOCTYPE html>
@@ -354,7 +376,7 @@ export class EmailService {
         </head>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background-color: #f9fafb; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; border-bottom: 2px solid #e5e7eb;">
-            <h1 style="color: #1f2937; margin: 0; font-size: 24px;">Agora Education Platform</h1>
+            <h1 style="color: #1f2937; margin: 0; font-size: 24px;">Agora school space</h1>
           </div>
           <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
             <h2 style="color: #1f2937; margin-top: 0;">Role Change Notification</h2>
@@ -383,7 +405,7 @@ export class EmailService {
             </p>
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
             <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
-              © ${new Date().getFullYear()} Agora Education Platform. All rights reserved.
+              © ${new Date().getFullYear()} Agora school space. All rights reserved.
             </p>
           </div>
         </body>
@@ -447,7 +469,7 @@ export class EmailService {
         </head>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background-color: #f9fafb; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; border-bottom: 2px solid #e5e7eb;">
-            <h1 style="color: #1f2937; margin: 0; font-size: 24px;">Agora Education Platform</h1>
+            <h1 style="color: #1f2937; margin: 0; font-size: 24px;">Agora school space</h1>
           </div>
           <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
             <h2 style="color: #1f2937; margin-top: 0;">Transfer Access Code Generated</h2>
@@ -482,7 +504,7 @@ export class EmailService {
             </p>
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
             <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
-              © ${new Date().getFullYear()} Agora Education Platform. All rights reserved.
+              © ${new Date().getFullYear()} Agora school space. All rights reserved.
             </p>
           </div>
         </body>
@@ -543,7 +565,7 @@ export class EmailService {
         </head>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background-color: #f9fafb; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; border-bottom: 2px solid #e5e7eb;">
-            <h1 style="color: #1f2937; margin: 0; font-size: 24px;">Agora Education Platform</h1>
+            <h1 style="color: #1f2937; margin: 0; font-size: 24px;">Agora school space</h1>
           </div>
           <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
             <h2 style="color: #1f2937; margin-top: 0;">Transfer Access Code Revoked</h2>
@@ -565,7 +587,7 @@ export class EmailService {
             </p>
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
             <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
-              © ${new Date().getFullYear()} Agora Education Platform. All rights reserved.
+              © ${new Date().getFullYear()} Agora school space. All rights reserved.
             </p>
           </div>
         </body>
@@ -615,7 +637,7 @@ export class EmailService {
       throw new Error('Email configuration error: No FROM address');
     }
 
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl = this.getFrontendUrl();
     const loginUrl = `${frontendUrl}/auth/login`;
 
     const mailOptions = {
@@ -634,7 +656,7 @@ export class EmailService {
         </head>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background-color: #f9fafb; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; border-bottom: 2px solid #e5e7eb;">
-            <h1 style="color: #1f2937; margin: 0; font-size: 24px;">Agora Education Platform</h1>
+            <h1 style="color: #1f2937; margin: 0; font-size: 24px;">Agora school space</h1>
           </div>
           <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
             <h2 style="color: #1f2937; margin-top: 0;">Class Assignment Notification</h2>
@@ -661,7 +683,7 @@ export class EmailService {
             </p>
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
             <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
-              © ${new Date().getFullYear()} Agora Education Platform. All rights reserved.
+              © ${new Date().getFullYear()} Agora school space. All rights reserved.
             </p>
           </div>
         </body>
@@ -727,7 +749,7 @@ export class EmailService {
         </head>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background-color: #f9fafb; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; border-bottom: 2px solid #e5e7eb;">
-            <h1 style="color: #1f2937; margin: 0; font-size: 24px;">Agora Education Platform</h1>
+            <h1 style="color: #1f2937; margin: 0; font-size: 24px;">Agora school space</h1>
           </div>
           <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
             <h2 style="color: #1f2937; margin-top: 0;">Class Assignment Removed</h2>
@@ -749,7 +771,7 @@ export class EmailService {
             </p>
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
             <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
-              © ${new Date().getFullYear()} Agora Education Platform. All rights reserved.
+              © ${new Date().getFullYear()} Agora school space. All rights reserved.
             </p>
           </div>
         </body>
@@ -797,7 +819,7 @@ export class EmailService {
       throw new Error('Email configuration error: No FROM address');
     }
 
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl = this.getFrontendUrl();
     const loginUrl = `${frontendUrl}/auth/login`;
 
     // Group permissions by resource
@@ -832,7 +854,7 @@ export class EmailService {
         </head>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background-color: #f9fafb; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; border-bottom: 2px solid #e5e7eb;">
-            <h1 style="color: #1f2937; margin: 0; font-size: 24px;">Agora Education Platform</h1>
+            <h1 style="color: #1f2937; margin: 0; font-size: 24px;">Agora school space</h1>
           </div>
           <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
             <h2 style="color: #1f2937; margin-top: 0;">Permissions Updated</h2>
@@ -855,7 +877,7 @@ export class EmailService {
             </p>
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
             <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
-              © ${new Date().getFullYear()} Agora Education Platform. All rights reserved.
+              © ${new Date().getFullYear()} Agora school space. All rights reserved.
             </p>
           </div>
         </body>
@@ -898,7 +920,7 @@ export class EmailService {
 
     return {
       'Message-ID': messageId,
-      'X-Mailer': 'Agora Education Platform',
+      'X-Mailer': 'Agora school space',
       'List-Unsubscribe': `<mailto:${replyToEmail}?subject=unsubscribe>`,
       'Precedence': 'bulk',
       'X-Auto-Response-Suppress': 'All', // Prevents auto-replies
@@ -914,7 +936,7 @@ export class EmailService {
       this.configService.get<string>('SMTP_FROM') ||
       this.configService.get<string>('MAIL_USER') ||
       this.configService.get<string>('SMTP_USER');
-    const fromName = this.configService.get<string>('MAIL_FROM_NAME') || 'Agora Education Platform';
+    const fromName = this.configService.get<string>('MAIL_FROM_NAME') || 'Agora school space';
     return `"${fromName}" <${fromEmail}>`;
   }
 
@@ -927,7 +949,7 @@ export class EmailService {
       this.configService.get<string>('SMTP_FROM') ||
       this.configService.get<string>('MAIL_USER') ||
       this.configService.get<string>('SMTP_USER');
-    return this.configService.get<string>('MAIL_REPLY_TO') || fromEmail;
+    return this.configService.get<string>('MAIL_REPLY_TO') || fromEmail || '';
   }
 
   async verifyConnection(): Promise<boolean> {
@@ -965,7 +987,7 @@ export class EmailService {
       throw new Error('Email configuration error: No FROM address');
     }
 
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl = this.getFrontendUrl();
     const loginUrl = `${frontendUrl}/auth/login`;
 
     const mailOptions = {
@@ -1008,7 +1030,7 @@ export class EmailService {
             </p>
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
             <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
-              © ${new Date().getFullYear()} Agora Education Platform. All rights reserved.
+              © ${new Date().getFullYear()} Agora school space. All rights reserved.
             </p>
           </div>
         </body>
@@ -1049,7 +1071,7 @@ export class EmailService {
       throw new Error('Email configuration error: No FROM address');
     }
 
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl = this.getFrontendUrl();
     const loginUrl = `${frontendUrl}/auth/login`;
 
     const mailOptions = {
@@ -1092,7 +1114,7 @@ export class EmailService {
             </p>
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
             <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
-              © ${new Date().getFullYear()} Agora Education Platform. All rights reserved.
+              © ${new Date().getFullYear()} Agora school space. All rights reserved.
             </p>
           </div>
         </body>
@@ -1131,7 +1153,7 @@ export class EmailService {
       throw new Error('Email configuration error: No FROM address');
     }
 
-    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const frontendUrl = this.getFrontendUrl();
     const loginUrl = `${frontendUrl}/auth/login`;
 
     const mailOptions = {
@@ -1177,7 +1199,7 @@ export class EmailService {
             </p>
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
             <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
-              © ${new Date().getFullYear()} Agora Education Platform. All rights reserved.
+              © ${new Date().getFullYear()} Agora school space. All rights reserved.
             </p>
           </div>
         </body>
@@ -1323,7 +1345,7 @@ export class EmailService {
         </head>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background-color: #f9fafb; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; border-bottom: 2px solid #e5e7eb;">
-            <h1 style="color: #1f2937; margin: 0; font-size: 24px;">Agora Education Platform</h1>
+            <h1 style="color: #1f2937; margin: 0; font-size: 24px;">Agora school space</h1>
           </div>
           <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
             <h2 style="color: #1f2937; margin-top: 0;">Verify School Profile Changes</h2>
@@ -1358,7 +1380,7 @@ export class EmailService {
             
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
             <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
-              © ${new Date().getFullYear()} Agora Education Platform. All rights reserved.
+              © ${new Date().getFullYear()} Agora school space. All rights reserved.
             </p>
           </div>
         </body>
@@ -1400,7 +1422,7 @@ export class EmailService {
     }
 
     // Get display name and reply-to from environment
-    const fromName = this.configService.get<string>('MAIL_FROM_NAME') || 'Agora Education Platform';
+    const fromName = this.configService.get<string>('MAIL_FROM_NAME') || 'Agora school space';
     const replyTo = this.configService.get<string>('MAIL_REPLY_TO') || fromEmail;
 
     // Generate unique Message-ID
@@ -1417,7 +1439,7 @@ This code will expire in 10 minutes. Do not share this code with anyone.
 
 If you didn't request this code, please ignore this email or contact support immediately.
 
-© ${new Date().getFullYear()} Agora Education Platform. All rights reserved.`;
+© ${new Date().getFullYear()} Agora school space. All rights reserved.`;
 
     const mailOptions = {
       from: this.getFormattedFrom(),
@@ -1438,7 +1460,7 @@ If you didn't request this code, please ignore this email or contact support imm
         </head>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
           <div style="background-color: #f9fafb; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; border-bottom: 2px solid #e5e7eb;">
-            <h1 style="color: #1f2937; margin: 0; font-size: 24px;">Agora Education Platform</h1>
+            <h1 style="color: #1f2937; margin: 0; font-size: 24px;">Agora school space</h1>
           </div>
           <div style="background-color: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px;">
             <h2 style="color: #1f2937; margin-top: 0;">Login Verification Code</h2>
@@ -1463,7 +1485,7 @@ If you didn't request this code, please ignore this email or contact support imm
             
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
             <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
-              © ${new Date().getFullYear()} Agora Education Platform. All rights reserved.
+              © ${new Date().getFullYear()} Agora school space. All rights reserved.
             </p>
           </div>
         </body>

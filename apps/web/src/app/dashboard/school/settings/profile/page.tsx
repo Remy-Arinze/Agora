@@ -16,7 +16,7 @@ import {
   useGetMySchoolQuery,
   useUpdateMySchoolMutation,
   useRequestEditTokenMutation,
-  useVerifyEditTokenQuery,
+  useVerifyEditTokenMutation,
 } from '@/lib/store/api/schoolAdminApi';
 import type { School } from '@/lib/store/api/schoolsApi';
 import { Save, Mail, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
@@ -31,11 +31,7 @@ export default function SchoolProfilePage() {
 
   const [updateSchool, { isLoading: isUpdating }] = useUpdateMySchoolMutation();
   const [requestToken, { isLoading: isRequestingToken }] = useRequestEditTokenMutation();
-
-  // Verify token if present in URL
-  const { data: tokenData, isLoading: isLoadingToken } = useVerifyEditTokenQuery(token || '', {
-    skip: !token,
-  });
+  const [verifyToken, { isLoading: isLoadingToken }] = useVerifyEditTokenMutation();
 
   const [formData, setFormData] = useState<Partial<School>>({
     name: '',
@@ -76,30 +72,43 @@ export default function SchoolProfilePage() {
     }
   }, [school]);
 
-  // Handle token verification from URL
+  // Handle token verification from URL (using POST to avoid token exposure)
   useEffect(() => {
-    if (token && tokenData?.data) {
-      setHasTokenVerification(true);
-      setVerificationToken(token);
-      // Pre-fill form with verified changes
-      const verifiedChanges = tokenData.data.changes as any;
-      if (verifiedChanges.name) setFormData((prev) => ({ ...prev, name: verifiedChanges.name }));
-      if (verifiedChanges.address) setFormData((prev) => ({ ...prev, address: verifiedChanges.address }));
-      if (verifiedChanges.city) setFormData((prev) => ({ ...prev, city: verifiedChanges.city }));
-      if (verifiedChanges.state) setFormData((prev) => ({ ...prev, state: verifiedChanges.state }));
-      if (verifiedChanges.phone) setFormData((prev) => ({ ...prev, phone: verifiedChanges.phone }));
-      if (verifiedChanges.email) setFormData((prev) => ({ ...prev, email: verifiedChanges.email }));
-      if (verifiedChanges.levels && typeof verifiedChanges.levels === 'object') {
-        const levels = verifiedChanges.levels;
-        setSchoolLevels({
-          primary: levels.primary ?? false,
-          secondary: levels.secondary ?? false,
-          tertiary: levels.tertiary ?? false,
+    if (token && !hasTokenVerification && !isLoadingToken) {
+      verifyToken(token)
+        .unwrap()
+        .then((response) => {
+          if (response.data) {
+            setHasTokenVerification(true);
+            setVerificationToken(token);
+            // Pre-fill form with verified changes
+            const verifiedChanges = response.data.changes as any;
+            if (verifiedChanges.name) setFormData((prev) => ({ ...prev, name: verifiedChanges.name }));
+            if (verifiedChanges.address) setFormData((prev) => ({ ...prev, address: verifiedChanges.address }));
+            if (verifiedChanges.city) setFormData((prev) => ({ ...prev, city: verifiedChanges.city }));
+            if (verifiedChanges.state) setFormData((prev) => ({ ...prev, state: verifiedChanges.state }));
+            if (verifiedChanges.phone) setFormData((prev) => ({ ...prev, phone: verifiedChanges.phone }));
+            if (verifiedChanges.email) setFormData((prev) => ({ ...prev, email: verifiedChanges.email }));
+            if (verifiedChanges.levels && typeof verifiedChanges.levels === 'object') {
+              const levels = verifiedChanges.levels;
+              setSchoolLevels({
+                primary: levels.primary ?? false,
+                secondary: levels.secondary ?? false,
+                tertiary: levels.tertiary ?? false,
+              });
+            }
+            toast.success('Verification token verified. You can now apply the changes.');
+            // Remove token from URL for security
+            router.replace('/dashboard/school/settings/profile');
+          }
+        })
+        .catch((error) => {
+          toast.error(error?.data?.message || 'Failed to verify token');
+          // Remove invalid token from URL
+          router.replace('/dashboard/school/settings/profile');
         });
-      }
-      toast.success('Verification token verified. You can now apply the changes.');
     }
-  }, [token, tokenData]);
+  }, [token, hasTokenVerification, isLoadingToken, verifyToken, router]);
 
   const handleInputChange = (field: keyof School, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));

@@ -95,8 +95,6 @@ export const DesktopSidebar = ({
       animate={{
         width: animate ? (open ? "250px" : "80px") : "250px",
       }}
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
       {...props}
     >
       {children}
@@ -204,7 +202,7 @@ export const SidebarLink = ({
             opacity: animate ? (open ? 1 : 0) : 1,
           }}
           className={cn(
-            "text-sm group-hover/sidebar:translate-x-1 transition duration-150 whitespace-pre inline-block !p-0 !m-0",
+            "text-[13px] group-hover/sidebar:translate-x-1 transition duration-150 whitespace-pre inline-block !p-0 !m-0",
             isActive ? "text-white" : "text-[#9ca3af] group-hover/sidebar:text-white"
           )}
         >

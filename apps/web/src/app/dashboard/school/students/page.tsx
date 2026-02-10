@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
@@ -15,6 +15,7 @@ import { GraduationCap, Plus, FileSpreadsheet, Search, Grid3x3, List, MoreVertic
 import { useGetStudentsQuery, useGetMySchoolQuery, useResendPasswordResetForStudentMutation } from '@/lib/store/api/schoolAdminApi';
 import { useSchoolType } from '@/hooks/useSchoolType';
 import { StudentImportModal } from '@/components/modals/StudentImportModal';
+import { StudentAdmissionModal } from '@/components/modals/StudentAdmissionModal';
 import { PermissionGate } from '@/components/permissions/PermissionGate';
 import { PermissionResource, PermissionType } from '@/hooks/usePermissions';
 import { cn } from '@/lib/utils';
@@ -55,14 +56,15 @@ const StudentAvatar = ({
   }
   
   return (
-    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 flex items-center justify-center text-white font-semibold text-sm border-2 border-[#1a1f2e] dark:border-[#1a1f2e] shadow-sm flex-shrink-0">
+      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 flex items-center justify-center text-white font-semibold border-2 border-[#1a1f2e] dark:border-[#1a1f2e] shadow-sm flex-shrink-0" style={{ fontSize: 'var(--text-body)' }}>
       {getInitials(firstName, lastName)}
     </div>
   );
 };
 
-export default function StudentsPage() {
+function StudentsPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -70,7 +72,36 @@ export default function StudentsPage() {
   const [filter, setFilter] = useState<FilterType>('all');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showAdmissionModal, setShowAdmissionModal] = useState(false);
+  const [transferId, setTransferId] = useState<string | null>(null);
   const [resendingStudentId, setResendingStudentId] = useState<string | null>(null);
+
+  // Check for new student param or transfer param
+  useEffect(() => {
+    const newParam = searchParams.get('new');
+    const fromTransfer = searchParams.get('fromTransfer');
+    
+    if (newParam === 'true') {
+      setShowAdmissionModal(true);
+      if (fromTransfer) {
+        setTransferId(fromTransfer);
+      }
+    }
+  }, [searchParams]);
+
+  // Handle modal close and URL cleanup
+  const handleAdmissionModalClose = () => {
+    setShowAdmissionModal(false);
+    setTransferId(null);
+    
+    // Remove query params without refreshing
+    const newSearchParams = new URLSearchParams(searchParams.toString());
+    newSearchParams.delete('new');
+    newSearchParams.delete('fromTransfer');
+    
+    const newPath = `${window.location.pathname}${newSearchParams.toString() ? `?${newSearchParams.toString()}` : ''}`;
+    router.replace(newPath);
+  };
 
   // Get school ID and school type
   const { data: schoolResponse } = useGetMySchoolQuery();
@@ -235,11 +266,11 @@ export default function StudentsPage() {
           </div>
           <PermissionGate resource={PermissionResource.STUDENTS} type={PermissionType.WRITE}>
             <div className="flex items-center gap-3">
-              <Button variant="accent" size="md" className="bg-[#f97316] hover:bg-[#ea580c] text-white" onClick={() => router.push('/dashboard/school/admissions?new=true')}>
+              <Button variant="primary" size="sm" onClick={() => setShowAdmissionModal(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Student
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setShowImportModal(true)}>
+              <Button variant="secondary" size="sm" onClick={() => setShowImportModal(true)}>
                 <FileSpreadsheet className="h-4 w-4 mr-2" />
                 Import CSV
               </Button>
@@ -351,7 +382,7 @@ export default function StudentsPage() {
             </div>
 
             {/* Total Count */}
-            <span className="text-sm text-light-text-secondary dark:text-[#9ca3af]">
+            <span className="text-light-text-secondary dark:text-[#9ca3af]" style={{ fontSize: 'var(--text-body)' }}>
               {pagination?.total || 0}
             </span>
           </div>
@@ -359,9 +390,9 @@ export default function StudentsPage() {
 
         {/* Students Grid/List */}
         <div>
-          <h2 className="font-semibold text-light-text-primary dark:text-white mb-4" style={{ fontSize: 'var(--text-section-title)' }}>
+          <p className="font-medium text-light-text-secondary dark:text-dark-text-secondary mb-4" style={{ fontSize: 'var(--text-section-title)' }}>
             All Students
-          </h2>
+          </p>
 
           {filteredStudents.length === 0 ? (
             <Card>
@@ -401,7 +432,7 @@ export default function StudentsPage() {
                                 <h3 className="font-semibold text-light-text-primary dark:text-white" style={{ fontSize: 'var(--text-card-title)' }}>
                                   {student.firstName} {student.middleName ? `${student.middleName} ` : ''}{student.lastName}
                                 </h3>
-                                <span className={cn('px-2.5 py-0.5 rounded-full text-xs font-medium', statusConfig.className)}>
+                                <span className={cn('px-2.5 py-0.5 rounded-full font-medium', statusConfig.className)} style={{ fontSize: 'var(--text-small)' }}>
                                   <StatusIcon className="h-3 w-3 inline mr-1" />
                                   {statusConfig.label}
                                 </span>
@@ -461,23 +492,23 @@ export default function StudentsPage() {
                                 <h3 className="font-medium text-light-text-primary dark:text-white">
                                   {student.firstName} {student.middleName ? `${student.middleName} ` : ''}{student.lastName}
                                 </h3>
-                                <span className={cn('px-2.5 py-0.5 rounded-full text-xs font-medium', statusConfig.className)}>
+                                <span className={cn('px-2.5 py-0.5 rounded-full font-medium', statusConfig.className)} style={{ fontSize: 'var(--text-small)' }}>
                                   <StatusIcon className="h-3 w-3 inline mr-1" />
                                   {statusConfig.label}
                                 </span>
                               </div>
-                              <p className="text-sm text-light-text-secondary dark:text-[#9ca3af]">
+                              <p className="text-light-text-secondary dark:text-[#9ca3af]" style={{ fontSize: 'var(--text-body)' }}>
                                 {student.uid} • {student.enrollment?.classLevel || 'N/A'}
                               </p>
                             </div>
                           </div>
                           <div className="flex items-center gap-6">
                             <div className="text-right">
-                              <p className="text-sm font-medium text-light-text-primary dark:text-white">
+                              <p className="font-medium text-light-text-primary dark:text-white" style={{ fontSize: 'var(--text-body)' }}>
                                 {new Date(student.dateOfBirth).toLocaleDateString()}
                               </p>
                             </div>
-                            <span className="text-sm text-blue-600 dark:text-blue-400 font-medium">
+                            <span className="text-blue-600 dark:text-blue-400 font-medium" style={{ fontSize: 'var(--text-body)' }}>
                               View →
                             </span>
                           </div>
@@ -514,7 +545,26 @@ export default function StudentsPage() {
             schoolId={schoolId}
           />
         )}
+
+        {/* Admission Modal */}
+        <StudentAdmissionModal
+          isOpen={showAdmissionModal}
+          onClose={handleAdmissionModalClose}
+          fromTransferId={transferId}
+        />
       </div>
     </ProtectedRoute>
+  );
+}
+
+export default function StudentsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[400px]">
+        <LoadingSpinner size="lg" />
+      </div>
+    }>
+      <StudentsPageContent />
+    </Suspense>
   );
 }

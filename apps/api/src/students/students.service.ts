@@ -97,7 +97,15 @@ export class StudentsService {
     if (schoolType) {
       // If no classes/classArms found for this school type, return empty result
       if (classIds.length === 0 && classLevels.length === 0 && classArmIds.length === 0) {
-        return new PaginatedResponseDto([], 0, page, limit);
+        const emptyResponse = new PaginatedResponseDto<StudentWithEnrollmentDto>();
+        emptyResponse.data = [];
+        emptyResponse.total = 0;
+        emptyResponse.page = page;
+        emptyResponse.limit = limit;
+        emptyResponse.totalPages = 0;
+        emptyResponse.hasNext = false;
+        emptyResponse.hasPrev = false;
+        return emptyResponse;
       }
 
       // Add the type filter
@@ -150,23 +158,26 @@ export class StudentsService {
       }),
     ]);
 
-    return new PaginatedResponseDto(
-      students.map((student) => ({
-        ...this.toDto(student),
-        enrollment: student.enrollments[0]
-          ? {
-              id: student.enrollments[0].id,
-              classLevel: student.enrollments[0].classLevel,
-              academicYear: student.enrollments[0].academicYear,
-              enrollmentDate: student.enrollments[0].enrollmentDate.toISOString(),
-              school: student.enrollments[0].school,
-            }
-          : undefined,
-      })),
-      total,
-      page,
-      limit
-    );
+    const response = new PaginatedResponseDto<StudentWithEnrollmentDto>();
+    response.data = students.map((student) => ({
+      ...this.toDto(student),
+      enrollment: student.enrollments[0]
+        ? {
+            id: student.enrollments[0].id,
+            classLevel: student.enrollments[0].classLevel,
+            academicYear: student.enrollments[0].academicYear,
+            enrollmentDate: student.enrollments[0].enrollmentDate.toISOString(),
+            school: student.enrollments[0].school,
+          }
+        : undefined,
+    }));
+    response.total = total;
+    response.page = page;
+    response.limit = limit;
+    response.totalPages = Math.ceil(total / limit);
+    response.hasNext = page < response.totalPages;
+    response.hasPrev = page > 1;
+    return response;
   }
 
   async findOne(tenantId: string, id: string): Promise<StudentWithEnrollmentDto> {

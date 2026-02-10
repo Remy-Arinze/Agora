@@ -107,7 +107,6 @@ export function useSidebarConfig(): {
         { label: currentType === 'TERTIARY' ? 'Courses' : 'Subjects', href: '/dashboard/school/subjects', icon: BookMarked, permission: PermissionResource.SUBJECTS },
         { label: 'Timetables', href: '/dashboard/school/timetables', icon: Clock, permission: PermissionResource.TIMETABLES },
         { label: 'Calendar', href: '/dashboard/school/calendar', icon: Calendar, permission: PermissionResource.CALENDAR },
-        { label: 'Admissions', href: '/dashboard/school/admissions', icon: UserPlus, permission: PermissionResource.ADMISSIONS },
         { label: 'Transfers', href: '/dashboard/school/transfers', icon: ArrowRightLeft, permission: PermissionResource.ADMISSIONS }, // Transfers use same permission as admissions
         { label: 'Subscription', href: '/dashboard/school/subscription', icon: CreditCard, permission: PermissionResource.SUBSCRIPTIONS },
         { label: 'Profile', href: '/dashboard/profile', icon: User }

@@ -9,6 +9,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { ShadowUserGuard } from './guards/shadow-user.guard';
 import { DatabaseModule } from '../database/database.module';
 import { EmailModule } from '../email/email.module';
+import { CloudinaryModule } from '../storage/cloudinary/cloudinary.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { EmailModule } from '../email/email.module';
     }),
     DatabaseModule,
     EmailModule,
+    CloudinaryModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, OtpService, JwtStrategy, ShadowUserGuard],

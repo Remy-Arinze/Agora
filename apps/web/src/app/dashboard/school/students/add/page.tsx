@@ -8,7 +8,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { motion } from 'framer-motion';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, Loader2 } from 'lucide-react';
 import { BackButton } from '@/components/ui/BackButton';
 import { 
   useGetMySchoolQuery, 
@@ -16,6 +16,7 @@ import {
   useGetClassesQuery,
   useGetClassArmsQuery,
   useGetClassLevelsQuery,
+  useGenerateDefaultClassesMutation,
 } from '@/lib/store/api/schoolAdminApi';
 import { studentAdmissionFormSchema } from '@/lib/validations/school-forms';
 import { useSchoolType } from '@/hooks/useSchoolType';
@@ -34,27 +35,45 @@ export default function AddStudentPage() {
   const { currentType } = useSchoolType();
 
   // Get classes for the current school type
-  const { data: classesResponse } = useGetClassesQuery(
+  const { 
+    data: classesResponse, 
+    isLoading: isLoadingClasses,
+    isFetching: isFetchingClasses 
+  } = useGetClassesQuery(
     { schoolId: schoolId!, type: currentType || undefined },
     { skip: !schoolId }
   );
   const classes = classesResponse?.data || [];
+  const hasClasses = classes.length > 0;
+  const classesLoaded = !isLoadingClasses && !isFetchingClasses;
 
   // Get ClassArms for PRIMARY/SECONDARY schools
   const isPrimaryOrSecondary = currentType === 'PRIMARY' || currentType === 'SECONDARY';
-  const { data: classArmsResponse } = useGetClassArmsQuery(
+  const { 
+    data: classArmsResponse,
+    isLoading: isLoadingClassArms,
+    isFetching: isFetchingClassArms 
+  } = useGetClassArmsQuery(
     { schoolId: schoolId!, schoolType: currentType || undefined },
     { skip: !schoolId || !isPrimaryOrSecondary }
   );
   const classArms = classArmsResponse?.data || [];
+  const hasClassArms = classArms.length > 0;
+  const classArmsLoaded = !isLoadingClassArms && !isFetchingClassArms;
   const schoolUsesClassArms = classArms.length > 0;
 
   // Get ClassLevels for grouping ClassArms
-  const { data: classLevelsResponse } = useGetClassLevelsQuery(
-    { schoolId: schoolId!, schoolType: currentType || undefined },
+  const { 
+    data: classLevelsResponse,
+    isLoading: isLoadingClassLevels,
+    isFetching: isFetchingClassLevels 
+  } = useGetClassLevelsQuery(
+    { schoolId: schoolId! },
     { skip: !schoolId || !isPrimaryOrSecondary }
   );
   const classLevels = classLevelsResponse?.data || [];
+  const hasClassLevels = classLevels.length > 0;
+  const classLevelsLoaded = !isLoadingClassLevels && !isFetchingClassLevels;
 
   // Group ClassArms by ClassLevel
   const classArmsByLevel = classLevels.reduce((acc, level) => {
@@ -64,6 +83,25 @@ export default function AddStudentPage() {
 
   // Student admission mutation
   const [admitStudent] = useAdmitStudentMutation();
+  
+  // Generate default classes mutation
+  const [generateDefaultClasses, { isLoading: isGeneratingClasses }] = useGenerateDefaultClassesMutation();
+
+  // Handler for generating classes
+  const handleGenerateClasses = async () => {
+    if (!schoolId || !currentType) return;
+    
+    try {
+      await generateDefaultClasses({
+        schoolId,
+        schoolType: currentType,
+      }).unwrap();
+      toast.success('Default classes generated successfully!');
+      // The query will automatically refetch due to cache invalidation
+    } catch (error: any) {
+      toast.error(error?.data?.message || 'Failed to generate classes');
+    }
+  };
 
   const [formData, setFormData] = useState({
     firstName: '',
@@ -87,43 +125,39 @@ export default function AddStudentPage() {
     medicalNotes: '',
   });
 
-  // Validate form using Zod
-  const validateForm = (): boolean => {
-    try {
-      studentAdmissionFormSchema.parse(formData);
-      setErrors({});
-      return true;
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        const fieldErrors: Record<string, string> = {};
-        const errorMessages: string[] = [];
-        
-        error.errors.forEach((err) => {
-          const fieldName = err.path[0] as string;
-          fieldErrors[fieldName] = err.message;
-          errorMessages.push(err.message);
+  // Validate and sanitize form using Zod
+  const validateForm = (): { isValid: boolean; sanitizedData?: z.infer<typeof studentAdmissionFormSchema> } => {
+    const result = studentAdmissionFormSchema.safeParse(formData);
+    
+    if (!result.success) {
+      const fieldErrors: Record<string, string> = {};
+      const errorMessages: string[] = [];
+      
+      result.error.issues.forEach((err) => {
+        const fieldName = err.path[0] as string;
+        fieldErrors[fieldName] = err.message;
+        errorMessages.push(err.message);
+      });
+      
+      setErrors(fieldErrors);
+      
+      // Show toast with errors
+      if (errorMessages.length === 1) {
+        toast.error(errorMessages[0]);
+      } else if (errorMessages.length > 1) {
+        toast.error(`Please fix ${errorMessages.length} errors in the form`, {
+          duration: 4000,
         });
-        
-        setErrors(fieldErrors);
-        
-        // Show toast with errors
-        if (errorMessages.length === 1) {
-          toast.error(errorMessages[0]);
-        } else if (errorMessages.length > 1) {
-          toast.error(`Please fix ${errorMessages.length} errors in the form`, {
-            duration: 4000,
-          });
-          setSubmitError(errorMessages[0]);
-        } else {
-          toast.error('Please check the form for errors');
-        }
+        setSubmitError(errorMessages[0]);
       } else {
-        const errorMessage = error instanceof Error ? error.message : 'Validation failed. Please check your input.';
-        setSubmitError(errorMessage);
-        toast.error(errorMessage);
+        toast.error('Please check the form for errors');
       }
-      return false;
+      
+      return { isValid: false };
     }
+    
+    setErrors({});
+    return { isValid: true, sanitizedData: result.data };
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -131,7 +165,8 @@ export default function AddStudentPage() {
     setSubmitError(null);
     setErrors({});
 
-    if (!validateForm()) {
+    const validation = validateForm();
+    if (!validation.isValid || !validation.sanitizedData) {
       return;
     }
 
@@ -144,27 +179,29 @@ export default function AddStudentPage() {
     setIsLoading(true);
 
     try {
+      // Use sanitized data from Zod validation
+      const sanitized = validation.sanitizedData;
       const studentData = {
-        firstName: formData.firstName.trim(),
-        middleName: formData.middleName?.trim() || undefined,
-        lastName: formData.lastName.trim(),
-        dateOfBirth: formData.dateOfBirth,
-        email: formData.email?.trim() || undefined,
-        phone: formData.phone.trim(),
-        address: formData.address?.trim() || undefined,
-        classLevel: formData.classArmId ? undefined : formData.classLevel, // Only send if no ClassArm
-        classArmId: formData.classArmId || undefined,
-        academicYear: undefined, // Will be auto-determined by backend
-        parentName: formData.parentName.trim(),
-        parentPhone: formData.parentPhone.trim(),
-        parentEmail: formData.parentEmail?.trim() || undefined,
-        parentRelationship: formData.parentRelationship.trim(),
-        bloodGroup: formData.bloodGroup?.trim() || undefined,
-        allergies: formData.allergies?.trim() || undefined,
-        medications: formData.medications?.trim() || undefined,
-        emergencyContact: formData.emergencyContact?.trim() || undefined,
-        emergencyContactPhone: formData.emergencyContactPhone?.trim() || undefined,
-        medicalNotes: formData.medicalNotes?.trim() || undefined,
+        firstName: sanitized.firstName,
+        middleName: sanitized.middleName,
+        lastName: sanitized.lastName,
+        dateOfBirth: sanitized.dateOfBirth,
+        email: sanitized.email,
+        phone: sanitized.phone,
+        address: sanitized.address,
+        classLevel: sanitized.classArmId ? undefined : sanitized.classLevel, // Only send if no ClassArm
+        classArmId: sanitized.classArmId,
+        academicYear: sanitized.academicYear, // Will be auto-determined by backend if undefined
+        parentName: sanitized.parentName,
+        parentPhone: sanitized.parentPhone,
+        parentEmail: sanitized.parentEmail,
+        parentRelationship: sanitized.parentRelationship,
+        bloodGroup: sanitized.bloodGroup,
+        allergies: sanitized.allergies,
+        medications: sanitized.medications,
+        emergencyContact: sanitized.emergencyContact,
+        emergencyContactPhone: sanitized.emergencyContactPhone,
+        medicalNotes: sanitized.medicalNotes,
       };
 
       const result = await admitStudent({
@@ -379,48 +416,79 @@ export default function AddStudentPage() {
                       <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
                         ClassArm *
                       </label>
-                      <select
-                        name="classArmId"
-                        value={formData.classArmId}
-                        onChange={(e) => {
-                          const selectedArmId = e.target.value;
-                          const selectedArm = classArms.find(arm => arm.id === selectedArmId);
-                          setFormData({ 
-                            ...formData, 
-                            classArmId: selectedArmId,
-                            classLevel: selectedArm ? selectedArm.classLevelName : '', // Auto-populate classLevel
-                          });
-                          if (errors.classArmId) setErrors({ ...errors, classArmId: '' });
-                        }}
-                        className={`w-full px-4 py-2 border rounded-lg bg-light-card dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 ${
-                          errors.classArmId
-                            ? 'border-red-500 dark:border-red-500'
-                            : 'border-light-border dark:border-dark-border'
-                        }`}
-                        required
-                      >
-                        <option value="">Select ClassArm</option>
-                        {classLevels.map((level) => {
-                          const armsForLevel = classArmsByLevel[level.id] || [];
-                          if (armsForLevel.length === 0) return null;
-                          return (
-                            <optgroup key={level.id} label={level.name}>
-                              {armsForLevel.map((arm) => (
-                                <option key={arm.id} value={arm.id}>
-                                  {level.name} {arm.name}
-                                  {arm.capacity && ` (${arm.capacity} max)`}
-                                </option>
-                              ))}
-                            </optgroup>
-                          );
-                        })}
-                      </select>
+                      {isLoadingClassArms || isFetchingClassArms || isLoadingClassLevels || isFetchingClassLevels ? (
+                        <div className="w-full px-4 py-2 border border-light-border dark:border-dark-border rounded-lg bg-light-card dark:bg-dark-surface">
+                          <div className="flex items-center gap-2 text-light-text-secondary dark:text-dark-text-secondary">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>Loading class arms...</span>
+                          </div>
+                        </div>
+                      ) : !hasClassArms && classArmsLoaded && !hasClassLevels && classLevelsLoaded ? (
+                        <div className="space-y-2">
+                          <div className="w-full px-4 py-3 border border-yellow-500/50 dark:border-yellow-500/30 rounded-lg bg-yellow-50/10 dark:bg-yellow-900/10">
+                            <p className="text-sm text-yellow-700 dark:text-yellow-400 mb-2">
+                              No class arms found. You need to create classes first.
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {currentType && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={handleGenerateClasses}
+                                  isLoading={isGeneratingClasses}
+                                >
+                                  Generate Default Classes
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <select
+                          name="classArmId"
+                          value={formData.classArmId}
+                          onChange={(e) => {
+                            const selectedArmId = e.target.value;
+                            const selectedArm = classArms.find(arm => arm.id === selectedArmId);
+                            setFormData({ 
+                              ...formData, 
+                              classArmId: selectedArmId,
+                              classLevel: selectedArm ? selectedArm.classLevelName : '', // Auto-populate classLevel
+                            });
+                            if (errors.classArmId) setErrors({ ...errors, classArmId: '' });
+                          }}
+                          className={`w-full px-4 py-2 border rounded-lg bg-light-card dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 ${
+                            errors.classArmId
+                              ? 'border-red-500 dark:border-red-500'
+                              : 'border-light-border dark:border-dark-border'
+                          }`}
+                          required
+                        >
+                          <option value="">Select ClassArm</option>
+                          {classLevels.map((level) => {
+                            const armsForLevel = classArmsByLevel[level.id] || [];
+                            if (armsForLevel.length === 0) return null;
+                            return (
+                              <optgroup key={level.id} label={level.name}>
+                                {armsForLevel.map((arm) => (
+                                  <option key={arm.id} value={arm.id}>
+                                    {level.name} {arm.name}
+                                    {arm.capacity && ` (${arm.capacity} max)`}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            );
+                          })}
+                        </select>
+                      )}
                       {errors.classArmId && (
                         <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.classArmId}</p>
                       )}
-                      <p className="mt-1 text-xs text-light-text-secondary dark:text-dark-text-secondary">
-                        Select the specific ClassArm (e.g., JSS 1 Gold, JSS 1 Blue)
-                      </p>
+                      {!isLoadingClassArms && !isFetchingClassArms && hasClassArms && (
+                        <p className="mt-1 text-xs text-light-text-secondary dark:text-dark-text-secondary">
+                          Select the specific ClassArm (e.g., JSS 1 Gold, JSS 1 Blue)
+                        </p>
+                      )}
                     </div>
                   ) : (
                     // Class selector for TERTIARY or schools without ClassArms (backward compatibility)
@@ -428,27 +496,56 @@ export default function AddStudentPage() {
                       <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">
                         Class Level *
                       </label>
-                      <select
-                        name="classLevel"
-                        value={formData.classLevel}
-                        onChange={(e) => {
-                          setFormData({ ...formData, classLevel: e.target.value });
-                          if (errors.classLevel) setErrors({ ...errors, classLevel: '' });
-                        }}
-                        className={`w-full px-4 py-2 border rounded-lg bg-light-card dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 ${
-                          errors.classLevel
-                            ? 'border-red-500 dark:border-red-500'
-                            : 'border-light-border dark:border-dark-border'
-                        }`}
-                        required
-                      >
-                        <option value="">Select class level</option>
-                        {classes.map((cls) => (
-                          <option key={cls.id} value={cls.name}>
-                            {cls.name}
-                          </option>
-                        ))}
-                      </select>
+                      {isLoadingClasses || isFetchingClasses ? (
+                        <div className="w-full px-4 py-2 border border-light-border dark:border-dark-border rounded-lg bg-light-card dark:bg-dark-surface">
+                          <div className="flex items-center gap-2 text-light-text-secondary dark:text-dark-text-secondary">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>Loading classes...</span>
+                          </div>
+                        </div>
+                      ) : !hasClasses && classesLoaded ? (
+                        <div className="space-y-2">
+                          <div className="w-full px-4 py-3 border border-yellow-500/50 dark:border-yellow-500/30 rounded-lg bg-yellow-50/10 dark:bg-yellow-900/10">
+                            <p className="text-sm text-yellow-700 dark:text-yellow-400 mb-2">
+                              No classes found. You need to create classes before adding students.
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {currentType && (
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={handleGenerateClasses}
+                                  isLoading={isGeneratingClasses}
+                                >
+                                  Generate Default Classes
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <select
+                          name="classLevel"
+                          value={formData.classLevel}
+                          onChange={(e) => {
+                            setFormData({ ...formData, classLevel: e.target.value });
+                            if (errors.classLevel) setErrors({ ...errors, classLevel: '' });
+                          }}
+                          className={`w-full px-4 py-2 border rounded-lg bg-light-card dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 ${
+                            errors.classLevel
+                              ? 'border-red-500 dark:border-red-500'
+                              : 'border-light-border dark:border-dark-border'
+                          }`}
+                          required
+                        >
+                          <option value="">Select class level</option>
+                          {classes.map((cls) => (
+                            <option key={cls.id} value={cls.name}>
+                              {cls.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                       {errors.classLevel && (
                         <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.classLevel}</p>
                       )}

@@ -54,46 +54,145 @@ export const addAdminFormSchema = z.object({
   employeeId: z.string().optional(),
 });
 
-// Validation schema for student admission
+// Validation schema for student admission with sanitization
 export const studentAdmissionFormSchema = z.object({
-  firstName: z.string().min(1, 'First name is required').min(2, 'First name must be at least 2 characters'),
-  middleName: z.string().optional(),
-  lastName: z.string().min(1, 'Last name is required').min(2, 'Last name must be at least 2 characters'),
-  dateOfBirth: z.string().min(1, 'Date of birth is required').refine(
-    (date) => {
-      const birthDate = new Date(date);
-      const today = new Date();
-      const age = today.getFullYear() - birthDate.getFullYear();
-      const monthDiff = today.getMonth() - birthDate.getMonth();
-      const actualAge = monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate()) ? age - 1 : age;
-      return actualAge >= 3 && actualAge <= 25;
-    },
-    { message: 'Student age must be between 3 and 25 years' }
-  ),
-  email: z.string().email('Invalid email address').optional().or(z.literal('')),
-  phone: z.string().min(1, 'Phone number is required').min(10, 'Phone number must be at least 10 characters'),
-  address: z.string().optional(),
-  classLevel: z.string().min(1, 'Class level is required'),
-  academicYear: z.string().optional(),
-  // Parent/Guardian Information
-  parentName: z.string().min(1, 'Parent/Guardian name is required').min(2, 'Parent/Guardian name must be at least 2 characters'),
-  parentPhone: z.string().min(1, 'Parent/Guardian phone is required').min(10, 'Parent/Guardian phone must be at least 10 characters'),
-  parentEmail: z.string().email('Invalid email address').optional().or(z.literal('')),
-  parentRelationship: z.string().min(1, 'Relationship is required'),
-  // Health Information (Optional)
-  bloodGroup: z.string().optional(),
-  allergies: z.string().optional(),
-  medications: z.string().optional(),
-  emergencyContact: z.string().optional(),
-  emergencyContactPhone: z
-    .union([
-      z.string().min(10, 'Emergency contact phone must be at least 10 characters'),
-      z.literal(''),
-    ])
+  firstName: z
+    .string()
+    .min(1, 'First name is required')
+    .min(2, 'First name must be at least 2 characters')
+    .max(50, 'First name must be at most 50 characters')
+    .transform((val) => sanitizeString(val, 50)),
+  middleName: z
+    .string()
     .optional()
-    .transform((val) => (val === '' ? undefined : val)),
-  medicalNotes: z.string().optional(),
-});
+    .transform((val) => (val ? sanitizeString(val, 50) : undefined)),
+  lastName: z
+    .string()
+    .min(1, 'Last name is required')
+    .min(2, 'Last name must be at least 2 characters')
+    .max(50, 'Last name must be at most 50 characters')
+    .transform((val) => sanitizeString(val, 50)),
+  dateOfBirth: z
+    .string()
+    .min(1, 'Date of birth is required')
+    .refine(
+      (date) => {
+        const birthDate = new Date(date);
+        const today = new Date();
+        const age = today.getFullYear() - birthDate.getFullYear();
+        const monthDiff = today.getMonth() - birthDate.getMonth();
+        const actualAge = monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate()) ? age - 1 : age;
+        return actualAge >= 3 && actualAge <= 25;
+      },
+      { message: 'Student age must be between 3 and 25 years' }
+    ),
+  email: z
+    .string()
+    .optional()
+    .transform((val) => (val && val.trim() ? sanitizeEmail(val) : undefined))
+    .refine(
+      (val) => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val),
+      { message: 'Invalid email address' }
+    ),
+  phone: z
+    .string()
+    .min(1, 'Phone number is required')
+    .transform((val) => sanitizePhone(val))
+    .refine(
+      (val) => val.length >= 10,
+      { message: 'Phone number must be at least 10 characters' }
+    )
+    .refine(
+      (val) => /^\+?[1-9]\d{1,14}$/.test(val),
+      { message: 'Invalid phone format' }
+    ),
+  address: z
+    .string()
+    .optional()
+    .transform((val) => (val ? sanitizeString(val, 500) : undefined)),
+  classLevel: z
+    .string()
+    .optional()
+    .transform((val) => (val ? sanitizeString(val, 100) : undefined)),
+  classArmId: z
+    .string()
+    .optional()
+    .transform((val) => (val && val.trim() ? val.trim() : undefined)),
+  academicYear: z
+    .string()
+    .optional()
+    .transform((val) => (val ? sanitizeString(val, 50) : undefined)),
+  // Parent/Guardian Information
+  parentName: z
+    .string()
+    .min(1, 'Parent/Guardian name is required')
+    .min(2, 'Parent/Guardian name must be at least 2 characters')
+    .max(100, 'Parent/Guardian name must be at most 100 characters')
+    .transform((val) => sanitizeString(val, 100)),
+  parentPhone: z
+    .string()
+    .min(1, 'Parent/Guardian phone is required')
+    .transform((val) => sanitizePhone(val))
+    .refine(
+      (val) => val.length >= 10,
+      { message: 'Parent/Guardian phone must be at least 10 characters' }
+    )
+    .refine(
+      (val) => /^\+?[1-9]\d{1,14}$/.test(val),
+      { message: 'Invalid phone format' }
+    ),
+  parentEmail: z
+    .string()
+    .optional()
+    .transform((val) => (val && val.trim() ? sanitizeEmail(val) : undefined))
+    .refine(
+      (val) => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val),
+      { message: 'Invalid email address' }
+    ),
+  parentRelationship: z
+    .string()
+    .min(1, 'Relationship is required')
+    .transform((val) => sanitizeString(val, 50)),
+  // Health Information (Optional)
+  bloodGroup: z
+    .string()
+    .optional()
+    .transform((val) => (val ? sanitizeString(val, 20) : undefined)),
+  allergies: z
+    .string()
+    .optional()
+    .transform((val) => (val ? sanitizeString(val, 500) : undefined)),
+  medications: z
+    .string()
+    .optional()
+    .transform((val) => (val ? sanitizeString(val, 500) : undefined)),
+  emergencyContact: z
+    .string()
+    .optional()
+    .transform((val) => (val ? sanitizeString(val, 100) : undefined)),
+  emergencyContactPhone: z
+    .string()
+    .optional()
+    .transform((val) => {
+      if (!val || val.trim() === '') return undefined;
+      const sanitized = sanitizePhone(val);
+      return sanitized.length >= 10 ? sanitized : undefined;
+    })
+    .refine(
+      (val) => !val || /^\+?[1-9]\d{1,14}$/.test(val),
+      { message: 'Emergency contact phone must be at least 10 characters if provided' }
+    ),
+  medicalNotes: z
+    .string()
+    .optional()
+    .transform((val) => (val ? sanitizeString(val, 1000) : undefined)),
+}).refine(
+  (data) => data.classArmId || data.classLevel,
+  {
+    message: 'Either Class Level or ClassArm must be selected',
+    path: ['classLevel'], // Show error on classLevel field
+  }
+);
 
 // Helper functions for sanitization transforms
 const sanitizeString = (str: string, maxLength: number = 1000): string => {

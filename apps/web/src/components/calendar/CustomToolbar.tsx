@@ -1,8 +1,9 @@
 'use client';
 
 import { Button } from '@/components/ui/Button';
-import { ChevronLeft, ChevronRight, Calendar, RefreshCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { ToolbarProps } from 'react-big-calendar';
+import { Select } from '@/components/ui/Select';
 
 export function CustomToolbar<T = any>({ label, onNavigate, onView, view }: ToolbarProps<T>) {
   const goToBack = () => {
@@ -23,14 +24,22 @@ export function CustomToolbar<T = any>({ label, onNavigate, onView, view }: Tool
 
   return (
     <div className="flex items-center justify-between mb-4 p-4 bg-blue-50 dark:bg-dark-surface rounded-lg border border-light-border dark:border-dark-border">
-      <div className="flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={goToBack}>
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <Button variant="outline" size="sm" onClick={goToNext}>
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-        <Button variant="outline" size="sm" onClick={goToToday}>
+      <div className="flex items-center gap-3">
+        <button
+          onClick={goToBack}
+          className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded transition-colors"
+          aria-label="Previous"
+        >
+          <ChevronLeft className="h-5 w-5 text-[#2490FD] dark:text-[#2490FD]" />
+        </button>
+        <button
+          onClick={goToNext}
+          className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/20 rounded transition-colors"
+          aria-label="Next"
+        >
+          <ChevronRight className="h-5 w-5 text-[#2490FD] dark:text-[#2490FD]" />
+        </button>
+        <Button variant="primary" size="sm" onClick={goToToday}>
           Today
         </Button>
         <h2 className="text-lg font-semibold text-light-text-primary dark:text-dark-text-primary ml-4">
@@ -39,16 +48,17 @@ export function CustomToolbar<T = any>({ label, onNavigate, onView, view }: Tool
       </div>
 
       <div className="flex items-center gap-2">
-        <select
+        <Select
           value={view}
           onChange={(e) => handleViewChange(e.target.value as 'month' | 'week' | 'day' | 'agenda')}
-          className="px-3 py-1.5 text-sm border border-light-border dark:border-dark-border rounded-lg bg-white dark:bg-dark-surface text-light-text-primary dark:text-dark-text-primary focus:outline-none focus:ring-2 focus:ring-blue-500"
+          inline
+          wrapperClassName="w-auto min-w-[140px]"
         >
           <option value="month">Month</option>
           <option value="week">Week</option>
           <option value="day">Day</option>
           <option value="agenda">Agenda</option>
-        </select>
+        </Select>
       </div>
     </div>
   );

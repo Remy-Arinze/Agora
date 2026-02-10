@@ -10,6 +10,7 @@ import {
   PermissionType,
   Permission,
 } from '@/lib/store/api/schoolAdminApi';
+import { isPrincipalRole } from '@/lib/constants/roles';
 
 export { PermissionResource, PermissionType };
 
@@ -45,10 +46,7 @@ export function useCurrentAdminPermissions() {
   // This ensures Principals get full access even before permissions are fetched
   const currentAdmin = schoolResponse?.data?.currentAdmin;
   const isPrincipalEarly = useMemo(() => {
-    if (currentAdmin?.role) {
-      return currentAdmin.role.toLowerCase().includes('principal');
-    }
-    return false;
+    return isPrincipalRole(currentAdmin?.role);
   }, [currentAdmin?.role]);
   
   // Get current admin's own permissions (uses /permissions/me endpoint - no STAFF:READ required)
@@ -67,7 +65,7 @@ export function useCurrentAdminPermissions() {
   
   // Final Principal check (from either source)
   const isPrincipal = useMemo(() => {
-    return isPrincipalEarly || adminRole.toLowerCase().includes('principal');
+    return isPrincipalEarly || isPrincipalRole(adminRole);
   }, [isPrincipalEarly, adminRole]);
   
   /**
